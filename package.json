@@ -1,0 +1,15 @@
+{
+  "name": "card-game",
+  "private": true,
+  "version": "0.0.1",
+  "workspaces": [
+    "client/apps/*",
+    "client/packages/*",
+    "shared/*"
+  ],
+  "scripts": {
+    "dev": "npm -w @cg/app-web run dev",
+    "build": "npm -w @cg/app-web run build",
+    "typecheck": "npm -w @cg/app-web run typecheck"
+  }
+}
