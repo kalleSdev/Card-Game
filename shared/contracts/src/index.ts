@@ -26,13 +26,30 @@ export type SynergyId =
   | "ATTR_HEAVENLY_2"      // 2+ heavenly restriction → +5%
   | "ATTR_ZENIN_2"         // 2+ zenin clan → +4%
   | "ATTR_JUJUTSU_3"       // 3+ jujutsu high → +8%
-  | "REL_BROTHERHOOD"      // Yuji + (Todo or Choso) → +1500 flat
+  | "REL_BROTHERHOOD"      // Yuji + (Todo or Choso) → +5%
+  | "REL_BROTHERHOOD_3"    // Yuji + Todo + Choso (all 3) → +8%
   | "REL_MEMORY_RES"       // Gojo + Geto → +5%
   | "REL_GOJO_2STUDENTS"   // Gojo + 2 students → +5%
   | "REL_GOJO_3STUDENTS"   // Gojo + 3 students → +10%
   | "DISASTER_CURSE_2"     // 2 of Mahito/Jogo/Hanami/Dagon → +4%
   | "DISASTER_CURSE_3"     // 3 of them → +6%
-  | "DISASTER_CURSE_4";    // all 4 → +8%
+  | "DISASTER_CURSE_4"     // all 4 → +8%
+  | "TOKYO_TRIO_2"         // Inumaki + Panda + Maki: 2 of 3 → +4%
+  | "TOKYO_TRIO_3"         // all 3 → +6%
+  | "THE_STRONGEST_2"      // 2 of [Gojo/Sukuna/Kurourushi/Mahoraga/Dabura] → +6%
+  | "THE_STRONGEST_3"      // 3 of above → +10%
+  | "THE_STRONGEST_4"      // 4+ of above → +500% (instant win)
+  | "LUCKY_STAR"           // Hakari + Kirara → +5%
+  | "TRIPLE_DOMAIN_CLASH"  // Uro + Ryu + Yuta (all 3) → +7%
+  | "ZENIN_ELDERS"         // Naoya + Jinichi → +4%
+  | "UNPREDICTABLE_DUO"    // Takaba + Hakari → +5%
+  | "SIX_EYES"             // Gojo + Yuta (both six-eyes users) → +6%
+  | "CULLING_GAME_3"       // 3+ culling-game characters → +5%
+  | "CULLING_GAME_4"       // 4 culling-game characters → +7%
+  | "AFROBEAT"             // Yuta + Miguel → +5%
+  | "KYOTO_2"              // 2 Kyoto sorcerers (Todo/Miwa/Mechamaru) → +3%
+  | "KYOTO_3"              // 3 Kyoto sorcerers → +5%
+  | "YUTA_MAKI";           // Yuta + Maki → +5%
 
 // ===== Slots =====
 export type SlotType = "LEADER" | "COMBAT" | "SUPPORT" | "UNLEASH";
@@ -61,7 +78,7 @@ export type OffRolePenalties = {
 export type CardDef = {
   id: CardId;
   name: string;
-  rarity: "C" | "B" | "A" | "S" | "SS" | "SSS";
+  rarity: "C" | "B" | "A" | "S" | "SS" | "SSS" | "X";
   basePoints: number;
   affinity: RoleAffinity;
   tags: string[];
@@ -75,6 +92,7 @@ export type CardDef = {
 export type CardVisibility = {
   identityRevealed: boolean; // Card Reveal spell was used
   shownRarity?: string;      // rate shown (real via Global Rate, or random via Fake Reveal)
+  shownRole?: string;        // affinity shown alongside real RATE spell
 };
 
 // ===== Card instance in a match =====
@@ -83,6 +101,19 @@ export type CardInstance = {
   defId: CardId;
   owner: PlayerId;
   visibility?: CardVisibility; // inherited from draft pool reveal state
+};
+
+// ===== LOCKED_IN phase =====
+export type LockedInPhaseState = {
+  decisions: Record<PlayerId, "ACTIVATE" | "SKIP" | null>;
+};
+
+export type DomainOutcomeEntry = {
+  activated: boolean;
+  name: string;
+  pct: number;       // actual % applied (may be reduced if clashed)
+  enemyPct: number;  // penalty applied to enemy (0 if clashed or none)
+  clashed: boolean;
 };
 
 // ===== Augments (Roulette system) =====
@@ -120,6 +151,7 @@ export type DraftPoolCard = {
   defId: string;
   identityRevealed: boolean;  // Card Reveal: both see full card
   shownRarity?: string;       // rate shown to both — may be real (Global Rate) or random (Fake Reveal)
+  shownRole?: string;         // affinity shown alongside real rate (RATE spell only)
 };
 
 // ===== Draft state (only present during DRAFT phase) =====
@@ -128,7 +160,7 @@ export type DraftState = {
   pool: DraftPoolCard[];
   skipsRemaining: Record<PlayerId, number>;
   spellsRemaining: Record<PlayerId, number>;      // 3 charges each
-  cardRevealUsed: Record<PlayerId, boolean>;       // Card Reveal: once per player only
+  cardRevealUsed: Record<PlayerId, number>;         // Card Reveal uses (max 2 per player)
 };
 
 // ===== Reveal state (only present during REVEAL phase) =====
@@ -147,9 +179,11 @@ export type GameState = {
   vowsChosen: Record<PlayerId, BindingVowId | null>;
   vowsReady: Record<PlayerId, boolean>;
   vowOutcome?: Record<PlayerId, { met: boolean; pct: number } | null>;
+  domainOutcome?: Record<PlayerId, DomainOutcomeEntry | null>;
   draft?: DraftState;
   revealPhase?: RevealState;
   augmentPhase?: AugmentPhaseState;
+  lockedInPhase?: LockedInPhaseState;
   cardDb: Record<CardId, CardDef>;
   players: Record<PlayerId, PlayerZones>;
 };
@@ -168,12 +202,11 @@ export type Intent =
   | { type: "SPELL_CARD_REVEAL"; playerId: PlayerId; cardInstanceId: string }
   | { type: "SPELL_GLOBAL_RATE"; playerId: PlayerId; cardInstanceId: string }
   | { type: "SPELL_FAKE_REVEAL"; playerId: PlayerId; cardInstanceId: string }
-  | {
-      type: "PLACE_CARD";
-      playerId: PlayerId;
-      cardInstanceId: string;
-      target: SlotRef;
-    };
+  | { type: "PLACE_CARD"; playerId: PlayerId; cardInstanceId: string; target: SlotRef }
+  | { type: "ACTIVATE_DOMAIN"; playerId: PlayerId }
+  | { type: "SKIP_DOMAIN"; playerId: PlayerId }
+  | { type: "RETURN_CARD"; playerId: PlayerId; target: SlotRef }
+  | { type: "DEBUG_REFILL_SPELLS"; playerId: PlayerId };
 
 // ===== Events =====
 export type GameEvent =
