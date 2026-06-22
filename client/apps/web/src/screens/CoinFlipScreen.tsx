@@ -1,64 +1,213 @@
-import { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import AmbientOverlay from "../components/AmbientOverlay";
+import AmbientCanvas from "../components/AmbientCanvas";
+import { motion, AnimatePresence } from "framer-motion";
 import type { PlayerId } from "@cg/contracts";
 import type { PlayerIcons, PlayerNames } from "../types";
 import { BG } from "../backgrounds";
 import PlayerIcon from "../components/PlayerIcon";
 
-function PlayerSide({ pid, playerNames, playerIcons, isWinner, isLoser }: {
-  pid: PlayerId; playerNames: PlayerNames; playerIcons: PlayerIcons;
-  isWinner: boolean; isLoser: boolean;
-}) {
-  const pColor = pid === "P1" ? "#4a9eff" : "#ff6666";
+// Burst ring — one-shot expand
+function BurstRing({ color, delay = 0 }: { color: string; delay?: number }) {
+  return (
+    <motion.div
+      initial={{ scale: 0.6, opacity: 0.8 }}
+      animate={{ scale: 2.8, opacity: 0 }}
+      transition={{ duration: 0.9, delay, ease: "easeOut" }}
+      style={{
+        position: "absolute", inset: 0, borderRadius: "50%",
+        border: `2px solid ${color}`,
+        pointerEvents: "none",
+      }}
+    />
+  );
+}
+
+// Ambient sparks — spawns around the coin center
+function SparkCanvas({ active }: { active: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const SIZE = 320;
+    canvas.width = SIZE;
+    canvas.height = SIZE;
+    const cx = SIZE / 2, cy = SIZE / 2;
+
+    interface Spark { x: number; y: number; vx: number; vy: number; size: number; alpha: number }
+    const sparks: Spark[] = [];
+    let raf = 0;
+    let tick = 0;
+
+    const spawn = () => {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 52 + Math.random() * 16;
+      sparks.push({
+        x: cx + Math.cos(angle) * radius,
+        y: cy + Math.sin(angle) * radius,
+        vx: Math.cos(angle) * (0.4 + Math.random() * 1.2),
+        vy: Math.sin(angle) * (0.4 + Math.random() * 1.2) - 0.8,
+        size: 0.8 + Math.random() * 2.2,
+        alpha: 0.7 + Math.random() * 0.3,
+      });
+    };
+
+    const loop = () => {
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      tick++;
+      if (active && tick % 2 === 0 && sparks.length < 60) spawn();
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const s = sparks[i];
+        s.x += s.vx; s.y += s.vy; s.vy -= 0.02;
+        s.alpha -= 0.012;
+        if (s.alpha <= 0) { sparks.splice(i, 1); continue; }
+        const g2 = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.size);
+        g2.addColorStop(0, `rgba(255,220,80,${s.alpha})`);
+        g2.addColorStop(1, `rgba(255,140,0,0)`);
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        ctx.fillStyle = g2;
+        ctx.fill();
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [active]);
 
   return (
-    <div style={{
-      flex: 1, display: "flex", flexDirection: "column",
-      alignItems: pid === "P1" ? "flex-start" : "flex-end",
-      padding: "0 32px",
-      opacity: isLoser ? 0.25 : 1,
-      transition: "opacity 0.6s, filter 0.6s",
-      filter: isWinner ? `drop-shadow(0 0 24px ${pColor}88)` : "none",
-    }}>
-      {/* Icon */}
-      <div style={{
-        marginBottom: 12,
-        borderRadius: 10,
-        border: `2px solid ${isWinner ? pColor : "#1a1a28"}`,
-        boxShadow: isWinner ? `0 0 32px ${pColor}88, 0 0 64px ${pColor}44` : "none",
-        transition: "all 0.6s",
-        overflow: "hidden",
-        background: isWinner ? `${pColor}11` : "transparent",
-      }}>
-        <PlayerIcon icon={playerIcons[pid]} size={56} />
-      </div>
+    <canvas ref={canvasRef} width={320} height={320}
+      style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", pointerEvents: "none", zIndex: 0 }} />
+  );
+}
 
-      {/* Name */}
-      <div style={{
-        fontSize: 20, fontWeight: 900,
-        color: isWinner ? pColor : "#444",
-        letterSpacing: 2,
-        textShadow: isWinner ? `0 0 20px ${pColor}` : "none",
-        transition: "all 0.6s",
-        textAlign: pid === "P1" ? "left" : "right",
-      }}>
+function PlayerSide({ pid, playerNames, playerIcons, isWinner, isLoser, showBurst }: {
+  pid: PlayerId; playerNames: PlayerNames; playerIcons: PlayerIcons;
+  isWinner: boolean; isLoser: boolean; showBurst: boolean;
+}) {
+  const pColor = pid === "P1" ? "#4a9eff" : "#ff6666";
+  return (
+    <motion.div
+      animate={isLoser ? { opacity: 0.15, scale: 0.96 } : { opacity: 1, scale: 1 }}
+      transition={{ duration: 0.6, ease: "easeOut" }}
+      style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: pid === "P1" ? "flex-start" : "flex-end", padding: "0 44px" }}
+    >
+      <div style={{ position: "relative", marginBottom: 20 }}>
+        {showBurst && <>
+          <BurstRing color={pColor} delay={0} />
+          <BurstRing color={pColor} delay={0.18} />
+          <BurstRing color={pColor} delay={0.36} />
+        </>}
+        <motion.div
+          animate={isWinner
+            ? { boxShadow: [`0 0 40px ${pColor}88, 0 0 80px ${pColor}44`, `0 0 64px ${pColor}cc, 0 0 120px ${pColor}66`, `0 0 40px ${pColor}88, 0 0 80px ${pColor}44`] }
+            : { boxShadow: "0 0 0px transparent" }}
+          transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+          style={{ borderRadius: 16, overflow: "hidden", border: `3px solid ${isWinner ? pColor : "#1a1a28"}`, transition: "border-color 0.5s" }}
+        >
+          <PlayerIcon icon={playerIcons[pid]} size={110} style={{ display: "block" }} />
+        </motion.div>
+      </div>
+      <motion.div
+        animate={isWinner ? { textShadow: `0 0 28px ${pColor}` } : { textShadow: "none" }}
+        style={{ fontSize: 28, fontWeight: 900, color: isWinner ? pColor : "#444", letterSpacing: 3, textAlign: pid === "P1" ? "left" : "right" }}
+      >
         {playerNames[pid].toUpperCase()}
-      </div>
+      </motion.div>
+      <div style={{ fontSize: 11, color: "#333", letterSpacing: 4, marginTop: 6, textAlign: pid === "P1" ? "left" : "right" }}>{pid}</div>
+      <AnimatePresence>
+        {isWinner && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, type: "spring", stiffness: 280, damping: 22 }}
+            style={{ marginTop: 16, fontSize: 14, letterSpacing: 4, color: pColor, fontWeight: "bold" }}
+          >
+            PICKS FIRST ✦
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
 
-      {/* Label */}
-      <div style={{
-        fontSize: 9, color: "#333", letterSpacing: 3, marginTop: 4,
-        textAlign: pid === "P1" ? "left" : "right",
-      }}>
-        {pid}
-      </div>
+// CSS 3D coin — idle shows purple "FLIP" face; after click shows P1/P2 and spins to winner
+function Coin3D({ phase, result, p1Color, p2Color, p1Name, p2Name, onClick }: {
+  phase: string; result: PlayerId | null;
+  p1Color: string; p2Color: string; p1Name: string; p2Name: string;
+  onClick: () => void;
+}) {
+  const baseRotations = 1440;
+  const landAngle = result === "P2" ? baseRotations + 180 : baseRotations;
+  const isIdle = phase === "idle";
 
-      {isWinner && (
+  const faceBase: React.CSSProperties = {
+    position: "absolute",
+    width: "100%", height: "100%",
+    borderRadius: "50%",
+    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+    backfaceVisibility: "hidden",
+    WebkitBackfaceVisibility: "hidden",
+    gap: 6,
+    userSelect: "none",
+  };
+
+  return (
+    <div
+      onClick={phase === "idle" ? onClick : undefined}
+      style={{ width: 130, height: 130, perspective: "600px", cursor: phase === "idle" ? "pointer" : "default", position: "relative", zIndex: 2 }}
+    >
+      {isIdle ? (
+        /* Idle: single flat purple FLIP coin */
         <div style={{
-          marginTop: 12, fontSize: 11, letterSpacing: 3,
-          color: pColor, fontWeight: "bold",
-          animation: "fadeUp 0.5s ease-out both",
+          position: "absolute", inset: 0,
+          borderRadius: "50%",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          gap: 4,
+          background: "radial-gradient(circle at 35% 35%, #7733cc55 0%, #1a0830 60%, #0d0520 100%)",
+          border: "3px solid #9933ffcc",
+          boxShadow: "0 0 28px #9933ff44, inset 0 0 24px #6600ff22",
+          animation: "coinIdlePulse 2.4s ease-in-out infinite",
+          userSelect: "none",
         }}>
-          PICKS FIRST ✦
+          <div style={{ fontSize: 30, fontWeight: 900, color: "#cc88ff", textShadow: "0 0 14px #9933ffaa", lineHeight: 1 }}>FLIP</div>
+          <div style={{ fontSize: 9, color: "#7744aa", letterSpacing: 3, lineHeight: 1 }}>CLICK</div>
+        </div>
+      ) : (
+        /* Spinning / landing — 3D with P1 / P2 faces */
+        <div style={{
+          width: "100%", height: "100%",
+          transformStyle: "preserve-3d",
+          animation: phase === "spinning"
+            ? "coinSpin3D 0.22s linear infinite"
+            : phase === "landing" || phase === "done"
+              ? "coinLand3D 0.85s cubic-bezier(0.25,1.4,0.5,1) forwards"
+              : "none",
+          ["--land-angle" as string]: `${landAngle}deg`,
+        }}>
+          {/* Front — P1 */}
+          <div style={{
+            ...faceBase,
+            background: `radial-gradient(circle at 35% 35%, ${p1Color}55 0%, #0a0a14 60%, #050510 100%)`,
+            border: `3px solid ${p1Color}cc`,
+            boxShadow: `0 0 28px ${p1Color}44, inset 0 0 24px ${p1Color}22`,
+          }}>
+            <div style={{ fontSize: 22, fontWeight: 900, color: p1Color, letterSpacing: 2 }}>P1</div>
+            <div style={{ fontSize: 9, color: p1Color + "88", letterSpacing: 3 }}>{p1Name.toUpperCase().slice(0, 6)}</div>
+          </div>
+          {/* Back — P2 */}
+          <div style={{
+            ...faceBase,
+            transform: "rotateY(180deg)",
+            background: `radial-gradient(circle at 35% 35%, ${p2Color}55 0%, #0a0a14 60%, #050510 100%)`,
+            border: `3px solid ${p2Color}cc`,
+            boxShadow: `0 0 28px ${p2Color}44, inset 0 0 24px ${p2Color}22`,
+          }}>
+            <div style={{ fontSize: 22, fontWeight: 900, color: p2Color, letterSpacing: 2 }}>P2</div>
+            <div style={{ fontSize: 9, color: p2Color + "88", letterSpacing: 3 }}>{p2Name.toUpperCase().slice(0, 6)}</div>
+          </div>
         </div>
       )}
     </div>
@@ -72,13 +221,21 @@ export default function CoinFlipScreen({ onFlip, playerNames, playerIcons }: {
 }) {
   const [phase, setPhase] = useState<"idle" | "spinning" | "landing" | "done">("idle");
   const [result, setResult] = useState<PlayerId | null>(null);
+  const [showBurst, setShowBurst] = useState(false);
+  const [flashKey, setFlashKey] = useState(0);
 
   const flip = () => {
     if (phase !== "idle") return;
     setPhase("spinning");
     const winner: PlayerId = Math.random() < 0.5 ? "P1" : "P2";
-    setTimeout(() => { setResult(winner); setPhase("landing"); }, 1800);
-    setTimeout(() => setPhase("done"), 2500);
+    setTimeout(() => {
+      setResult(winner);
+      setPhase("landing");
+      setShowBurst(true);
+      setFlashKey(k => k + 1);
+      setTimeout(() => setShowBurst(false), 1000);
+    }, 1900);
+    setTimeout(() => setPhase("done"), 2800);
   };
 
   const pColor = result === "P1" ? "#4a9eff" : result === "P2" ? "#ff6666" : "#ffd700";
@@ -87,159 +244,168 @@ export default function CoinFlipScreen({ onFlip, playerNames, playerIcons }: {
     <div style={{
       minHeight: "100vh",
       background: "#04040a",
-      backgroundImage: BG.coinflip, backgroundSize: "cover", backgroundPosition: "center",
+      backgroundImage: BG.coinflip, backgroundSize: "cover", backgroundPosition: "center", animation: "bgPan 70s ease-in-out infinite",
       color: "#e0e0e0",
       fontFamily: "'Segoe UI', system-ui, sans-serif",
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
       position: "relative", overflow: "hidden",
     }}>
+      <AmbientCanvas theme="snow" />
+      <AmbientOverlay theme="purple" />
+      <motion.div
+        animate={{ background: phase === "spinning" ? "rgba(2,2,6,0.72)" : "rgba(4,4,10,0.45)" }}
+        transition={{ duration: 0.6 }}
+        style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}
+      />
+      <div style={{
+        position: "fixed", inset: 0, pointerEvents: "none", zIndex: 1,
+        background: "radial-gradient(ellipse at center, transparent 30%, rgba(2,2,8,0.75) 100%)",
+      }} />
 
-      {/* Light fade overlay — same as BindingVow */}
-      <div style={{ position: "fixed", inset: 0, background: "rgba(4,4,10,0.45)", pointerEvents: "none", zIndex: 0 }} />
+      {/* Result flash */}
+      <AnimatePresence>
+        {showBurst && (
+          <motion.div
+            key={flashKey}
+            initial={{ opacity: 0.7 }} animate={{ opacity: 0 }} exit={{}}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            style={{
+              position: "fixed", inset: 0, zIndex: 50, pointerEvents: "none",
+              background: `radial-gradient(ellipse at center, ${pColor}66 0%, ${pColor}28 35%, transparent 65%)`,
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Header */}
-      <div style={{ textAlign: "center", marginBottom: 40, position: "relative", zIndex: 1 }}>
-        <div style={{ fontSize: 11, letterSpacing: 7, color: "#2a2a2a", marginBottom: 8 }}>
-          BEFORE THE DRAFT
-        </div>
-        <div style={{ fontSize: 28, fontWeight: "bold", letterSpacing: 5, color: "#fff" }}>
+      <motion.div
+        initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        style={{ textAlign: "center", marginBottom: 56, position: "relative", zIndex: 2 }}
+      >
+        <div style={{ fontSize: 11, letterSpacing: 8, color: "#333344", marginBottom: 10 }}>BEFORE THE DRAFT</div>
+        <motion.div
+          animate={{ textShadow: ["0 2px 20px rgba(0,0,0,0.8)", "0 0 40px rgba(255,215,0,0.15), 0 2px 20px rgba(0,0,0,0.8)", "0 2px 20px rgba(0,0,0,0.8)"] }}
+          transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+          style={{ fontSize: 48, fontWeight: "bold", letterSpacing: 8, color: "#fff" }}
+        >
           COIN FLIP
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
-      {/* Main row: P1 | coin area | P2 */}
-      <div style={{
-        position: "relative", zIndex: 2,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        width: "100%", maxWidth: 860, gap: 0,
-      }}>
-
-        {/* P1 */}
-        <PlayerSide
-          pid="P1"
-          playerNames={playerNames}
-          playerIcons={playerIcons}
+      {/* Main row */}
+      <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", justifyContent: "center", width: "100%", maxWidth: 1100 }}>
+        <PlayerSide pid="P1" playerNames={playerNames} playerIcons={playerIcons}
           isWinner={phase === "done" && result === "P1"}
           isLoser={phase === "done" && result === "P2"}
-        />
+          showBurst={showBurst && result === "P1"} />
 
-        {/* Center — coin on table */}
-        <div style={{
-          display: "flex", flexDirection: "column", alignItems: "center",
-          gap: 0, flexShrink: 0, width: 200,
-        }}>
-          {/* Coin */}
-          <div style={{
-            fontSize: 84,
-            lineHeight: 1,
-            userSelect: "none",
-            animation: phase === "spinning"
-              ? "coinSpin 0.25s linear infinite"
-              : phase === "landing"
-                ? "coinLand 0.7s cubic-bezier(0.34,1.56,0.64,1) forwards"
-                : "none",
-            filter: phase === "done" && result
-              ? `drop-shadow(0 0 16px ${pColor}) drop-shadow(0 0 32px ${pColor}66)`
-              : phase === "spinning"
-                ? "drop-shadow(0 0 8px #ffd70055)"
-                : "none",
-            transition: "filter 0.5s",
-            cursor: phase === "idle" ? "pointer" : "default",
-            marginBottom: 0,
-          }}
-            onClick={phase === "idle" ? flip : undefined}
-          >
-            🪙
+        {/* Center — coin + effects all relative to the coin area */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0, width: 280 }}>
+
+          {/* Coin wrapper — all effects positioned relative to coin */}
+          <div style={{ position: "relative", width: 130, height: 130, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {/* Spark canvas — exactly centered on coin */}
+            <SparkCanvas active={phase === "spinning"} />
+
+            {/* Glow ring — centered on coin */}
+            <motion.div
+              animate={phase === "spinning"
+                ? { opacity: [0.4, 0.9, 0.4], scale: [0.9, 1.1, 0.9] }
+                : phase === "done" && result
+                  ? { opacity: [0.5, 0.9, 0.5], scale: [1, 1.15, 1] }
+                  : { opacity: 0.1, scale: 1 }}
+              transition={{ duration: 0.5, repeat: phase === "idle" ? 0 : Infinity, ease: "easeInOut" }}
+              style={{
+                position: "absolute", inset: -10,
+                borderRadius: "50%",
+                background: `radial-gradient(circle, ${phase === "done" && result ? pColor : "#ffd700"}55 0%, transparent 70%)`,
+                filter: "blur(10px)",
+                pointerEvents: "none", zIndex: 1,
+              }}
+            />
+
+            {/* The coin itself */}
+            <Coin3D
+              phase={phase} result={result}
+              p1Color="#4a9eff" p2Color="#ff6666"
+              p1Name={playerNames.P1} p2Name={playerNames.P2}
+              onClick={flip}
+            />
           </div>
 
-          {/* Table surface */}
+          {/* Shadow under coin */}
           <div style={{
-            width: 140, height: 8, borderRadius: "50%",
+            width: 160, height: 10, borderRadius: "50%",
             background: "radial-gradient(ellipse at center, #3a2a18 0%, #1a0e08 50%, transparent 100%)",
-            margin: "2px 0 4px",
-            boxShadow: "0 2px 12px rgba(0,0,0,0.6)",
+            margin: "6px 0 4px",
+            boxShadow: "0 2px 20px rgba(0,0,0,0.7)",
           }} />
           <div style={{
-            width: "100%", height: 3,
+            width: "60%", height: 3,
             background: "linear-gradient(90deg, transparent, #3a2a1a 20%, #5a4028 50%, #3a2a1a 80%, transparent)",
-            borderRadius: 2,
-            boxShadow: "0 1px 8px rgba(0,0,0,0.8)",
+            borderRadius: 2, boxShadow: "0 1px 12px rgba(0,0,0,0.9)",
           }} />
 
-          {/* Flip prompt / status */}
-          <div style={{ marginTop: 20, textAlign: "center", minHeight: 80, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-            {phase === "idle" && (
-              <div style={{ animation: "fadeUp 0.4s ease-out" }}>
-                <div style={{ fontSize: 11, color: "#333", marginBottom: 14, letterSpacing: 1 }}>
-                  click the coin — or
-                </div>
-                <button onClick={flip} style={{
-                  padding: "10px 36px",
-                  background: "linear-gradient(135deg, #0d0d24, #0a0a1e)",
-                  border: "1px solid #4a4a88",
-                  borderRadius: 10, color: "#8888cc", fontWeight: "bold", cursor: "pointer",
-                  fontSize: 14, letterSpacing: 3,
-                  boxShadow: "0 0 14px #4a4a8833",
-                }}>
-                  FLIP
-                </button>
-              </div>
-            )}
-            {phase === "spinning" && (
-              <div style={{ fontSize: 13, color: "#2a2a2a", letterSpacing: 4, animation: "blink 0.4s linear infinite" }}>
-                FLIPPING...
-              </div>
-            )}
-            {(phase === "landing" || phase === "done") && result && (
-              <div style={{ animation: "revealResult 0.5s cubic-bezier(0.175,0.885,0.32,1.275) both" }}>
-                {phase === "done" && (
-                  <button
+          {/* Controls — only shown after result */}
+          <div style={{ marginTop: 28, textAlign: "center", minHeight: 60, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+            <AnimatePresence mode="wait">
+              {phase === "idle" && (
+                <motion.div key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <div style={{ fontSize: 11, color: "#2a2a3a", letterSpacing: 3 }}>click the coin to flip</div>
+                </motion.div>
+              )}
+              {phase === "spinning" && (
+                <motion.div key="spinning" initial={{ opacity: 0 }} animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 0.4, repeat: Infinity }}>
+                  <div style={{ fontSize: 14, color: "#555533", letterSpacing: 6 }}>FLIPPING...</div>
+                </motion.div>
+              )}
+              {phase === "done" && result && (
+                <motion.div key="done" initial={{ opacity: 0, scale: 0.8, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 22 }}>
+                  <motion.button
+                    whileHover={{ scale: 1.06, y: -2 }}
+                    whileTap={{ scale: 0.96 }}
+                    animate={{ boxShadow: [`0 0 28px ${pColor}44`, `0 0 52px ${pColor}66`, `0 0 28px ${pColor}44`] }}
+                    transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
                     onClick={() => onFlip(result)}
                     style={{
-                      padding: "10px 36px",
-                      background: "linear-gradient(135deg, #0a1800, #051000)",
-                      border: `2px solid ${pColor}88`,
-                      borderRadius: 10, color: pColor, fontWeight: "bold", cursor: "pointer",
-                      fontSize: 13, letterSpacing: 3,
-                      boxShadow: `0 0 18px ${pColor}33`,
-                      animation: "fadeUp 0.4s 0.1s ease-out both",
+                      padding: "14px 52px",
+                      background: `linear-gradient(135deg, #0a1800, #050e00)`,
+                      border: `2px solid ${pColor}99`,
+                      borderRadius: 12, color: pColor, fontWeight: "bold", cursor: "pointer",
+                      fontSize: 18, letterSpacing: 4, fontFamily: "inherit",
                     }}
                   >
                     START DRAFT →
-                  </button>
-                )}
-              </div>
-            )}
+                  </motion.button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
-        {/* P2 */}
-        <PlayerSide
-          pid="P2"
-          playerNames={playerNames}
-          playerIcons={playerIcons}
+        <PlayerSide pid="P2" playerNames={playerNames} playerIcons={playerIcons}
           isWinner={phase === "done" && result === "P2"}
           isLoser={phase === "done" && result === "P1"}
-        />
+          showBurst={showBurst && result === "P2"} />
       </div>
 
       <style>{`
-        @keyframes coinSpin {
-          0%   { transform: rotateY(0deg) scaleX(1); }
-          25%  { transform: rotateY(90deg) scaleX(0.05); }
-          50%  { transform: rotateY(180deg) scaleX(1); }
-          75%  { transform: rotateY(270deg) scaleX(0.05); }
-          100% { transform: rotateY(360deg) scaleX(1); }
+        @keyframes coinSpin3D {
+          0%   { transform: rotateY(0deg); }
+          100% { transform: rotateY(360deg); }
         }
-        @keyframes coinLand {
-          0%   { transform: rotateY(720deg) scaleX(1) translateY(-10px); }
-          60%  { transform: rotateY(20deg) scaleX(1) translateY(4px); }
-          80%  { transform: rotateY(-8deg) scaleX(1) translateY(0px); }
-          100% { transform: rotateY(0deg) scaleX(1) translateY(0px); }
+        @keyframes coinLand3D {
+          0%   { transform: rotateY(0deg); }
+          80%  { transform: rotateY(var(--land-angle)); }
+          88%  { transform: rotateY(calc(var(--land-angle) + 12deg)); }
+          94%  { transform: rotateY(calc(var(--land-angle) - 5deg)); }
+          100% { transform: rotateY(var(--land-angle)); }
         }
-        @keyframes fadeUp { from { transform: translateY(14px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes blink { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
-        @keyframes revealResult { from { transform: scale(0.7) translateY(20px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+        @keyframes coinIdlePulse {
+          0%,100% { box-shadow: 0 0 28px #9933ff44, inset 0 0 24px #6600ff22; border-color: #9933ffcc; }
+          50%     { box-shadow: 0 0 52px #9933ff88, 0 0 90px #6600ff44, inset 0 0 32px #6600ff44; border-color: #cc66ffee; }
+        }
       `}</style>
     </div>
   );

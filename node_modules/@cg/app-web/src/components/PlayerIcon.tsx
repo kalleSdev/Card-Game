@@ -33,7 +33,7 @@ export default function PlayerIcon({
         src={`/players/${icon}.jpg`}
         alt={emoji}
         onError={() => setImgFailed(true)}
-        style={{ width: size, height: Math.round(size * 1.4), objectFit: "cover", borderRadius: 6, flexShrink: 0, display: "block", ...style }}
+        style={{ width: size, height: Math.round(size * 1.2), objectFit: "cover", borderRadius: 6, flexShrink: 0, display: "block", ...style }}
       />
     );
   }

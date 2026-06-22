@@ -36,9 +36,10 @@ export type SynergyId =
   | "DISASTER_CURSE_4"     // all 4 → +8%
   | "TOKYO_TRIO_2"         // Inumaki + Panda + Maki: 2 of 3 → +4%
   | "TOKYO_TRIO_3"         // all 3 → +6%
-  | "THE_STRONGEST_2"      // 2 of [Gojo/Sukuna/Kurourushi/Mahoraga/Dabura] → +6%
+  | "THE_STRONGEST_2"      // 2 of [Gojo/Sukuna/Mahoraga/Dabura] → +6%
   | "THE_STRONGEST_3"      // 3 of above → +10%
-  | "THE_STRONGEST_4"      // 4+ of above → +500% (instant win)
+  | "THE_STRONGEST_4"      // 4 of above → +12%
+  | "THE_STRONGEST_5"      // 5 of above → ×9 (instant win)
   | "LUCKY_STAR"           // Hakari + Kirara → +5%
   | "TRIPLE_DOMAIN_CLASH"  // Uro + Ryu + Yuta (all 3) → +7%
   | "ZENIN_ELDERS"         // Naoya + Jinichi → +4%
@@ -49,7 +50,8 @@ export type SynergyId =
   | "AFROBEAT"             // Yuta + Miguel → +5%
   | "KYOTO_2"              // 2 Kyoto sorcerers (Todo/Miwa/Mechamaru) → +3%
   | "KYOTO_3"              // 3 Kyoto sorcerers → +5%
-  | "YUTA_MAKI";           // Yuta + Maki → +5%
+  | "YUTA_MAKI"            // Yuta + Maki → +5%
+  | "HEAVEN_AND_HELL";     // Gojo + Toji → +4%
 
 // ===== Slots =====
 export type SlotType = "LEADER" | "COMBAT" | "SUPPORT" | "UNLEASH";
@@ -152,6 +154,8 @@ export type DraftPoolCard = {
   identityRevealed: boolean;  // Card Reveal: both see full card
   shownRarity?: string;       // rate shown to both — may be real (Global Rate) or random (Fake Reveal)
   shownRole?: string;         // affinity shown alongside real rate (RATE spell only)
+  denied?: boolean;           // Deny: revealed + locked, cannot be picked
+  frozenUntilTurn?: number;  // Freeze: revealed, unpickable until this turn
 };
 
 // ===== Draft state (only present during DRAFT phase) =====
@@ -159,8 +163,14 @@ export type DraftState = {
   coinFlipped: boolean;
   pool: DraftPoolCard[];
   skipsRemaining: Record<PlayerId, number>;
-  spellsRemaining: Record<PlayerId, number>;      // 3 charges each
-  cardRevealUsed: Record<PlayerId, number>;         // Card Reveal uses (max 2 per player)
+  spellsRemaining: Record<PlayerId, number>;        // 3 charges each
+  cardRevealUsed: Record<PlayerId, number>;          // total Card Reveal uses (2 normally, 6 for special vows)
+  cardRevealUsedThisTurn: Record<PlayerId, number>; // resets each turn (per-turn cap: 2 for special vow holders)
+  deniesRemaining: Record<PlayerId, number>;          // 2 denies per player per draft
+  lastDenyTurn: Record<PlayerId, number>;             // turn on which last deny was used (0 = never)
+  freezesRemaining: Record<PlayerId, number>;         // 1 freeze per player per draft
+  iceCharges: Record<PlayerId, number>;               // refills to 1 each turn
+  extendsRemaining: Record<PlayerId, number>;         // 3 freeze-extends per player per draft
 };
 
 // ===== Reveal state (only present during REVEAL phase) =====
@@ -206,6 +216,9 @@ export type Intent =
   | { type: "ACTIVATE_DOMAIN"; playerId: PlayerId }
   | { type: "SKIP_DOMAIN"; playerId: PlayerId }
   | { type: "RETURN_CARD"; playerId: PlayerId; target: SlotRef }
+  | { type: "DRAFT_DENY"; playerId: PlayerId; cardInstanceId: string }
+  | { type: "DRAFT_FREEZE"; playerId: PlayerId; cardInstanceId: string }
+  | { type: "DRAFT_EXTEND_FREEZE"; playerId: PlayerId; cardInstanceId: string }
   | { type: "DEBUG_REFILL_SPELLS"; playerId: PlayerId };
 
 // ===== Events =====

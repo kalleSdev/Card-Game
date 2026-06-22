@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
+import AmbientOverlay from "../components/AmbientOverlay";
+import AmbientCanvas from "../components/AmbientCanvas";
 import { BG } from "../backgrounds";
 import type { CardInstance, GameState, PlayerId } from "@cg/contracts";
 import { VOW_DEFS } from "@cg/engine";
@@ -10,11 +12,12 @@ import PlayerIcon from "../components/PlayerIcon";
 type RevealStage = "idle" | "p1" | "p2" | "winner";
 
 // Top-level — avoids remount on ResolutionScreen re-render
-function PlayerReveal({ pid, score, active, state, playerNames, playerIcons, maxScore }: {
-  pid: PlayerId; score: number; active: boolean;
+function PlayerReveal({ pid, score, active, isWinner, isLoser, state, playerNames, playerIcons, maxScore }: {
+  pid: PlayerId; score: number; active: boolean; isWinner?: boolean; isLoser?: boolean;
   state: GameState; playerNames: PlayerNames; playerIcons: PlayerIcons; maxScore: number;
 }) {
   const zones = state.players[pid];
+  const pColor = pid === "P1" ? "#4a9eff" : "#ff6666";
   const slots: Array<{ label: string; card: CardInstance | null }> = [
     { label: "Leader",    card: zones.board.leader },
     { label: "Combat 1",  card: zones.board.combat[0] },
@@ -31,19 +34,38 @@ function PlayerReveal({ pid, score, active, state, playerNames, playerIcons, max
       transition: "opacity 0.6s",
       padding: "0 12px",
     }}>
-      <div style={{ fontSize: 18, fontWeight: "bold", color: pid === "P1" ? "#4a9eff" : "#ff6666", marginBottom: 12, letterSpacing: 2, display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ borderRadius: 8, overflow: "hidden", border: `2px solid ${pid === "P1" ? "#4a9eff44" : "#ff666644"}`, flexShrink: 0 }}>
+      {/* Winner crown badge */}
+      {isWinner && (
+        <div style={{
+          textAlign: "center", marginBottom: 10,
+          fontSize: 11, letterSpacing: 4, color: "#ffd700",
+          fontWeight: "bold", animation: "fadeIn 0.5s ease-out",
+        }}>
+          ✦ WINNER ✦
+        </div>
+      )}
+
+      <div style={{ fontSize: 18, fontWeight: "bold", color: isWinner ? "#ffd700" : pColor, marginBottom: 12, letterSpacing: 2, display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{
+          borderRadius: 8, overflow: "hidden",
+          border: `2px solid ${isWinner ? "#ffd70088" : pid === "P1" ? "#4a9eff44" : "#ff666644"}`,
+          boxShadow: isWinner ? `0 0 16px #ffd70055` : "none",
+          flexShrink: 0, transition: "all 0.5s",
+        }}>
           <PlayerIcon icon={playerIcons[pid]} size={52} style={{ display: "block" }} />
         </div>
-        <span>{playerNames[pid]}</span>
+        <span style={{ textShadow: isWinner ? "0 0 20px #ffd70066" : "none", transition: "text-shadow 0.5s" }}>
+          {playerNames[pid]}
+        </span>
       </div>
 
       <div style={{
         fontSize: 48, fontWeight: "bold",
-        color: active ? "#ffd700" : "#444",
+        color: isWinner ? "#ffd700" : active ? "#aaaaaa" : "#444",
         letterSpacing: -1, lineHeight: 1, marginBottom: 4,
         fontVariantNumeric: "tabular-nums",
-        transition: "color 0.4s",
+        textShadow: isWinner ? "0 0 32px #ffd70066" : "none",
+        transition: "color 0.4s, text-shadow 0.5s",
       }}>
         {score.toLocaleString()}
       </div>
@@ -125,9 +147,9 @@ function PlayerReveal({ pid, score, active, state, playerNames, playerIcons, max
           return (
             <div key={label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
               {def && card ? (
-                <CharacterCard defId={card.defId} def={def} size="sm" />
+                <CharacterCard defId={card.defId} def={def} size="md" />
               ) : (
-                <div style={{ width: 96, height: 136, borderRadius: 8, border: "1px solid #1a1a2a", background: "#060610", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ width: 128, height: 182, borderRadius: 8, border: "1px solid #1a1a2a", background: "#060610", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <span style={{ fontSize: 10, color: "#222" }}>—</span>
                 </div>
               )}
@@ -194,12 +216,14 @@ export default function ResolutionScreen({ state, onRestart, playerNames, player
   return (
     <div style={{
       minHeight: "100vh", background: "#04040a",
-      backgroundImage: BG.resolution, backgroundSize: "cover", backgroundPosition: "center",
+      backgroundImage: BG.resolution, backgroundSize: "cover", backgroundPosition: "center", animation: "bgPan 75s ease-in-out infinite",
       color: "#e0e0e0",
       fontFamily: "'Segoe UI', system-ui, sans-serif",
       display: "flex", flexDirection: "column", alignItems: "center",
       justifyContent: "flex-start", padding: 32, position: "relative",
     }}>
+      <AmbientCanvas theme="rain" />
+      <AmbientOverlay theme="gold" />
       <div style={{ position: "fixed", inset: 0, background: "rgba(4,4,10,0.52)", pointerEvents: "none", zIndex: 0 }} />
       <div style={{ position: "relative", zIndex: 1, width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
       <div style={{ fontSize: 11, letterSpacing: 6, color: "#555", marginBottom: 4, textTransform: "uppercase" }}>
@@ -209,57 +233,109 @@ export default function ResolutionScreen({ state, onRestart, playerNames, player
         RESOLUTION
       </div>
 
-      <div style={{
-        display: "flex", width: "100%", maxWidth: 900, gap: 16,
-        marginBottom: 32,
-      }}>
-        <div style={{ flex: 1, background: "rgba(8,8,18,0.62)", borderRadius: 16, border: "1px solid #1a1a3a", backdropFilter: "blur(6px)", padding: "20px 16px" }}>
-          <PlayerReveal pid="P1" score={p1Score} active={stage !== "idle"}
-            state={state} playerNames={playerNames} playerIcons={playerIcons} maxScore={maxScore} />
-        </div>
-        <div style={{ flex: 1, background: "rgba(8,8,18,0.62)", borderRadius: 16, border: "1px solid #1a1a3a", backdropFilter: "blur(6px)", padding: "20px 16px" }}>
-          <PlayerReveal pid="P2" score={p2Score} active={stage === "p2" || stage === "winner"}
-            state={state} playerNames={playerNames} playerIcons={playerIcons} maxScore={maxScore} />
-        </div>
-      </div>
+      {(() => {
+        const p1IsWinner = stage === "winner" && winner === "P1";
+        const p2IsWinner = stage === "winner" && winner === "P2";
+        const p1IsLoser  = stage === "winner" && winner === "P2";
+        const p2IsLoser  = stage === "winner" && winner === "P1";
+        const showWinner = stage === "winner";
 
-      {stage === "winner" && (
-        <div style={{ textAlign: "center", animation: "fadeIn 0.6s ease-out" }}>
-          {winner === "DRAW" ? (
-            <div style={{ fontSize: 32, color: "#888", letterSpacing: 4 }}>DRAW</div>
-          ) : (
-            <>
-              <div style={{ fontSize: 13, letterSpacing: 4, color: "#555", marginBottom: 8 }}>WINNER</div>
+        const panelBase: React.CSSProperties = {
+          width: 546, flexShrink: 0,   // 728 * 0.75
+          borderRadius: 18, backdropFilter: "blur(8px)", padding: "28px 24px",
+          transition: "all 0.8s cubic-bezier(0.4,0,0.2,1)",
+        };
+
+        return (
+          <>
+            {/* Winner banner — above panels, animates in when stage=winner */}
+            <div style={{ minHeight: 110, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 4 }}>
+              {showWinner && (
+                <div style={{
+                  animation: "winnerPop 0.55s cubic-bezier(0.25,1.4,0.5,1) forwards",
+                  textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+                }}>
+                  {winner === "DRAW" ? (
+                    <div style={{ fontSize: 44, color: "#888", letterSpacing: 6 }}>DRAW</div>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: 11, letterSpacing: 8, color: "#ffd70066" }}>WINNER</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                        <PlayerIcon icon={playerIcons[winner as PlayerId]} size={64} />
+                        <div style={{
+                          fontSize: 44, fontWeight: 900, color: "#ffd700",
+                          textShadow: "0 0 40px #ffd700cc, 0 0 80px #ffd70066",
+                          letterSpacing: 5,
+                        }}>
+                          {playerNames[winner as PlayerId].toUpperCase()}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 15, color: "#9a8050", letterSpacing: 2 }}>
+                        {winner === "P1" ? p1Final.toLocaleString() : p2Final.toLocaleString()} pts
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Player panels row — same width always, centered, side by side */}
+            <div style={{
+              display: "flex", width: "100%",
+              justifyContent: "center", alignItems: "flex-start",
+              gap: 32,
+              marginBottom: 0, position: "relative",
+            }}>
               <div style={{
-                fontSize: 48, fontWeight: "bold", color: "#ffd700",
-                textShadow: "0 0 32px #ffd70088, 0 0 64px #ffd70044",
-                letterSpacing: 4,
-                display: "flex", alignItems: "center", gap: 12, justifyContent: "center",
+                ...panelBase,
+                background: p1IsWinner ? "rgba(14,12,4,0.88)" : p1IsLoser ? "rgba(4,4,10,0.72)" : "rgba(8,8,18,0.72)",
+                border: p1IsWinner ? "1px solid #ffd70066" : p1IsLoser ? "1px solid #0e0e1a" : "1px solid #1a1a3a",
+                boxShadow: p1IsWinner ? "0 0 64px #ffd70030, 0 0 160px #4a9eff12, inset 0 0 48px #ffd7000e" : "none",
+                opacity: p1IsLoser ? 0.38 : 1,
               }}>
-                <PlayerIcon icon={playerIcons[winner as PlayerId]} size={48} />
-                {playerNames[winner as PlayerId].toUpperCase()}
+                <PlayerReveal pid="P1" score={p1Score} active={stage !== "idle"}
+                  isWinner={p1IsWinner} isLoser={p1IsLoser}
+                  state={state} playerNames={playerNames} playerIcons={playerIcons} maxScore={maxScore} />
               </div>
-              <div style={{ fontSize: 18, color: "#888", marginTop: 8 }}>
-                {winner === "P1" ? p1Final.toLocaleString() : p2Final.toLocaleString()} pts
+
+              <div style={{
+                ...panelBase,
+                background: p2IsWinner ? "rgba(14,12,4,0.88)" : p2IsLoser ? "rgba(4,4,10,0.72)" : "rgba(8,8,18,0.72)",
+                border: p2IsWinner ? "1px solid #ffd70066" : p2IsLoser ? "1px solid #0e0e1a" : "1px solid #1a1a3a",
+                boxShadow: p2IsWinner ? "0 0 64px #ffd70030, 0 0 160px #ff666612, inset 0 0 48px #ffd7000e" : "none",
+                opacity: p2IsLoser ? 0.38 : 1,
+              }}>
+                <PlayerReveal pid="P2" score={p2Score} active={stage === "p2" || stage === "winner"}
+                  isWinner={p2IsWinner} isLoser={p2IsLoser}
+                  state={state} playerNames={playerNames} playerIcons={playerIcons} maxScore={maxScore} />
               </div>
-            </>
-          )}
-          <button
-            onClick={onRestart}
-            style={{
-              marginTop: 32, padding: "10px 28px",
-              background: "#0a0a0a", border: "1px solid #333",
-              borderRadius: 8, color: "#888", fontWeight: "bold",
-              cursor: "pointer", fontSize: 13, letterSpacing: 2,
-            }}
-          >
-            PLAY AGAIN
-          </button>
-        </div>
-      )}
+            </div>
+
+            {/* Play Again — bottom center */}
+            {showWinner && (
+              <div style={{ width: "100%", display: "flex", justifyContent: "center", marginTop: 48, animation: "fadeIn 0.8s ease-out 0.6s both" }}>
+                <button
+                  onClick={onRestart}
+                  style={{
+                    padding: "14px 48px",
+                    background: "#0a0a0a", border: "1px solid #3a3a3a",
+                    borderRadius: 10, color: "#888", fontWeight: "bold",
+                    cursor: "pointer", fontSize: 14, letterSpacing: 3,
+                  }}
+                >
+                  PLAY AGAIN
+                </button>
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       </div> {/* end zIndex:1 wrapper */}
-      <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes winnerPop { 0% { opacity: 0; transform: translateY(-12%) scale(0.72); } 70% { opacity: 1; transform: translateY(-12%) scale(1.06); } 100% { opacity: 1; transform: translateY(-12%) scale(1); } }
+      `}</style>
     </div>
   );
 }

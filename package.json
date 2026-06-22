@@ -11,5 +11,12 @@
     "dev": "npm -w @cg/app-web run dev",
     "build": "npm -w @cg/app-web run build",
     "typecheck": "npm -w @cg/app-web run typecheck"
+  },
+  "dependencies": {
+    "framer-motion": "^12.40.0",
+    "howler": "^2.2.4"
+  },
+  "devDependencies": {
+    "@types/howler": "^2.2.13"
   }
 }

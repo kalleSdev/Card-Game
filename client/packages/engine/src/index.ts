@@ -38,7 +38,7 @@ export const VOW_DEFS: Record<BindingVowId, {
   BLIND_FAITH: {
     name: "Blind Faith",
     description: "You cannot use any spells during the draft.",
-    reward: "+10% total score",
+    reward: "+13% total score",
     penalty: "Spells are blocked (enforced)",
     icon: "🙈",
   },
@@ -51,8 +51,8 @@ export const VOW_DEFS: Record<BindingVowId, {
   },
   KING_OF_CURSES_VOW: {
     name: "King of Curses",
-    description: "+3% for each Curse on your team, −1% for each non-Curse.",
-    reward: "+3% per Curse card",
+    description: "+1.5% per Curse on your team, −1% per non-Curse.",
+    reward: "+1.5% per Curse card",
     penalty: "−1% per non-Curse card",
     icon: "💀",
   },
@@ -78,17 +78,15 @@ export type RouletteItemDef = {
 
 export const ROULETTE_ITEM_MAP: Record<string, RouletteItemDef> = {
   "playful-cloud":    { id: "playful-cloud",    name: "Playful Cloud",             baseBonus: 2000 },
-  "split-soul-katana":{ id: "split-soul-katana", name: "Split Soul Katana",         baseBonus: 1500,  conditionalDesc: "+ if on Toji" },
-  "inverted-spear":   { id: "inverted-spear",    name: "Inverted Spear of Heaven",  baseBonus: 500,  conditionalDesc: "+ if enemy has Gojo" },
-  "jet-black-blade":  { id: "jet-black-blade",   name: "Jet Black Blade",           baseBonus: 1000 },
-  "higuruma-gavel":   { id: "higuruma-gavel",    name: "Higuruma's Gavel",          baseBonus: 500,  conditionalDesc: "+ if on Higuruma" },
-  "festering-life":   { id: "festering-life",    name: "Festering Life Sword",      baseBonus: 1000, conditionalDesc: "+ if on Kurourushi" },
-  "dragon-bone":      { id: "dragon-bone",        name: "Dragon Bone",               baseBonus: 1500, conditionalDesc: "+ if on Maki" },
-  "mei-battle-axe":   { id: "mei-battle-axe",    name: "Mei's Battle Axe",          baseBonus: 500 },
-  "slaughter-demon":  { id: "slaughter-demon",   name: "Slaughter Demon",           baseBonus: 500 },
-  "nobara-hammer":    { id: "nobara-hammer",      name: "Nobara's Hammer",           baseBonus: 500,  conditionalDesc: "+ if on Nobara" },
-  "electric-guitar":  { id: "electric-guitar",   name: "Electric Guitar",           baseBonus: 500,  conditionalDesc: "+ if on Gakuganji" },
-  "black-rope":       { id: "black-rope",         name: "Black Rope",                baseBonus: 1000, conditionalDesc: "+ if on Miguel" },
+  "split-soul-katana":{ id: "split-soul-katana", name: "Split Soul Katana",         baseBonus: 1500, conditionalDesc: "+1,000 if on Toji" },
+  "inverted-spear":   { id: "inverted-spear",    name: "Inverted Spear of Heaven",  baseBonus: 500,  conditionalDesc: "+3,000 if enemy has Gojo" },
+  "higuruma-gavel":   { id: "higuruma-gavel",    name: "Higuruma's Gavel",          baseBonus: 500,  conditionalDesc: "+1,500 if on Higuruma" },
+  "festering-life":   { id: "festering-life",    name: "Festering Life Sword",      baseBonus: 1000, conditionalDesc: "+1,000 if on Kurourushi" },
+  "dragon-bone":      { id: "dragon-bone",        name: "Dragon Bone",               baseBonus: 1500, conditionalDesc: "+1,000 if on Maki" },
+  "nobara-hammer":    { id: "nobara-hammer",      name: "Nobara's Hammer",           baseBonus: 500,  conditionalDesc: "+500 if on Nobara" },
+  "electric-guitar":  { id: "electric-guitar",   name: "Electric Guitar",           baseBonus: 500,  conditionalDesc: "+1,500 if on Gakuganji" },
+  "black-rope":       { id: "black-rope",         name: "Black Rope",                baseBonus: 1000, conditionalDesc: "+2,000 if on Miguel" },
+  "miwa-sword":       { id: "miwa-sword",         name: "Miwa's Sword",              baseBonus: 500,  conditionalDesc: "+500 if on Miwa" },
 };
 
 const ALL_ROULETTE_IDS = Object.keys(ROULETTE_ITEM_MAP);
@@ -174,6 +172,7 @@ const computeItemBonus = (
   if (itemId === "dragon-bone"     && targetDefId === "maki")         bonus += 1000;
   if (itemId === "festering-life"  && targetDefId === "kurourushi")   bonus += 1000;
   if (itemId === "split-soul-katana" && targetDefId === "toji")       bonus += 1000;
+  if (itemId === "miwa-sword"        && targetDefId === "miwa")        bonus += 500;
   // Naoya appreciates any weapon — +1000 flat bonus on all weapons
   if (targetDefId === "naoya") bonus += 1000;
 
@@ -197,7 +196,7 @@ const CARD_DB: GameState["cardDb"] = {
     basePoints: 15000,
     affinity: "LEADER",
     tags: ["sorcerer", "jujutsu-high", "gojo-clan", "six-eyes", "strongest"],
-    offRolePenalties: { combat: 0.8, support: 0.7 },
+    offRolePenalties: { combat: 0.9, support: 0.7 },
   },
   "yuji": {
     id: "yuji",
@@ -206,7 +205,7 @@ const CARD_DB: GameState["cardDb"] = {
     basePoints: 10000,
     affinity: "COMBAT",
     tags: ["sorcerer", "curse", "jujutsu-high", "kenjaku", "brother", "gojo-student"],
-    offRolePenalties: { leader: 0.8, support: 0.7 },
+    offRolePenalties: { leader: 0.85, support: 0.75 },
   },
   "toji": {
     id: "toji",
@@ -215,7 +214,7 @@ const CARD_DB: GameState["cardDb"] = {
     basePoints: 13000,
     affinity: "COMBAT",
     tags: ["heavenly-restriction", "zenin-clan", "assassin"],
-    offRolePenalties: { leader: 0.85, support: 0.6 },
+    offRolePenalties: { leader: 0.8, support: 0.6 },
     perks: { weaponEfficiency: "double" },
   },
   "maki": {
@@ -245,7 +244,7 @@ const CARD_DB: GameState["cardDb"] = {
     basePoints: 9000,
     affinity: "SUPPORT",
     tags: ["sorcerer", "jujutsu-high", "zenin-clan", "ten-shadows", "gojo-student"],
-    offRolePenalties: { leader: 0.75, combat: 0.85 },
+    offRolePenalties: { leader: 0.8, combat: 0.8 },
   },
   "nobara": {
     id: "nobara",
@@ -263,7 +262,7 @@ const CARD_DB: GameState["cardDb"] = {
     basePoints: 8500,
     affinity: "SUPPORT",
     tags: ["sorcerer", "ratio"],
-    offRolePenalties: { leader: 0.9, combat: 0.85 },
+    offRolePenalties: { leader: 0.95, combat: 0.85 },
   },
   "geto": {
     id: "geto",
@@ -281,16 +280,16 @@ const CARD_DB: GameState["cardDb"] = {
     basePoints: 15000,
     affinity: "LEADER",
     tags: ["curse", "king-of-curses", "malevolent-shrine", "strongest"],
-    offRolePenalties: { combat: 0.85, support: 0.7 },
+    offRolePenalties: { combat: 0.9, support: 0.7 },
   },
   "choso": {
     id: "choso",
     name: "Choso",
-    rarity: "A",
-    basePoints: 10000,
+    rarity: "S",
+    basePoints: 11000,
     affinity: "SUPPORT",
     tags: ["curse", "kenjaku", "blood-manipulation", "brother"],
-    offRolePenalties: { leader: 0.75, support: 0.9 },
+    offRolePenalties: { leader: 0.8, support: 0.9 },
   },
   "yuta": {
     id: "yuta",
@@ -299,16 +298,16 @@ const CARD_DB: GameState["cardDb"] = {
     basePoints: 12500,
     affinity: "LEADER",
     tags: ["sorcerer", "jujutsu-high", "six-eyes", "rika"],
-    offRolePenalties: { combat: 0.85, support: 0.7 },
+    offRolePenalties: { combat: 0.9, support: 0.8 },
   },
   "higuruma": {
     id: "higuruma",
     name: "Higuruma Hiromi",
     rarity: "A",
-    basePoints: 9000,
+    basePoints: 9500,
     affinity: "LEADER",
     tags: ["sorcerer", "judgeman"],
-    offRolePenalties: { combat: 0.8, support: 0.75 },
+    offRolePenalties: { combat: 0.9, support: 0.9 },
   },
   "gakuganji": {
     id: "gakuganji",
@@ -317,7 +316,7 @@ const CARD_DB: GameState["cardDb"] = {
     basePoints: 8000,
     affinity: "SUPPORT",
     tags: ["sorcerer", "kyoto", "elder"],
-    offRolePenalties: { leader: 0.7, combat: 0.75 },
+    offRolePenalties: { leader: 0.95, combat: 0.75 },
   },
   "miguel": {
     id: "miguel",
@@ -332,7 +331,7 @@ const CARD_DB: GameState["cardDb"] = {
     id: "mahito",
     name: "Mahito",
     rarity: "S",
-    basePoints: 11500,
+    basePoints: 11000,
     affinity: "COMBAT",
     tags: ["curse", "idle-transfiguration", "disaster-curse"],
     offRolePenalties: { leader: 0.8, support: 0.75 },
@@ -382,7 +381,7 @@ const CARD_DB: GameState["cardDb"] = {
     basePoints: 9500,
     affinity: "SUPPORT",
     tags: ["sorcerer", "jujutsu-high", "cursed-speech", "inumaki-clan", "tokyo-senior"],
-    offRolePenalties: { leader: 0.75, combat: 0.85 },
+    offRolePenalties: { leader: 0.7, combat: 0.7 },
   },
   "hakari": {
     id: "hakari",
@@ -400,7 +399,7 @@ const CARD_DB: GameState["cardDb"] = {
     basePoints: 9000,
     affinity: "SUPPORT",
     tags: ["sorcerer", "star-map"],
-    offRolePenalties: { leader: 0.7, combat: 0.7 },
+    offRolePenalties: { leader: 0.7, combat: 0.6 },
   },
   "mechamaru": {
     id: "mechamaru",
@@ -418,7 +417,8 @@ const CARD_DB: GameState["cardDb"] = {
     basePoints: 8000,
     affinity: "SUPPORT",
     tags: ["sorcerer", "jujutsu-high", "kyoto"],
-    offRolePenalties: { leader: 0.7, combat: 0.8 },
+    offRolePenalties: { leader: 0.7, combat: 0.9 },
+    perks: { weaponEfficiency: "base" },
   },
   "naoya": {
     id: "naoya",
@@ -480,7 +480,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "S",
     basePoints: 11000,
     affinity: "COMBAT",
-    tags: ["curse", "special-grade", "culling-game", "strongest"],
+    tags: ["curse", "special-grade", "culling-game"],
     offRolePenalties: { leader: 0.9, support: 1 },
   },
   "jinichi": {
@@ -585,9 +585,10 @@ const calcSynergies = (state: GameState, p: PlayerId): SynergyId[] => {
   if (tokyoCount >= 3)      syn.push("TOKYO_TRIO_3");
   else if (tokyoCount >= 2) syn.push("TOKYO_TRIO_2");
 
-  // The Strongest — Gojo, Sukuna, Kurourushi, Mahoraga, Dabura (via "strongest" tag)
+  // The Strongest — Gojo, Sukuna, Mahoraga, Dabura (via "strongest" tag; Kurourushi removed)
   const strongestCount = countTagOnBoard(state, p, "strongest");
-  if (strongestCount >= 4)      syn.push("THE_STRONGEST_4");
+  if (strongestCount >= 5)      syn.push("THE_STRONGEST_5");
+  else if (strongestCount >= 4) syn.push("THE_STRONGEST_4");
   else if (strongestCount >= 3) syn.push("THE_STRONGEST_3");
   else if (strongestCount >= 2) syn.push("THE_STRONGEST_2");
 
@@ -620,6 +621,9 @@ const calcSynergies = (state: GameState, p: PlayerId): SynergyId[] => {
   if (hasOnBoard(state, p, "yuta") && hasOnBoard(state, p, "miguel"))
     syn.push("AFROBEAT");
   if (hasOnBoard(state, p, "yuta") && hasOnBoard(state, p, "maki")) syn.push("YUTA_MAKI");
+
+  // Heaven and Hell - Gojo x Toji (the strongest sorcerer and his nemesis)
+  if (hasOnBoard(state, p, "gojo-base") && hasOnBoard(state, p, "toji")) syn.push("HEAVEN_AND_HELL");
 
   // Kyoto sorcerers — Todo, Miwa, Mechamaru (all tagged "kyoto")
   const kyotoCount = countTagOnBoard(state, p, "kyoto");
@@ -663,20 +667,22 @@ const applySynergyBonus = (base: number, synergies: SynergyId[]): number => {
   else if (synergies.includes("DISASTER_CURSE_2"))   score *= 1.04;
   if (synergies.includes("TOKYO_TRIO_3"))            score *= 1.06;
   else if (synergies.includes("TOKYO_TRIO_2"))       score *= 1.04;
-  if (synergies.includes("THE_STRONGEST_4"))         score *= 5.00;  // instant win
-  else if (synergies.includes("THE_STRONGEST_3"))    score *= 1.10;
-  else if (synergies.includes("THE_STRONGEST_2"))    score *= 1.06;
-  if (synergies.includes("LUCKY_STAR"))              score *= 1.05;
+  if (synergies.includes("THE_STRONGEST_5"))          score *= 9.00;  // instant win
+  else if (synergies.includes("THE_STRONGEST_4"))    score *= 1.06;
+  else if (synergies.includes("THE_STRONGEST_3"))    score *= 1.05;
+  else if (synergies.includes("THE_STRONGEST_2"))    score *= 1.04;
+  if (synergies.includes("LUCKY_STAR"))              score *= 1.03;
   if (synergies.includes("TRIPLE_DOMAIN_CLASH"))     score *= 1.07;
   if (synergies.includes("ZENIN_ELDERS"))            score *= 1.04;
   if (synergies.includes("UNPREDICTABLE_DUO"))       score *= 1.04;
-  if (synergies.includes("SIX_EYES"))                score *= 1.06;
+  if (synergies.includes("SIX_EYES"))                score *= 1.04;
   if (synergies.includes("CULLING_GAME_4"))          score *= 1.07;
   else if (synergies.includes("CULLING_GAME_3"))     score *= 1.05;
   if (synergies.includes("AFROBEAT"))                score *= 1.05;
   if (synergies.includes("KYOTO_3"))                 score *= 1.05;
   else if (synergies.includes("KYOTO_2"))            score *= 1.03;
   if (synergies.includes("YUTA_MAKI"))               score *= 1.05;
+  if (synergies.includes("HEAVEN_AND_HELL"))         score *= 1.04;
   return Math.round(score * 100) / 100;
 };
 
@@ -793,7 +799,7 @@ const applyVowToScore = (state: GameState, p: PlayerId, base: number): VowResult
       return { score: r(base * (1 + pct / 100)), outcome: { met, pct } };
     }
     case "BLIND_FAITH": {
-      return { score: r(base * 1.10), outcome: { met: true, pct: 10 } };
+      return { score: r(base * 1.13), outcome: { met: true, pct: 13 } };
     }
     case "HEAVENLY_RESTRICTION_VOW": {
       const met = hasOnBoard(state, p, "maki") && hasOnBoard(state, p, "toji");
@@ -806,8 +812,8 @@ const applyVowToScore = (state: GameState, p: PlayerId, base: number): VowResult
       for (const c of cards) {
         state.cardDb[c.defId]?.tags?.includes("curse") ? curses++ : nonCurses++;
       }
-      const pct = Math.round((curses * 3 - nonCurses * 1) * 10) / 10;
-      const met = pct >= 0;
+      const pct = Math.round((curses * 1.5 - nonCurses * 1) * 10) / 10;
+      const met = pct > 0;
       return { score: r(base * (1 + pct / 100)), outcome: { met, pct } };
     }
     default: return { score: base, outcome: { met: true, pct: 0 } };
@@ -873,6 +879,12 @@ export const createInitialState = (): GameState => {
       skipsRemaining: { P1: 999, P2: 999 },
       spellsRemaining: { P1: 3, P2: 3 },
       cardRevealUsed: { P1: 0, P2: 0 },
+      cardRevealUsedThisTurn: { P1: 0, P2: 0 },
+      deniesRemaining: { P1: 2, P2: 2 },
+      lastDenyTurn: { P1: 0, P2: 0 },
+      freezesRemaining: { P1: 1, P2: 1 },
+      iceCharges: { P1: 1, P2: 1 },
+      extendsRemaining: { P1: 3, P2: 3 },
     },
     cardDb: CARD_DB,
     players: { P1: emptyZones(), P2: emptyZones() },
@@ -933,8 +945,14 @@ export const createEngine = (initialState: GameState = createInitialState()): En
           return { state, events: [illegal(intent.playerId, "Not in draft phase")] };
         if (state.vowsChosen[intent.playerId] === "BLIND_FAITH")
           return { state, events: [illegal(intent.playerId, "Binding Vow: Blind Faith — spells are forbidden")] };
-        if (state.draft.cardRevealUsed[intent.playerId] >= 2)
+        const specialRevealVows = ["HEAVENLY_RESTRICTION_VOW", "BROTHERHOOD_PACT", "KING_OF_CURSES_VOW"];
+        const hasSpecialVow = specialRevealVows.includes(state.vowsChosen[intent.playerId] ?? "");
+        const revealTotalCap = hasSpecialVow ? 6 : 2;
+        const revealPerTurnCap = hasSpecialVow ? 2 : Infinity;
+        if (state.draft.cardRevealUsed[intent.playerId] >= revealTotalCap)
           return { state, events: [illegal(intent.playerId, "Card Reveal already used this draft")] };
+        if (hasSpecialVow && state.draft.cardRevealUsedThisTurn[intent.playerId] >= revealPerTurnCap)
+          return { state, events: [illegal(intent.playerId, "Card Reveal limit reached this turn (2 per turn)")] };
         if (state.draft.spellsRemaining[intent.playerId] <= 0)
           return { state, events: [illegal(intent.playerId, "No spell charges remaining")] };
         const card = state.draft.pool.find(c => c.instanceId === intent.cardInstanceId);
@@ -947,6 +965,7 @@ export const createEngine = (initialState: GameState = createInitialState()): En
             ...state.draft,
             spellsRemaining: { ...state.draft.spellsRemaining, [intent.playerId]: state.draft.spellsRemaining[intent.playerId] - 1 },
             cardRevealUsed: { ...state.draft.cardRevealUsed, [intent.playerId]: state.draft.cardRevealUsed[intent.playerId] + 1 },
+            cardRevealUsedThisTurn: { ...state.draft.cardRevealUsedThisTurn, [intent.playerId]: state.draft.cardRevealUsedThisTurn[intent.playerId] + 1 },
             pool: updatePoolCard(state.draft.pool, intent.cardInstanceId, { identityRevealed: true }),
           },
         };
@@ -974,7 +993,7 @@ export const createEngine = (initialState: GameState = createInitialState()): En
             pool: updatePoolCard(state.draft.pool, intent.cardInstanceId, { shownRarity: realRarity, shownRole: realRole }),
           },
         };
-        return { state, events: [{ type: "DRAFT_SKIPPED", by: intent.playerId, skipsLeft: state.draft.spellsRemaining[intent.playerId] }] };
+        return { state, events: [{ type: "DRAFT_SKIPPED", by: intent.playerId, skipsLeft: state.draft!.spellsRemaining[intent.playerId] }] };
       }
 
       case "SPELL_FAKE_REVEAL": {
@@ -998,7 +1017,7 @@ export const createEngine = (initialState: GameState = createInitialState()): En
             pool: updatePoolCard(state.draft.pool, intent.cardInstanceId, { shownRarity: fakeRarity }),
           },
         };
-        return { state, events: [{ type: "DRAFT_SKIPPED", by: intent.playerId, skipsLeft: state.draft.spellsRemaining[intent.playerId] }] };
+        return { state, events: [{ type: "DRAFT_SKIPPED", by: intent.playerId, skipsLeft: state.draft!.spellsRemaining[intent.playerId] }] };
       }
 
       // ===== DRAFT PICK / SKIP (consume the turn) =====
@@ -1013,6 +1032,10 @@ export const createEngine = (initialState: GameState = createInitialState()): En
         const poolCard = state.draft.pool.find(c => c.instanceId === intent.cardInstanceId);
         if (!poolCard)
           return { state, events: [illegal(intent.playerId, "Card not in pool")] };
+        if (poolCard.denied)
+          return { state, events: [illegal(intent.playerId, "Card is denied")] };
+        if (poolCard.frozenUntilTurn && poolCard.frozenUntilTurn > state.turn)
+          return { state, events: [illegal(intent.playerId, "Card is frozen")] };
 
         const picked = {
           instanceId: `${intent.playerId}-${poolCard.defId}`,
@@ -1049,12 +1072,25 @@ export const createEngine = (initialState: GameState = createInitialState()): En
         } else {
           // Switch turn + regen 1 spell for the next player (max 3)
           const next = otherPlayer(intent.playerId);
-          const regenSpells = Math.min(3, state.draft.spellsRemaining[next] + 2);
+          const d = state.draft!;
+          const regenSpells = Math.min(3, d.spellsRemaining[next] + 2);
+          const newTurn = state.turn + 1;
+          const thawedPool = d.pool.map(c =>
+            c.frozenUntilTurn && c.frozenUntilTurn <= newTurn
+              ? { ...c, frozenUntilTurn: undefined }
+              : c
+          );
           state = {
             ...state,
             activePlayerId: next,
-            turn: state.turn + 1,
-            draft: { ...state.draft, spellsRemaining: { ...state.draft.spellsRemaining, [next]: regenSpells } },
+            turn: newTurn,
+            draft: {
+              ...d,
+              spellsRemaining: { ...d.spellsRemaining, [next]: regenSpells },
+              cardRevealUsedThisTurn: { ...d.cardRevealUsedThisTurn, [next]: 0 },
+              iceCharges: { ...d.iceCharges, [next]: 1 },
+              pool: thawedPool,
+            },
           };
         }
 
@@ -1072,18 +1108,101 @@ export const createEngine = (initialState: GameState = createInitialState()): En
           [intent.playerId]: state.draft.skipsRemaining[intent.playerId] - 1,
         };
         const next = otherPlayer(intent.playerId);
-        const regenSpells = Math.min(3, state.draft.spellsRemaining[next] + 2);
+        const ds = state.draft!;
+        const regenSpells = Math.min(3, ds.spellsRemaining[next] + 2);
+        const newTurnSkip = state.turn + 1;
+        const thawedPoolSkip = ds.pool.map(c =>
+          c.frozenUntilTurn && c.frozenUntilTurn <= newTurnSkip
+            ? { ...c, frozenUntilTurn: undefined }
+            : c
+        );
         state = {
           ...state,
           activePlayerId: next,
-          turn: state.turn + 1,
+          turn: newTurnSkip,
           draft: {
-            ...state.draft,
+            ...ds,
             skipsRemaining: newSkips,
-            spellsRemaining: { ...state.draft.spellsRemaining, [next]: regenSpells },
+            spellsRemaining: { ...ds.spellsRemaining, [next]: regenSpells },
+            cardRevealUsedThisTurn: { ...ds.cardRevealUsedThisTurn, [next]: 0 },
+            iceCharges: { ...ds.iceCharges, [next]: 1 },
+            pool: thawedPoolSkip,
           },
         };
         return { state, events: [{ type: "DRAFT_SKIPPED", by: intent.playerId, skipsLeft: newSkips[intent.playerId] }] };
+      }
+
+      case "DRAFT_DENY": {
+        if (state.phase !== "DRAFT" || !state.draft)
+          return { state, events: [illegal(intent.playerId, "Not in draft phase")] };
+        if (state.draft.deniesRemaining[intent.playerId] <= 0)
+          return { state, events: [illegal(intent.playerId, "No denies remaining")] };
+        const lastDeny = state.draft.lastDenyTurn[intent.playerId];
+        if (lastDeny > 0 && state.turn - lastDeny < 2)
+          return { state, events: [illegal(intent.playerId, "Must wait 2 turns between denies")] };
+        const denyCard = state.draft.pool.find(c => c.instanceId === intent.cardInstanceId);
+        if (!denyCard || denyCard.denied)
+          return { state, events: [illegal(intent.playerId, "Invalid deny target")] };
+        state = {
+          ...state,
+          draft: {
+            ...state.draft,
+            deniesRemaining: { ...state.draft.deniesRemaining, [intent.playerId]: state.draft.deniesRemaining[intent.playerId] - 1 },
+            lastDenyTurn: { ...state.draft.lastDenyTurn, [intent.playerId]: state.turn },
+            pool: updatePoolCard(state.draft.pool, intent.cardInstanceId, { identityRevealed: true, denied: true }),
+          },
+        };
+        return { state, events: [{ type: "DRAFT_PICKED", by: intent.playerId, defId: denyCard.defId }] };
+      }
+
+      case "DRAFT_FREEZE": {
+        if (state.phase !== "DRAFT" || !state.draft)
+          return { state, events: [illegal(intent.playerId, "Not in draft phase")] };
+        if (state.draft.freezesRemaining[intent.playerId] <= 0)
+          return { state, events: [illegal(intent.playerId, "No freezes remaining")] };
+        if ((state.draft.iceCharges[intent.playerId] ?? 0) <= 0)
+          return { state, events: [illegal(intent.playerId, "No ice charges remaining")] };
+        const freezeCard = state.draft.pool.find(c => c.instanceId === intent.cardInstanceId);
+        if (!freezeCard || freezeCard.denied)
+          return { state, events: [illegal(intent.playerId, "Invalid freeze target")] };
+        state = {
+          ...state,
+          draft: {
+            ...state.draft,
+            freezesRemaining: { ...state.draft.freezesRemaining, [intent.playerId]: 0 },
+            iceCharges: { ...state.draft.iceCharges, [intent.playerId]: state.draft.iceCharges[intent.playerId] - 1 },
+            pool: updatePoolCard(state.draft.pool, intent.cardInstanceId, {
+              identityRevealed: true,
+              frozenUntilTurn: state.turn + 2,
+            }),
+          },
+        };
+        return { state, events: [{ type: "DRAFT_PICKED", by: intent.playerId, defId: freezeCard.defId }] };
+      }
+
+      case "DRAFT_EXTEND_FREEZE": {
+        if (state.phase !== "DRAFT" || !state.draft)
+          return { state, events: [illegal(intent.playerId, "Not in draft phase")] };
+        const extendsLeft = state.draft.extendsRemaining?.[intent.playerId] ?? 0;
+        if (extendsLeft <= 0)
+          return { state, events: [illegal(intent.playerId, "No extends remaining")] };
+        if ((state.draft.iceCharges[intent.playerId] ?? 0) <= 0)
+          return { state, events: [illegal(intent.playerId, "No ice charges remaining")] };
+        const extCard = state.draft.pool.find(c => c.instanceId === intent.cardInstanceId);
+        if (!extCard || !extCard.frozenUntilTurn || extCard.frozenUntilTurn <= state.turn)
+          return { state, events: [illegal(intent.playerId, "Card is not frozen")] };
+        state = {
+          ...state,
+          draft: {
+            ...state.draft,
+            extendsRemaining: { ...state.draft.extendsRemaining, [intent.playerId]: extendsLeft - 1 },
+            iceCharges: { ...state.draft.iceCharges, [intent.playerId]: state.draft.iceCharges[intent.playerId] - 1 },
+            pool: updatePoolCard(state.draft.pool, intent.cardInstanceId, {
+              frozenUntilTurn: extCard.frozenUntilTurn + 1,
+            }),
+          },
+        };
+        return { state, events: [] };
       }
 
       // ===== REVEAL PHASE =====
@@ -1426,7 +1545,8 @@ export const createEngine = (initialState: GameState = createInitialState()): En
           draft: {
             ...state.draft,
             spellsRemaining: { ...state.draft.spellsRemaining, [intent.playerId]: 99 },
-            cardRevealUsed:  { ...state.draft.cardRevealUsed,  [intent.playerId]: 0 },
+            cardRevealUsed: { ...state.draft.cardRevealUsed, [intent.playerId]: 0 },
+            cardRevealUsedThisTurn: { ...state.draft.cardRevealUsedThisTurn, [intent.playerId]: 0 },
           },
         };
         return { state, events: [] };

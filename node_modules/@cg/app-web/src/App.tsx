@@ -4,6 +4,7 @@ import { createEngine, createInitialState } from "@cg/engine";
 import type { PlayerIcons, PlayerNames } from "./types";
 
 import HomeScreen from "./screens/HomeScreen";
+import CardGallery from "./screens/CardGallery";
 import SetupScreen from "./screens/SetupScreen";
 import BindingVowScreen from "./screens/BindingVowScreen";
 import CoinFlipScreen from "./screens/CoinFlipScreen";
@@ -14,7 +15,7 @@ import AugmentScreen from "./screens/AugmentScreen";
 import LockedInScreen from "./screens/LockedInScreen";
 import ResolutionScreen from "./screens/ResolutionScreen";
 
-type AppScreen = "HOME" | "SETUP" | "GAME";
+type AppScreen = "HOME" | "SETUP" | "GAME" | "GALLERY";
 
 export default function App() {
   const [appScreen, setAppScreen] = useState<AppScreen>("HOME");
@@ -34,7 +35,8 @@ export default function App() {
     setState(res.state);
   };
 
-  if (appScreen === "HOME") return <HomeScreen onSelect={() => setAppScreen("SETUP")} />;
+  if (appScreen === "HOME") return <HomeScreen onSelect={() => setAppScreen("SETUP")} onGallery={() => setAppScreen("GALLERY")} />;
+  if (appScreen === "GALLERY") return <CardGallery cardDb={state.cardDb} onBack={() => setAppScreen("HOME")} />;
 
   if (appScreen === "SETUP") {
     return <SetupScreen onStart={(names, icons) => {
@@ -68,7 +70,7 @@ export default function App() {
   }
 
   if (state.phase === "REVEAL") {
-    return <RevealScreen state={state} onSend={send} />;
+    return <RevealScreen state={state} onSend={send} playerNames={playerNames} />;
   }
 
   if (state.phase === "AUGMENT") {
