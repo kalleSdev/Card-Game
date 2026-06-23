@@ -98,7 +98,7 @@ function PlayerPanel({ pid, name, icon, onNameChange, onIconChange, color, iconO
   );
 }
 
-export default function SetupScreen({ onStart }: { onStart: (names: PlayerNames, icons: PlayerIcons) => void }) {
+export default function SetupScreen({ onStart, onHome }: { onStart: (names: PlayerNames, icons: PlayerIcons) => void; onHome: () => void }) {
   const [p1Name, setP1Name] = useState("Player 1");
   const [p2Name, setP2Name] = useState("Player 2");
   const [p1Icon, setP1Icon] = useState("player-1");
@@ -128,6 +128,20 @@ export default function SetupScreen({ onStart }: { onStart: (names: PlayerNames,
         position: "fixed", inset: 0, pointerEvents: "none",
         background: "radial-gradient(ellipse at center, transparent 35%, rgba(2,2,8,0.72) 100%)",
       }} />
+
+      {/* Home button — top left */}
+      <button
+        onClick={onHome}
+        style={{
+          position: "fixed", top: 18, left: 18, zIndex: 10,
+          padding: "8px 18px", background: "rgba(255,255,255,0.04)",
+          border: "1px solid #2a2a3a", borderRadius: 8,
+          color: "#666", cursor: "pointer", fontSize: 11,
+          letterSpacing: 2, fontFamily: "inherit",
+        }}
+      >
+        ← HOME
+      </button>
 
       <div style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: 900, display: "flex", flexDirection: "column", alignItems: "center" }}>
 

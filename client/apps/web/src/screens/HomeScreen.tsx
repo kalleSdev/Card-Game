@@ -72,7 +72,7 @@ function AmbientCanvas() {
   );
 }
 
-export default function HomeScreen({ onSelect, onGallery }: { onSelect: () => void; onGallery: () => void }) {
+export default function HomeScreen({ onSelect, onGallery, onBack }: { onSelect: () => void; onGallery: () => void; onBack?: () => void }) {
   const [hovered, setHovered] = useState(false);
   const [galleryHovered, setGalleryHovered] = useState(false);
   const [pulse, setPulse] = useState(false);
@@ -95,8 +95,24 @@ export default function HomeScreen({ onSelect, onGallery }: { onSelect: () => vo
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
       fontFamily: "'Segoe UI', system-ui, sans-serif", overflow: "hidden", position: "relative",
     }}>
-      {/* Base dark overlay */}
-      <div style={{ position: "absolute", inset: 0, background: "rgba(3,3,10,0.52)", pointerEvents: "none", zIndex: 0 }} />
+      {/* Base dark overlay — lighter so background shows */}
+      <div style={{ position: "absolute", inset: 0, background: "rgba(3,3,10,0.26)", pointerEvents: "none", zIndex: 0 }} />
+
+      {/* Back to splash */}
+      {onBack && (
+        <button
+          onClick={onBack}
+          style={{
+            position: "fixed", top: 18, left: 18, zIndex: 10,
+            padding: "8px 18px", background: "rgba(255,255,255,0.04)",
+            border: "1px solid #2a2a3a", borderRadius: 8,
+            color: "#556", cursor: "pointer", fontSize: 11,
+            letterSpacing: 2, fontFamily: "inherit",
+          }}
+        >
+          ← HOME
+        </button>
+      )}
 
       {/* Ambient particles */}
       <AmbientCanvas />
@@ -104,7 +120,7 @@ export default function HomeScreen({ onSelect, onGallery }: { onSelect: () => vo
       {/* Vignette */}
       <div style={{
         position: "fixed", inset: 0, pointerEvents: "none", zIndex: 2,
-        background: "radial-gradient(ellipse at center, transparent 40%, rgba(2,2,8,0.7) 100%)",
+        background: "radial-gradient(ellipse at center, transparent 40%, rgba(2,2,8,0.45) 100%)",
       }} />
 
       {/* ── Main content ── */}
@@ -125,7 +141,7 @@ export default function HomeScreen({ onSelect, onGallery }: { onSelect: () => vo
             transition={{ duration: 0.55, ease: "easeInOut" }}
             style={{
               fontSize: 112, fontWeight: 900, lineHeight: 1,
-              color: "#c088ff",
+              color: "#d8aaff",
               userSelect: "none", letterSpacing: 4,
             }}
           >
@@ -137,7 +153,7 @@ export default function HomeScreen({ onSelect, onGallery }: { onSelect: () => vo
             transition={{ duration: 3.0, repeat: Infinity, ease: "easeInOut" }}
             style={{
               fontSize: 13, fontWeight: "bold", letterSpacing: 16,
-              color: "#8866bb",
+              color: "#b899dd",
               marginTop: 8, textTransform: "uppercase",
             }}
           >
@@ -211,9 +227,9 @@ export default function HomeScreen({ onSelect, onGallery }: { onSelect: () => vo
             <div style={{ textAlign: "left" }}>
               <div style={{
                 fontSize: 22, fontWeight: "bold", letterSpacing: 4,
-                color: hovered ? "#ffffff" : "#ccaaee",
+                color: hovered ? "#ffffff" : "#e0ccf8",
               }}>JJK</div>
-              <div style={{ fontSize: 10, color: hovered ? "#bb99dd" : "#665577", letterSpacing: 1, marginBottom: 10 }}>
+              <div style={{ fontSize: 10, color: hovered ? "#cc99ee" : "#9977aa", letterSpacing: 1, marginBottom: 10 }}>
                 Jujutsu Kaisen
               </div>
               <motion.div
@@ -227,7 +243,7 @@ export default function HomeScreen({ onSelect, onGallery }: { onSelect: () => vo
                   boxShadow: hovered ? "0 0 12px #9933ff55" : "none",
                 }}
               >
-                <span style={{ fontSize: 9, color: hovered ? "#cc88ff" : "#776688", letterSpacing: 2 }}>
+                <span style={{ fontSize: 9, color: hovered ? "#dd99ff" : "#9988bb", letterSpacing: 2 }}>
                   ▶ START GAME
                 </span>
               </motion.div>
@@ -269,10 +285,10 @@ export default function HomeScreen({ onSelect, onGallery }: { onSelect: () => vo
               📖
             </div>
             <div style={{ textAlign: "left" }}>
-              <div style={{ fontSize: 16, fontWeight: "bold", letterSpacing: 3, color: galleryHovered ? "#aaccff" : "#445566" }}>
+              <div style={{ fontSize: 16, fontWeight: "bold", letterSpacing: 3, color: galleryHovered ? "#bbddff" : "#7799bb" }}>
                 CARD GALLERY
               </div>
-              <div style={{ fontSize: 9, color: galleryHovered ? "#6688aa" : "#223344", letterSpacing: 1 }}>
+              <div style={{ fontSize: 9, color: galleryHovered ? "#88aacc" : "#556677", letterSpacing: 1 }}>
                 Browse all 34 characters
               </div>
             </div>
@@ -284,7 +300,7 @@ export default function HomeScreen({ onSelect, onGallery }: { onSelect: () => vo
           initial={{ opacity: 0 }}
           animate={{ opacity: [0, 0.5, 0] }}
           transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut", delay: 1.2 }}
-          style={{ marginTop: 48, fontSize: 10, color: "#664488", letterSpacing: 5 }}
+          style={{ marginTop: 48, fontSize: 10, color: "#9966bb", letterSpacing: 5 }}
         >
           SELECT A GAME MODE TO BEGIN
         </motion.div>

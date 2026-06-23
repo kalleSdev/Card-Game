@@ -119,9 +119,10 @@ function PlayerStatusPanel({ pid, playerNames, playerIcons, vowChosen, isActive,
   );
 }
 
-export default function BindingVowScreen({ state, onSend, playerNames, playerIcons }: {
+export default function BindingVowScreen({ state, onSend, playerNames, playerIcons, onHome }: {
   state: GameState; onSend: (i: Intent) => void;
   playerNames: PlayerNames; playerIcons: PlayerIcons;
+  onHome: () => void;
 }) {
   const me = state.activePlayerId;
   const [selected, setSelected] = useState<BindingVowId | null | "PASS">(null);
@@ -146,6 +147,19 @@ export default function BindingVowScreen({ state, onSend, playerNames, playerIco
       <AmbientCanvas theme="wisps" />
       <AmbientOverlay theme="red" />
       <div style={{ position: "fixed", inset: 0, background: "rgba(7,3,10,0.68)", pointerEvents: "none" }} />
+      {/* Home button */}
+      <button
+        onClick={onHome}
+        style={{
+          position: "fixed", top: 18, left: 18, zIndex: 10,
+          padding: "8px 18px", background: "rgba(255,255,255,0.04)",
+          border: "1px solid #2a2a3a", borderRadius: 8,
+          color: "#666", cursor: "pointer", fontSize: 11,
+          letterSpacing: 2, fontFamily: "inherit",
+        }}
+      >
+        ← HOME
+      </button>
       <div style={{
         position: "fixed", inset: 0, pointerEvents: "none",
         background: "radial-gradient(ellipse at 50% 40%, transparent 40%, rgba(2,0,5,0.72) 100%)",

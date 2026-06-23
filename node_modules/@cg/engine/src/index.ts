@@ -270,7 +270,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "SS",
     basePoints: 12000,
     affinity: "SUPPORT",
-    tags: ["sorcerer", "curse-spirit"],
+    tags: ["sorcerer", "curse-spirit", "curse-leader-geto"],
     offRolePenalties: { leader: 0.8, combat: 0.75 },
   },
   "sukuna": {
@@ -333,7 +333,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "S",
     basePoints: 11000,
     affinity: "COMBAT",
-    tags: ["curse", "idle-transfiguration", "disaster-curse"],
+    tags: ["curse", "idle-transfiguration", "disaster-curse", "curse-subordinate"],
     offRolePenalties: { leader: 0.8, support: 0.75 },
   },
   "jogo": {
@@ -342,7 +342,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "S",
     basePoints: 11000,
     affinity: "COMBAT",
-    tags: ["curse", "disaster-flame", "disaster-curse"],
+    tags: ["curse", "disaster-flame", "disaster-curse", "curse-subordinate"],
     offRolePenalties: { leader: 0.75, support: 0.8 },
   },
   "hanami": {
@@ -360,7 +360,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "S",
     basePoints: 10000,
     affinity: "SUPPORT",
-    tags: ["curse", "disaster-sea", "disaster-curse"],
+    tags: ["curse", "disaster-sea", "disaster-curse", "curse-subordinate"],
     offRolePenalties: { leader: 0.7, combat: 0.8 },
   },
 
@@ -574,6 +574,14 @@ const calcSynergies = (state: GameState, p: PlayerId): SynergyId[] => {
     else if (studentCount >= 2) syn.push("REL_GOJO_2STUDENTS");
   }
 
+  // Curse Leader — Geto leads his curse subordinates (Mahito, Jogo, Dagon)
+  if (hasOnBoard(state, p, "geto")) {
+    const subCount = ["mahito", "jogo", "dagon"].filter(id => hasOnBoard(state, p, id)).length;
+    if (subCount >= 3)      syn.push("CURSE_LEADER_3");
+    else if (subCount >= 2) syn.push("CURSE_LEADER_2");
+    else if (subCount >= 1) syn.push("CURSE_LEADER_1");
+  }
+
   // Disaster Curse combo — Mahito, Jogo, Hanami, Dagon
   const disasterCount = ["mahito", "jogo", "hanami", "dagon"].filter(id => hasOnBoard(state, p, id)).length;
   if (disasterCount >= 4)      syn.push("DISASTER_CURSE_4");
@@ -657,11 +665,14 @@ const applySynergyBonus = (base: number, synergies: SynergyId[]): number => {
   if (synergies.includes("ATTR_HEAVENLY_2"))    score *= 1.05;
   if (synergies.includes("ATTR_ZENIN_2"))       score *= 1.03;
   if (synergies.includes("ATTR_JUJUTSU_3"))     score *= 1.05;
-  if (synergies.includes("REL_MEMORY_RES"))     score *= 1.05;
+  if (synergies.includes("REL_MEMORY_RES"))     score *= 1.03;
   if (synergies.includes("REL_BROTHERHOOD_3"))  score *= 1.08;
   else if (synergies.includes("REL_BROTHERHOOD")) score *= 1.05;
   if (synergies.includes("REL_GOJO_3STUDENTS"))      score *= 1.8;
   else if (synergies.includes("REL_GOJO_2STUDENTS")) score *= 1.05;
+  if (synergies.includes("CURSE_LEADER_3"))           score *= 1.06;
+  else if (synergies.includes("CURSE_LEADER_2"))     score *= 1.045;
+  else if (synergies.includes("CURSE_LEADER_1"))     score *= 1.03;
   if (synergies.includes("DISASTER_CURSE_4"))        score *= 1.10;
   else if (synergies.includes("DISASTER_CURSE_3"))   score *= 1.06;
   else if (synergies.includes("DISASTER_CURSE_2"))   score *= 1.04;
@@ -812,7 +823,7 @@ const applyVowToScore = (state: GameState, p: PlayerId, base: number): VowResult
       for (const c of cards) {
         state.cardDb[c.defId]?.tags?.includes("curse") ? curses++ : nonCurses++;
       }
-      const pct = Math.round((curses * 1.5 - nonCurses * 1) * 10) / 10;
+      const pct = Math.round((curses * 1.7 - nonCurses * 0.9) * 10) / 10;
       const met = pct > 0;
       return { score: r(base * (1 + pct / 100)), outcome: { met, pct } };
     }
@@ -947,7 +958,7 @@ export const createEngine = (initialState: GameState = createInitialState()): En
           return { state, events: [illegal(intent.playerId, "Binding Vow: Blind Faith — spells are forbidden")] };
         const specialRevealVows = ["HEAVENLY_RESTRICTION_VOW", "BROTHERHOOD_PACT", "KING_OF_CURSES_VOW"];
         const hasSpecialVow = specialRevealVows.includes(state.vowsChosen[intent.playerId] ?? "");
-        const revealTotalCap = hasSpecialVow ? 6 : 2;
+        const revealTotalCap = hasSpecialVow ? 8 : 2;
         const revealPerTurnCap = hasSpecialVow ? 2 : Infinity;
         if (state.draft.cardRevealUsed[intent.playerId] >= revealTotalCap)
           return { state, events: [illegal(intent.playerId, "Card Reveal already used this draft")] };
@@ -1135,6 +1146,8 @@ export const createEngine = (initialState: GameState = createInitialState()): En
       case "DRAFT_DENY": {
         if (state.phase !== "DRAFT" || !state.draft)
           return { state, events: [illegal(intent.playerId, "Not in draft phase")] };
+        if (state.vowsChosen[intent.playerId] === "BLIND_FAITH")
+          return { state, events: [illegal(intent.playerId, "Binding Vow: Blind Faith — deny is forbidden")] };
         if (state.draft.deniesRemaining[intent.playerId] <= 0)
           return { state, events: [illegal(intent.playerId, "No denies remaining")] };
         const lastDeny = state.draft.lastDenyTurn[intent.playerId];
@@ -1158,6 +1171,8 @@ export const createEngine = (initialState: GameState = createInitialState()): En
       case "DRAFT_FREEZE": {
         if (state.phase !== "DRAFT" || !state.draft)
           return { state, events: [illegal(intent.playerId, "Not in draft phase")] };
+        if (state.vowsChosen[intent.playerId] === "BLIND_FAITH")
+          return { state, events: [illegal(intent.playerId, "Binding Vow: Blind Faith — freeze is forbidden")] };
         if (state.draft.freezesRemaining[intent.playerId] <= 0)
           return { state, events: [illegal(intent.playerId, "No freezes remaining")] };
         if ((state.draft.iceCharges[intent.playerId] ?? 0) <= 0)

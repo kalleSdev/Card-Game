@@ -3,6 +3,7 @@ import type { GameState, Intent } from "@cg/contracts";
 import { createEngine, createInitialState } from "@cg/engine";
 import type { PlayerIcons, PlayerNames } from "./types";
 
+import SplashScreen from "./screens/SplashScreen";
 import HomeScreen from "./screens/HomeScreen";
 import CardGallery from "./screens/CardGallery";
 import SetupScreen from "./screens/SetupScreen";
@@ -15,10 +16,10 @@ import AugmentScreen from "./screens/AugmentScreen";
 import LockedInScreen from "./screens/LockedInScreen";
 import ResolutionScreen from "./screens/ResolutionScreen";
 
-type AppScreen = "HOME" | "SETUP" | "GAME" | "GALLERY";
+type AppScreen = "SPLASH" | "HOME" | "SETUP" | "GAME" | "GALLERY";
 
 export default function App() {
-  const [appScreen, setAppScreen] = useState<AppScreen>("HOME");
+  const [appScreen, setAppScreen] = useState<AppScreen>("SPLASH");
   const [playerNames, setPlayerNames] = useState<PlayerNames>({ P1: "Player 1", P2: "Player 2" });
   const [playerIcons, setPlayerIcons] = useState<PlayerIcons>({ P1: "⚡", P2: "💀" });
   const [key, setKey] = useState(0);
@@ -35,11 +36,12 @@ export default function App() {
     setState(res.state);
   };
 
-  if (appScreen === "HOME") return <HomeScreen onSelect={() => setAppScreen("SETUP")} onGallery={() => setAppScreen("GALLERY")} />;
+  if (appScreen === "SPLASH") return <SplashScreen onSelectJJK={() => setAppScreen("HOME")} />;
+  if (appScreen === "HOME") return <HomeScreen onSelect={() => setAppScreen("SETUP")} onGallery={() => setAppScreen("GALLERY")} onBack={() => setAppScreen("SPLASH")} />;
   if (appScreen === "GALLERY") return <CardGallery cardDb={state.cardDb} onBack={() => setAppScreen("HOME")} />;
 
   if (appScreen === "SETUP") {
-    return <SetupScreen onStart={(names, icons) => {
+    return <SetupScreen onHome={() => setAppScreen("HOME")} onStart={(names, icons) => {
       setPlayerNames(names);
       setPlayerIcons(icons);
       setAppScreen("GAME");
@@ -47,7 +49,7 @@ export default function App() {
   }
 
   if (state.phase === "BINDING_VOW") {
-    return <BindingVowScreen state={state} onSend={send} playerNames={playerNames} playerIcons={playerIcons} />;
+    return <BindingVowScreen state={state} onSend={send} playerNames={playerNames} playerIcons={playerIcons} onHome={() => { setKey(k => k + 1); setAppScreen("HOME"); }} />;
   }
 
   if (state.phase === "DRAFT" && state.draft && !state.draft.coinFlipped) {
@@ -59,7 +61,7 @@ export default function App() {
         </div>
         {/* Coin flip as a translucent overlay */}
         <div style={{ position: "fixed", inset: 0, zIndex: 50 }}>
-          <CoinFlipScreen onFlip={firstPicker => send({ type: "FLIP_COIN", firstPicker })} playerNames={playerNames} playerIcons={playerIcons} />
+          <CoinFlipScreen onFlip={firstPicker => send({ type: "FLIP_COIN", firstPicker })} playerNames={playerNames} playerIcons={playerIcons} onHome={() => { setKey(k => k + 1); setAppScreen("HOME"); }} />
         </div>
       </div>
     );

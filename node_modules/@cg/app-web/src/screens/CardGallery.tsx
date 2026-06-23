@@ -60,8 +60,13 @@ const TAG_SYNERGY: Record<string, string> = {
   "star-map":       "⭐ Lucky Star",
   "miguel-rope":    "🔱 Miguel",
   "zenin-elder":    "⚔ Zenin Elders",
-  "rika":           "💜 Rika Bond",
+  "rika":              "💜 Rika Bond",
+  "curse-leader-geto": "👿 Curse Leader (Geto)",
+  "curse-subordinate": "👿 Curse Leader (sub)",
 };
+
+// Maps defId to memory-resonance partner for gallery display
+const MEMORY_RESONANCE_IDS = new Set(["gojo-base", "geto"]);
 
 const RARITY_ORDER = ["X", "SSS", "SS", "S", "A", "B", "C"];
 
@@ -72,6 +77,9 @@ function CardDetail({ defId, def, onClose }: { defId: string; def: CardDef; onCl
   const cardSynergies = def.tags
     .filter(t => TAG_SYNERGY[t])
     .map(t => ({ tag: t, label: TAG_SYNERGY[t] }));
+  if (MEMORY_RESONANCE_IDS.has(defId)) {
+    cardSynergies.push({ tag: "memory-resonance", label: "👁 Memory Resonance +3% (w/ Gojo or Geto)" });
+  }
 
   return (
     <div
@@ -308,7 +316,7 @@ export default function CardGallery({
           flex: 1, overflowY: "auto",
           display: "flex", flexWrap: "wrap",
           gap: 14, alignContent: "flex-start",
-          paddingBottom: 24,
+          paddingTop: 20, paddingBottom: 24,
         }}>
           {entries.map(([id, def]) => {
             const color = rc(def.rarity);

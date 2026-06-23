@@ -214,10 +214,11 @@ function Coin3D({ phase, result, p1Color, p2Color, p1Name, p2Name, onClick }: {
   );
 }
 
-export default function CoinFlipScreen({ onFlip, playerNames, playerIcons }: {
+export default function CoinFlipScreen({ onFlip, playerNames, playerIcons, onHome }: {
   onFlip: (firstPicker: PlayerId) => void;
   playerNames: PlayerNames;
   playerIcons: PlayerIcons;
+  onHome?: () => void;
 }) {
   const [phase, setPhase] = useState<"idle" | "spinning" | "landing" | "done">("idle");
   const [result, setResult] = useState<PlayerId | null>(null);
@@ -252,6 +253,20 @@ export default function CoinFlipScreen({ onFlip, playerNames, playerIcons }: {
     }}>
       <AmbientCanvas theme="snow" />
       <AmbientOverlay theme="purple" />
+      {onHome && (
+        <button
+          onClick={onHome}
+          style={{
+            position: "fixed", top: 18, left: 18, zIndex: 10,
+            padding: "8px 18px", background: "rgba(255,255,255,0.04)",
+            border: "1px solid #2a2a3a", borderRadius: 8,
+            color: "#666", cursor: "pointer", fontSize: 11,
+            letterSpacing: 2, fontFamily: "inherit",
+          }}
+        >
+          ← HOME
+        </button>
+      )}
       <motion.div
         animate={{ background: phase === "spinning" ? "rgba(2,2,6,0.72)" : "rgba(4,4,10,0.45)" }}
         transition={{ duration: 0.6 }}

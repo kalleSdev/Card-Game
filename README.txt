@@ -4,8 +4,14 @@ How to start:
 npm run dev
 
 
+NEXT TIME: 
+Resolution screen cinematic
+refine all cinematics
 
-
+have the reveal cinematic play for the domain expansion
+yuji and geto synergy
+no need for the card to be a "card" in the cinematics, just have it be still for dramatic effect and quality of the cinematic. 
+vfx
 
 #NOTES
 Domain Unleash becomes a rock paper scissors type of game where winner gets bonus points

@@ -12,7 +12,7 @@ const bg = (name: string, ext: string) => `url('/backgrounds/${name}.${ext}')`;
 // Preload all backgrounds, player icons, and card images immediately on import
 // so every phase transition and SetupScreen render is instant.
 const BG_FILES = [
-  "home","setup","vow","coinflip","draft","reveal","placement","augment","locked-in","resolution",
+  "splash","home","setup","vow","coinflip","draft","reveal","placement","augment","locked-in","resolution",
 ];
 for (const name of BG_FILES) { const i = new Image(); i.src = `/backgrounds/${name}.jpg`; }
 

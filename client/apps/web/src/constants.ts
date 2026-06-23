@@ -64,7 +64,10 @@ export const SYNERGY_LABEL: Record<string, string> = {
   SIX_EYES:            "👁 Six Eyes (+4%)",
   CULLING_GAME_3:      "⚔ Culling Game ×3 (+5%)",
   CULLING_GAME_4:      "💀 Culling Game ×4 (+7%)",
-  REL_MEMORY_RES:      "👁 Memory Resonance (+5%)",
+  REL_MEMORY_RES:      "👁 Memory Resonance (+3%)",
+  CURSE_LEADER_1:      "👿 Curse Leader ×1 (+3%)",
+  CURSE_LEADER_2:      "👿 Curse Leader ×2 (+4.5%)",
+  CURSE_LEADER_3:      "☠ Curse Leader ×3 (+6%)",
   REL_GOJO_2STUDENTS:  "🎓 Gojo ×2 Students (+5%)",
   REL_GOJO_3STUDENTS:  "🎓 Gojo ×3 Students (+80%)",  // engine: 1.8
   DISASTER_CURSE_2:    "💀 Disaster Curse ×2 (+4%)",

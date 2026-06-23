@@ -10,6 +10,9 @@ import { rc } from "../helpers";
 import { SYNERGY_LABEL } from "../constants";
 import AmbientOverlay from "../components/AmbientOverlay";
 import AmbientCanvas from "../components/AmbientCanvas";
+import CardRevealCinematic from "./CardRevealCinematic";
+import PickSideCinematic from "./PickSideCinematic";
+import RateSideCinematic from "./RateSideCinematic";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Spell type
@@ -25,7 +28,7 @@ function PoolCard({
   onPick,
   debugRevealMode,
   currentTurn,
-  onDragStart, onDragEnd, onRevealEffect,
+  onDragStart, onDragEnd, onRevealEffect, onPickHighRarity, onRateHighRarity,
 }: {
   card: DraftPoolCard; cardDb: Record<string, CardDef>;
   isMyTurn: boolean; myPlayerId: PlayerId;
@@ -36,7 +39,9 @@ function PoolCard({
   currentTurn: number;
   onDragStart?: () => void;
   onDragEnd?: () => void;
-  onRevealEffect?: (rarity: string, color: string) => void;
+  onRevealEffect?: (rarity: string, color: string, defId: string) => void;
+  onPickHighRarity?: (defId: string, def: CardDef) => void;
+  onRateHighRarity?: (rarity: string) => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const rotateZ = useMotionValue(0);
@@ -47,12 +52,15 @@ function PoolCard({
   const prevShownRarity = useRef(card.shownRarity);
   useEffect(() => {
     if (!prevRevealed.current && card.identityRevealed && def)
-      onRevealEffect?.(def.rarity, rc(def.rarity));
+      onRevealEffect?.(def.rarity, rc(def.rarity), card.defId);
     prevRevealed.current = card.identityRevealed;
   }, [card.identityRevealed]);
   useEffect(() => {
-    if (!prevShownRarity.current && card.shownRarity)
+    if (!prevShownRarity.current && card.shownRarity) {
       onRevealEffect?.(card.shownRarity, rc(card.shownRarity));
+      if (["SS", "SSS", "X"].includes(card.shownRarity))
+        onRateHighRarity?.(card.shownRarity);
+    }
     prevShownRarity.current = card.shownRarity;
   }, [card.shownRarity]);
 
@@ -92,6 +100,8 @@ function PoolCard({
     const els = document.elementsFromPoint(info.point.x, info.point.y);
     const dropZone = els.find(el => (el as HTMLElement).hasAttribute?.("data-drop-hand")) as HTMLElement | undefined;
     if (dropZone && dropZone.getAttribute("data-drop-hand") === myPlayerId) {
+      if (card.identityRevealed && def && ["SS", "SSS", "X"].includes(def.rarity))
+        onPickHighRarity?.(card.defId, def);
       onPick();
     }
   };
@@ -117,7 +127,13 @@ function PoolCard({
       dragMomentum={false}
       dragTransition={{ bounceStiffness: 550, bounceDamping: 38 }}
       onClick={handleClick}
-      onDoubleClick={() => { if (isMyTurn && !activeSpell && !isDenied && !isFrozen) onPick(); }}
+      onDoubleClick={() => {
+        if (isMyTurn && !activeSpell && !isDenied && !isFrozen) {
+          if (card.identityRevealed && def && ["SS", "SSS", "X"].includes(def.rarity))
+            onPickHighRarity?.(card.defId, def);
+          onPick();
+        }
+      }}
       onDragStart={() => {
         setIsDragging(true);
         onDragStart?.();
@@ -417,40 +433,40 @@ function PlayerHandPanel({
           <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
             {Array.from({ length: 3 }).map((_, i) => (
               <span key={i} style={{
-                fontSize: 18, lineHeight: 1,
+                fontSize: 25, lineHeight: 1,
                 opacity: i < spellsLeft ? 1 : 0.18,
-                filter: i < spellsLeft && isActive ? `drop-shadow(0 0 6px ${pColor}88)` : "none",
+                filter: i < spellsLeft && isActive ? `drop-shadow(0 0 8px ${pColor}88)` : "none",
                 transition: "all 0.2s",
               }}>⚡</span>
             ))}
-            <span style={{ fontSize: 9, color: "#445", letterSpacing: 1, marginLeft: 4 }}>SPELLS</span>
+            <span style={{ fontSize: 12, color: "#445", letterSpacing: 1, marginLeft: 4 }}>SPELLS</span>
           </div>
 
-          <div style={{ width: 1, height: 18, background: "#1a1a28" }} />
+          <div style={{ width: 1, height: 26, background: "#1a1a28" }} />
 
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{
-              fontSize: 18, lineHeight: 1,
+              fontSize: 25, lineHeight: 1,
               opacity: iceCharges > 0 ? 1 : 0.18,
-              filter: iceCharges > 0 && isActive ? "drop-shadow(0 0 6px #44aaff88)" : "none",
+              filter: iceCharges > 0 && isActive ? "drop-shadow(0 0 8px #44aaff88)" : "none",
               textDecoration: iceCharges <= 0 ? "line-through" : "none",
               transition: "all 0.2s",
             }}>🧊</span>
-            <span style={{ fontSize: 9, color: "#445", letterSpacing: 1 }}>FREEZE</span>
+            <span style={{ fontSize: 12, color: "#445", letterSpacing: 1 }}>FREEZE</span>
           </div>
 
-          <div style={{ width: 1, height: 18, background: "#1a1a28" }} />
+          <div style={{ width: 1, height: 26, background: "#1a1a28" }} />
 
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 18, lineHeight: 1, opacity: isActive ? 1 : 0.35, filter: isActive ? `drop-shadow(0 0 6px ${pColor}66)` : "none" }}>🃏</span>
+            <span style={{ fontSize: 25, lineHeight: 1, opacity: isActive ? 1 : 0.35, filter: isActive ? `drop-shadow(0 0 8px ${pColor}66)` : "none" }}>🃏</span>
             <span style={{
-              fontSize: 12, fontWeight: "bold",
+              fontSize: 17, fontWeight: "bold",
               color: isActive ? pColor : "#3a3a4a",
               textShadow: isActive ? `0 0 8px ${pColor}66` : "none",
             }}>
               {revealCap - revealsUsed}/{revealCap}
             </span>
-            <span style={{ fontSize: 9, color: "#445", letterSpacing: 1 }}>REVEALS</span>
+            <span style={{ fontSize: 12, color: "#445", letterSpacing: 1 }}>REVEALS</span>
           </div>
         </div>
 
@@ -490,7 +506,7 @@ export default function DraftScreen({ state, onSend, playerNames, playerIcons }:
   const cardRevealUsed = draft.cardRevealUsed[me];
   const specialRevealVows = ["HEAVENLY_RESTRICTION_VOW", "BROTHERHOOD_PACT", "KING_OF_CURSES_VOW"];
   const hasSpecialVow = specialRevealVows.includes(state.vowsChosen[me] ?? "");
-  const revealTotalCap = hasSpecialVow ? 6 : 2;
+  const revealTotalCap = hasSpecialVow ? 8 : 2;
   const revealThisTurn = draft.cardRevealUsedThisTurn?.[me] ?? 0;
   const deniesLeft = draft.deniesRemaining?.[me] ?? 0;
   const lastDenyTurn = draft.lastDenyTurn?.[me] ?? 0;
@@ -504,6 +520,9 @@ export default function DraftScreen({ state, onSend, playerNames, playerIcons }:
   const [activeSpell, setActiveSpell] = useState<ActiveSpell>(null);
   const [debugRevealMode, setDebugRevealMode] = useState(false);
   const [isDraggingAny, setIsDraggingAny] = useState(false);
+  const [cinematicCard, setCinematicCard] = useState<{ defId: string; def: CardDef } | null>(null);
+  const [pickCinematic, setPickCinematic] = useState<{ defId: string; def: CardDef } | null>(null);
+  const [rateCinematic, setRateCinematic] = useState<{ rarity: string } | null>(null);
   // Per-player skip counter across the whole draft (not reset per turn)
   const [skipsUsed, setSkipsUsed] = useState<Record<string, number>>({ P1: 0, P2: 0 });
 
@@ -534,8 +553,13 @@ export default function DraftScreen({ state, onSend, playerNames, playerIcons }:
   const [flashColor, setFlashColor] = useState<string | null>(null);
   const [flashKey, setFlashKey] = useState(0);
 
-  const handleRevealEffect = async (rarity: string, color: string) => {
+  const handleRevealEffect = async (rarity: string, color: string, defId?: string) => {
     if (!["SS", "SSS", "X"].includes(rarity)) return;
+    // Trigger P5-style cinematic for high-rarity reveals
+    if (defId) {
+      const def = state.cardDb[defId];
+      if (def) { setCinematicCard({ defId, def }); return; } // cinematic handles all drama
+    }
     setFlashColor(color);
     setFlashKey(k => k + 1);
     setTimeout(() => setFlashColor(null), 800);
@@ -589,6 +613,34 @@ export default function DraftScreen({ state, onSend, playerNames, playerIcons }:
       <AmbientCanvas theme="embers" />
       <AmbientOverlay theme="blue" />
       <div style={{ position: "fixed", inset: 0, background: "rgba(5,5,11,0.38)", pointerEvents: "none", zIndex: 0 }} />
+
+      {/* P5 cinematic overlay for SS/SSS/X reveals (full screen) */}
+      {cinematicCard && (
+        <CardRevealCinematic
+          defId={cinematicCard.defId}
+          def={cinematicCard.def}
+          onDone={() => setCinematicCard(null)}
+        />
+      )}
+
+      {/* P5 half-screen cinematic when SS/SSS/X card is PICKED */}
+      {pickCinematic && (
+        <PickSideCinematic
+          defId={pickCinematic.defId}
+          def={pickCinematic.def}
+          side={me === "P1" ? "left" : "right"}
+          onDone={() => setPickCinematic(null)}
+        />
+      )}
+
+      {/* P5 bottom strip cinematic when SS/SSS/X card is RATED */}
+      {rateCinematic && (
+        <RateSideCinematic
+          rarity={rateCinematic.rarity}
+          side={me === "P1" ? "left" : "right"}
+          onDone={() => setRateCinematic(null)}
+        />
+      )}
 
       {flashColor && (
         <motion.div
@@ -745,6 +797,8 @@ export default function DraftScreen({ state, onSend, playerNames, playerIcons }:
                             onDragStart={() => { setIsDraggingAny(true); setActiveSpell(null); }}
                             onDragEnd={() => setIsDraggingAny(false)}
                             onRevealEffect={handleRevealEffect}
+                            onPickHighRarity={(defId, def) => setPickCinematic({ defId, def })}
+                            onRateHighRarity={(rarity) => setRateCinematic({ rarity })}
                           />
                         </motion.div>
                       );

@@ -51,7 +51,10 @@ export type SynergyId =
   | "KYOTO_2"              // 2 Kyoto sorcerers (Todo/Miwa/Mechamaru) → +3%
   | "KYOTO_3"              // 3 Kyoto sorcerers → +5%
   | "YUTA_MAKI"            // Yuta + Maki → +5%
-  | "HEAVEN_AND_HELL";     // Gojo + Toji → +4%
+  | "HEAVEN_AND_HELL"      // Gojo + Toji → +4%
+  | "CURSE_LEADER_1"       // Geto + 1 of (Mahito/Dagon/Jogo) → +3%
+  | "CURSE_LEADER_2"       // Geto + 2 of them → +4.5%
+  | "CURSE_LEADER_3";      // Geto + all 3 → +6%
 
 // ===== Slots =====
 export type SlotType = "LEADER" | "COMBAT" | "SUPPORT" | "UNLEASH";

@@ -413,7 +413,7 @@ function AugSlot({
   const canAssign = isMe && !!pending && !!inst && !equipped;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, position: "relative" }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, position: "relative", overflow: "visible" }}>
       <div
         onClick={() => canAssign && inst && onAssign(inst.instanceId)}
         style={{
@@ -426,7 +426,7 @@ function AugSlot({
           boxShadow: canAssign ? "0 0 20px rgba(255,215,0,0.15)" : def ? `0 0 12px ${cardColor}14` : "none",
           animation: canAssign ? "slotPulse 1.6s ease-in-out infinite" : "none",
           transition: "border-color 0.15s, box-shadow 0.15s",
-          overflow: "hidden", flexShrink: 0,
+          overflow: "visible", flexShrink: 0,
         }}
       >
         {def && cardColor && (
@@ -521,6 +521,7 @@ function AugmentBoardPanel({
       transition: "box-shadow 0.3s, border-color 0.3s",
       display: "flex", flexDirection: "column", gap: 8,
       opacity: isMe ? 1 : 0.6,
+      overflow: "visible",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
