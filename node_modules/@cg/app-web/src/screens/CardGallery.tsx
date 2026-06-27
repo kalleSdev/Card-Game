@@ -10,38 +10,47 @@ import { BG } from "../backgrounds";
 import CardRevealCinematic from "./CardRevealCinematic";
 import PickSideCinematic from "./PickSideCinematic";
 
-// Which weapons give extra bonus to this card
-function weaponBonusesForCard(defId: string, cardDef: CardDef): { itemId: string; name: string; extra: number; desc: string }[] {
-  const result: { itemId: string; name: string; extra: number; desc: string }[] = [];
-  const bonusMap: Record<string, { extra: number; desc: string }> = {
-    "split-soul-katana": defId === "toji"       ? { extra: 1000, desc: "+1,000 bonus on Toji" } : { extra: 0, desc: "" },
-    "higuruma-gavel":    defId === "higuruma"   ? { extra: 1500, desc: "+1,500 bonus on Higuruma" } : { extra: 0, desc: "" },
-    "festering-life":    defId === "kurourushi" ? { extra: 1000, desc: "+1,000 bonus on Kurourushi" } : { extra: 0, desc: "" },
-    "dragon-bone":       defId === "maki"       ? { extra: 1000, desc: "+1,000 bonus on Maki" } : { extra: 0, desc: "" },
-    "nobara-hammer":     defId === "nobara"     ? { extra: 500,  desc: "+500 bonus on Nobara" } : { extra: 0, desc: "" },
-    "electric-guitar":   defId === "gakuganji"  ? { extra: 1500, desc: "+1,500 bonus on Gakuganji" } : { extra: 0, desc: "" },
-    "black-rope":        defId === "miguel"     ? { extra: 2000, desc: "+2,000 bonus on Miguel" } : { extra: 0, desc: "" },
-    "miwa-sword":        defId === "miwa"       ? { extra: 500,  desc: "+500 bonus on Miwa" } : { extra: 0, desc: "" },
-  };
-  // Naoya bonus on all weapons
+// Weapon info split into global perks (shown as a single summary line)
+// and specific per-weapon bonuses (shown with weapon icon + name)
+interface GlobalPerk { kind: "global"; label: string; note: string }
+interface SpecificBonus { kind: "specific"; itemId: string; name: string; extra: number }
+type WeaponEntry = GlobalPerk | SpecificBonus;
+
+function weaponBonusesForCard(defId: string, cardDef: CardDef): WeaponEntry[] {
+  const result: WeaponEntry[] = [];
+
+  // Global perks — single summary line, no individual weapon listing
   if (defId === "naoya") {
-    for (const [itemId, def] of Object.entries(ROULETTE_ITEM_MAP)) {
-      result.push({ itemId, name: def.name, extra: 1000, desc: "+1,000 bonus (Naoya perk)" });
-    }
-    return result;
+    result.push({ kind: "global", label: "+1,000 bonus with any weapon", note: "Projection Sorcery Perk" });
   }
-  for (const [itemId, entry] of Object.entries(bonusMap)) {
-    if (entry.extra > 0) {
-      const def = ROULETTE_ITEM_MAP[itemId];
-      if (def) result.push({ itemId, name: def.name, extra: entry.extra, desc: entry.desc });
-    }
-  }
-  // Weapon efficiency perk
   if (cardDef.perks?.weaponEfficiency) {
     const perk = cardDef.perks.weaponEfficiency;
-    const perkDesc = perk === "double" ? "×2 all weapon bonuses" : perk === "plus" ? "+50% all weapon bonuses" : "+35% all weapon bonuses";
-    result.push({ itemId: "_perk", name: "Weapon Perk", extra: 0, desc: perkDesc });
+    const label = perk === "double" ? "×2 multiplier on all weapon bonuses"
+                : perk === "plus"   ? "+50% on all weapon bonuses"
+                :                     "+35% on all weapon bonuses";
+    result.push({ kind: "global", label, note: "Weapon Efficiency Perk" });
   }
+
+  // Per-weapon specific bonuses (only for non-Naoya cards)
+  if (defId !== "naoya") {
+    const specificMap: Record<string, { extra: number; name?: string }> = {
+      "split-soul-katana": defId === "toji"       ? { extra: 1000 } : { extra: 0 },
+      "higuruma-gavel":    defId === "higuruma"   ? { extra: 1500 } : { extra: 0 },
+      "festering-life":    defId === "kurourushi" ? { extra: 1000 } : { extra: 0 },
+      "dragon-bone":       defId === "maki"       ? { extra: 1000 } : { extra: 0 },
+      "nobara-hammer":     defId === "nobara"     ? { extra: 500  } : { extra: 0 },
+      "electric-guitar":   defId === "gakuganji"  ? { extra: 1500 } : { extra: 0 },
+      "black-rope":        defId === "miguel"     ? { extra: 2000 } : { extra: 0 },
+      "miwa-sword":        defId === "miwa"       ? { extra: 500  } : { extra: 0 },
+    };
+    for (const [itemId, entry] of Object.entries(specificMap)) {
+      if (entry.extra > 0) {
+        const def = ROULETTE_ITEM_MAP[itemId];
+        if (def) result.push({ kind: "specific", itemId, name: def.name, extra: entry.extra });
+      }
+    }
+  }
+
   return result;
 }
 
@@ -145,17 +154,26 @@ function CardDetail({ defId, def, onClose }: { defId: string; def: CardDef; onCl
             <div>
               <div style={{ fontSize: 10, color: "#445", letterSpacing: 3, marginBottom: 8 }}>WEAPON BONUSES</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                {weapons.map((w, i) => (
+                {weapons.map((w, i) => w.kind === "global" ? (
+                  /* Global perk — single clean summary row */
+                  <div key={i} style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    background: "rgba(68,255,34,0.07)", borderRadius: 4,
+                    padding: "5px 8px", border: "1px solid rgba(68,255,34,0.18)",
+                  }}>
+                    <span style={{ fontSize: 11, color: "#44ff22", fontWeight: "bold" }}>{w.label}</span>
+                    <span style={{ fontSize: 9, color: "#44ff2288", marginLeft: "auto", whiteSpace: "nowrap" }}>{w.note}</span>
+                  </div>
+                ) : (
+                  /* Specific weapon row with icon */
                   <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {w.itemId !== "_perk" && (
-                      <img src={`/weapons/${w.itemId}.PNG`} alt={w.name}
-                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                        style={{ width: 18, height: 18, objectFit: "contain", flexShrink: 0 }}
-                      />
-                    )}
+                    <img src={`/weapons/${w.itemId}.PNG`} alt={w.name}
+                      onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                      style={{ width: 18, height: 18, objectFit: "contain", flexShrink: 0 }}
+                    />
                     <span style={{ fontSize: 10, color: "#66cc44" }}>{w.name}</span>
                     <span style={{ fontSize: 10, color: "#44ff22", fontWeight: "bold", marginLeft: "auto" }}>
-                      {w.extra > 0 ? `+${w.extra.toLocaleString()}` : ""} {w.desc}
+                      +{w.extra.toLocaleString()}
                     </span>
                   </div>
                 ))}
