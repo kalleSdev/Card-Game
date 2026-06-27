@@ -62,6 +62,7 @@ export const SYNERGY_LABEL: Record<string, string> = {
   ZENIN_ELDERS:        "⚔ Zenin Elders (+4%)",
   UNPREDICTABLE_DUO:   "🎰 Unpredictable Duo (+4%)",
   SIX_EYES:            "👁 Six Eyes (+4%)",
+  CULLING_GAME_2:      "⚔ Culling Game ×2 (+3%)",
   CULLING_GAME_3:      "⚔ Culling Game ×3 (+5%)",
   CULLING_GAME_4:      "💀 Culling Game ×4 (+7%)",
   REL_MEMORY_RES:      "👁 Memory Resonance (+3%)",

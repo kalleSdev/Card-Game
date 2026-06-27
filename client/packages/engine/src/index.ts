@@ -371,7 +371,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "A",
     basePoints: 9000,
     affinity: "SUPPORT",
-    tags: ["sorcerer", "jujutsu-high", "cursed-corpse", "tokyo-senior"],
+    tags: ["sorcerer", "jujutsu-high", "cursed-corpse", "tokyo-senior", "culling-game"],
     offRolePenalties: { leader: 0.8, combat: 0.8 },
   },
   "inumaki": {
@@ -624,6 +624,7 @@ const calcSynergies = (state: GameState, p: PlayerId): SynergyId[] => {
   const cullingCount = countTagOnBoard(state, p, "culling-game");
   if (cullingCount >= 4)      syn.push("CULLING_GAME_4");
   else if (cullingCount >= 3) syn.push("CULLING_GAME_3");
+  else if (cullingCount >= 2) syn.push("CULLING_GAME_2");
 
   // Afrobeat — Yuta + Miguel
   if (hasOnBoard(state, p, "yuta") && hasOnBoard(state, p, "miguel"))
@@ -689,6 +690,7 @@ const applySynergyBonus = (base: number, synergies: SynergyId[]): number => {
   if (synergies.includes("SIX_EYES"))                score *= 1.04;
   if (synergies.includes("CULLING_GAME_4"))          score *= 1.07;
   else if (synergies.includes("CULLING_GAME_3"))     score *= 1.05;
+  else if (synergies.includes("CULLING_GAME_2"))     score *= 1.03;
   if (synergies.includes("AFROBEAT"))                score *= 1.05;
   if (synergies.includes("KYOTO_3"))                 score *= 1.05;
   else if (synergies.includes("KYOTO_2"))            score *= 1.03;

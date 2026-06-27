@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { BG } from "../backgrounds";
+import DomainCinematic from "./DomainCinematic";
 import type { CardInstance, GameState, Intent, PlayerId } from "@cg/contracts";
 import { DOMAIN_EFFECTS, DEFAULT_DOMAIN } from "@cg/engine";
 import type { DomainEffectDef } from "@cg/engine";
@@ -108,10 +109,12 @@ export default function LockedInScreen({ state, onSend, playerNames }: {
 
   const activate = () => {
     setActivating(true);
-    setTimeout(() => {
-      setActivating(false);
-      onSend({ type: "ACTIVATE_DOMAIN", playerId: me });
-    }, 1400);
+    // DomainCinematic runs ~4.2s; send the intent when done
+  };
+
+  const handleCinematicDone = () => {
+    setActivating(false);
+    onSend({ type: "ACTIVATE_DOMAIN", playerId: me });
   };
 
   const skip = () => onSend({ type: "SKIP_DOMAIN", playerId: me });
@@ -215,22 +218,11 @@ export default function LockedInScreen({ state, onSend, playerNames }: {
       </div>
 
       {activating && (
-        <div style={{
-          position: "fixed", inset: 0, background: "#000000f8", zIndex: 300,
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16,
-          animation: "fadeIn 0.3s ease-out",
-        }}>
-          <div style={{ fontSize: 11, letterSpacing: 8, color: "#440044" }}>DOMAIN EXPANSION</div>
-          <div style={{
-            fontSize: 44, fontWeight: "bold", color: "#cc88ff",
-            textShadow: "0 0 40px #cc88ffaa, 0 0 80px #9933cc66",
-            letterSpacing: 3, textAlign: "center",
-            animation: "domainExpand 0.8s cubic-bezier(0.175,0.885,0.32,1.275) forwards",
-          }}>
-            {myEffect.name}
-          </div>
-          <div style={{ fontSize: 16, color: "#665588", letterSpacing: 2 }}>{myEffect.technique}</div>
-        </div>
+        <DomainCinematic
+          leaderDefId={state.players[me].board.leader?.defId ?? ""}
+          characterName={myEffect.name}
+          onDone={handleCinematicDone}
+        />
       )}
 
       </div> {/* end zIndex:1 wrapper */}

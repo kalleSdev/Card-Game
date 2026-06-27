@@ -1,101 +1,106 @@
 import type { CSSProperties, ReactNode } from "react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Torn-paper panel — organic P5 ripped edges with thick SVG line art
+// Torn-paper panel — organic P5 ripped edges
 //
-// Diagonal variation strategy:
-//   • x-gap variation: tight gaps (2-4 units) = steep angular cuts
-//                      wide gaps (8-12 units) = long diagonal slashes
-//   • addVariedDiagonal: primary slope + sinusoidal undulation so different
-//     sections lean at different angles — some hard left, some hard right
-//   • SVG overlay drawn OUTSIDE clip for thick black line art
+// Design rules:
+//   • Tooth depths vary wildly: 0-2% valleys beside 36-44% peaks
+//   • x-spacing is irregular: tight 2-4 units (steep cuts) vs wide 10-15 units
+//   • addRegionalDiagonal: piecewise-linear envelope makes each 20% section
+//     lean a different direction — genuinely organic, not a regular wave
+//   • SVG overlay drawn OUTSIDE clip: thick black line art on torn edges
 //   • Outer wrapper is transparent — outside rips = see-through
 // ─────────────────────────────────────────────────────────────────────────────
 
-// [x, y] pairs — x: 0–100 left→right, y: depth into panel (% of panel height)
-// x-gap variation intentional: tight = steep diagonal, wide = long slash
+// [x, y] — x: 0–100, y: depth into panel (% of panel height)
+// High contrast: 0-2 valleys between 36-44 peaks
 
+// Depths intentionally varied: small (5-10%), medium (16-24%), large (32-40%)
+// Rhythm: small→small→medium→large→small→medium→small→large creates a natural feel
+// The tear cuts through the card in places but leaves most of it visible
 const FULL_TOP_RAW: [number, number][] = [
-  [  0, 16], [  3,  0], [  7, 30], [ 10,  1], // tight steep cuts
-  [ 20, 28], [ 23,  0],                         // wide diagonal run → quick peak
-  [ 27, 22], [ 30,  1], [ 34, 32], [ 37,  0],  // mix
-  [ 46, 29], [ 49,  2],                         // wide deep valley
-  [ 53, 26], [ 56,  0], [ 60, 31], [ 63,  1],  // tight alternation
-  [ 72, 28], [ 75,  2],                         // wide slash
-  [ 78, 24], [ 81,  0], [ 85, 30], [ 88,  1],
-  [ 94, 22], [ 97,  3], [100, 18],
+  [  0,  6], [  2,  0], [  5, 10], [  7,  1],   // small opening pair
+  [ 12, 22], [ 14,  0],                           // medium cut
+  [ 20, 38], [ 23,  2],                           // large dramatic cut
+  [ 27,  7], [ 29,  0], [ 32,  5], [ 34,  1],    // two small cuts
+  [ 40, 18], [ 42,  0],                           // medium
+  [ 47, 34], [ 50,  2], [ 53,  8], [ 55,  0],    // large then small
+  [ 59, 14], [ 61,  1],                           // medium
+  [ 66, 36], [ 69,  0],                           // large
+  [ 73,  6], [ 75,  1], [ 78, 22], [ 80,  0],    // small then medium
+  [ 85, 32], [ 88,  2],                           // large near end
+  [ 92,  9], [ 94,  0], [ 97, 20], [100, 10],    // small then medium finish
 ];
 
 const FULL_BOT_RAW: [number, number][] = [
-  [  0, 20], [  4,  1], [  8, 28], [ 11,  0],
-  [ 18, 26], [ 21,  2], [ 26, 32], [ 29,  0],
-  [ 35, 22], [ 38,  3], [ 43, 30], [ 46,  1],
-  [ 55, 27], [ 58,  2],
-  [ 62, 24], [ 65,  0], [ 69, 31], [ 73,  1],
-  [ 80, 25], [ 83,  2], [ 87, 28], [ 90,  0],
-  [ 96, 22], [100,  4],
+  [  0,  8], [  3,  1], [  7, 34], [ 10,  0],   // large opener
+  [ 15,  5], [ 17,  1], [ 21, 18], [ 23,  0],   // small then medium
+  [ 28, 38], [ 31,  2],                           // large
+  [ 35,  7], [ 37,  0], [ 40, 12], [ 42,  1],   // small pair
+  [ 48, 28], [ 51,  0],                           // medium-large
+  [ 55,  6], [ 57,  1], [ 60, 32], [ 63,  0],   // small then large
+  [ 67, 16], [ 69,  2],                           // medium
+  [ 73,  9], [ 75,  0], [ 80, 36], [ 83,  1],   // small then large
+  [ 87, 14], [ 89,  0], [ 93,  8], [ 96,  2],   // medium then small
+  [100,  6],
 ];
 
 const HALF_TOP_RAW: [number, number][] = [
-  [  0, 20], [  3,  0], [  8, 34], [ 11,  1],  // very steep opening
-  [ 20, 30], [ 23,  2], [ 27, 36], [ 30,  0],
-  [ 38, 28], [ 41,  3], [ 46, 34], [ 49,  0],
-  [ 57, 26], [ 60,  2], [ 65, 32], [ 68,  1],
-  [ 76, 24], [ 79,  3], [ 84, 30], [ 87,  0],
-  [ 93, 22], [ 97,  4], [100, 16],
+  [  0, 10], [  2,  0], [  5, 38], [  7,  1],
+  [ 13, 24], [ 15,  0], [ 20, 42], [ 23,  2],
+  [ 27, 16], [ 29,  0], [ 34, 36], [ 37,  1],
+  [ 41, 20], [ 43,  0], [ 48, 34], [ 51,  2],
+  [ 56, 14], [ 58,  0], [ 63, 40], [ 66,  1],
+  [ 70, 22], [ 72,  0], [ 77, 32], [ 80,  2],
+  [ 84, 18], [ 86,  0], [ 91, 36], [ 94,  1],
+  [ 97, 22], [100, 14],
 ];
 
 const HALF_BOT_RAW: [number, number][] = [
-  [  0, 18], [  4,  1], [  9, 32], [ 13,  0],
-  [ 21, 28], [ 24,  2], [ 30, 34], [ 33,  0],
-  [ 41, 26], [ 44,  3], [ 49, 32], [ 52,  1],
-  [ 60, 28], [ 63,  2], [ 68, 30], [ 71,  0],
-  [ 79, 24], [ 83,  3], [ 88, 28], [ 91,  1],
-  [ 97, 20], [100,  5],
+  [  0, 16], [  3,  1], [  8, 34], [ 11,  0],
+  [ 17, 22], [ 19,  2], [ 24, 40], [ 27,  0],
+  [ 32, 18], [ 34,  1], [ 39, 32], [ 42,  2],
+  [ 47, 24], [ 49,  0], [ 54, 36], [ 57,  1],
+  [ 62, 20], [ 64,  0], [ 69, 30], [ 72,  2],
+  [ 77, 16], [ 79,  1], [ 84, 34], [ 87,  0],
+  [ 92, 22], [ 95,  2], [100, 12],
 ];
 
-// Banner: tapering toward the pointed end — depths reduce near x=85+
-const BANNER_TOP_RAW: [number, number][] = [
-  [  0, 14], [  3,  0], [  7, 26], [ 10,  1],
-  [ 18, 24], [ 21,  0], [ 26, 28], [ 29,  2],
-  [ 36, 22], [ 39,  0], [ 44, 26], [ 47,  2],
-  [ 54, 20], [ 57,  1], [ 62, 22], [ 65,  0],
-  [ 71, 16], [ 74,  2], [ 79, 12], [ 82,  1],
-  [ 87,  7], [ 90,  0], [ 94,  4], [ 97,  1], [ 99,  2],
-];
-
-const BANNER_BOT_RAW: [number, number][] = [
-  [  0, 12], [  4,  1], [  9, 24], [ 12,  0],
-  [ 19, 22], [ 22,  2], [ 27, 26], [ 30,  0],
-  [ 37, 20], [ 40,  2], [ 45, 24], [ 48,  1],
-  [ 55, 18], [ 58,  0], [ 63, 20], [ 66,  2],
-  [ 72, 14], [ 75,  1], [ 80, 10], [ 83,  0],
-  [ 88,  6], [ 91,  1], [ 95,  3], [ 98,  1], [ 99,  0],
-];
-
-// ── Varied diagonal: primary slope + sinusoidal undulation ───────────────────
-// Different sections lean at different angles — like real torn paper grain
-function addVariedDiagonal(
+// ── Regional diagonal: piecewise-linear envelope ─────────────────────────────
+// keyframes: [x, cumulativeOffset] — each region between keyframes leans a
+// different direction; abrupt changes between regions = genuinely torn character
+function addRegionalDiagonal(
   pts: [number, number][],
-  primarySlope: number,   // overall tilt (positive = right side deeper)
-  waveAmp: number,        // amplitude of diagonal variation (makes sections lean differently)
-  waveFreq: number,       // how many waves across the width
+  keyframes: [number, number][],
 ): [number, number][] {
   return pts.map(([x, y]) => {
-    const t = x / 100;
-    const primary = t * primarySlope;
-    // Sinusoidal component creates sections that lean differently
-    const wave = Math.sin(t * Math.PI * waveFreq) * waveAmp;
-    return [x, Math.max(0, y + primary + wave)] as [number, number];
+    let lo = 0;
+    for (let i = 0; i < keyframes.length - 1; i++) {
+      if (x <= keyframes[i + 1][0]) { lo = i; break; }
+      lo = i + 1;
+    }
+    const hi = Math.min(lo + 1, keyframes.length - 1);
+    const [x0, d0] = keyframes[lo];
+    const [x1, d1] = keyframes[hi];
+    const t = x1 > x0 ? (x - x0) / (x1 - x0) : 0;
+    return [x, Math.max(0, y + d0 + (d1 - d0) * t)] as [number, number];
   });
 }
 
-const FULL_TOP    = addVariedDiagonal(FULL_TOP_RAW,    5,  3, 2.2);
-const FULL_BOT    = addVariedDiagonal(FULL_BOT_RAW,   -4,  2.5, 1.8);
-const HALF_TOP    = addVariedDiagonal(HALF_TOP_RAW,    6,  4, 2.5);
-const HALF_BOT    = addVariedDiagonal(HALF_BOT_RAW,   -5,  3, 2.0);
-const BANNER_TOP  = addVariedDiagonal(BANNER_TOP_RAW,  3,  2, 1.5);
-const BANNER_BOT  = addVariedDiagonal(BANNER_BOT_RAW, -2,  1.5, 1.2);
+// Diagonal envelopes — different sections lean OPPOSITE directions
+// Numbers are Y-offsets (positive = deeper = more to bottom side of panel)
+const FULL_TOP = addRegionalDiagonal(FULL_TOP_RAW, [
+  [0, 0], [22, +9], [44, -6], [65, +15], [84, +2], [100, +11],
+]);
+const FULL_BOT = addRegionalDiagonal(FULL_BOT_RAW, [
+  [0, 0], [30, +7], [54, -9], [76, +11], [100, +5],
+]);
+const HALF_TOP = addRegionalDiagonal(HALF_TOP_RAW, [
+  [0, 0], [24, +11], [46, -7], [68, +17], [100, +9],
+]);
+const HALF_BOT = addRegionalDiagonal(HALF_BOT_RAW, [
+  [0, 0], [28, -5], [52, +13], [76, -4], [100, +9],
+]);
 
 // ── Clip-path builders ────────────────────────────────────────────────────────
 function buildClip(top: [number, number][], bot: [number, number][]): string {
@@ -106,50 +111,19 @@ function buildClip(top: [number, number][], bot: [number, number][]): string {
   return `polygon(${[...tPts, ...bPts].join(", ")})`;
 }
 
-function buildBannerClip(
-  top: [number, number][],
-  bot: [number, number][],
-  tipAtRight: boolean,
-): string {
-  if (tipAtRight) {
-    const tPts = top.map(([x, y]) => `${x.toFixed(2)}% ${y.toFixed(2)}%`);
-    const bPts = [...bot].reverse().map(([x, y]) =>
-      `${x.toFixed(2)}% ${(100 - y).toFixed(2)}%`
-    );
-    return `polygon(${tPts.join(", ")}, 100% 50%, ${bPts.join(", ")})`;
-  } else {
-    const flip = (p: [number, number][]): [number, number][] =>
-      p.map(([x, y]) => [100 - x, y] as [number, number]).sort((a, b) => a[0] - b[0]);
-    return buildBannerClip(flip(top), flip(bot), true);
-  }
-}
+export const TORN_CLIP_FULL = buildClip(FULL_TOP, FULL_BOT);
+export const TORN_CLIP_HALF = buildClip(HALF_TOP, HALF_BOT);
 
-export const TORN_CLIP_FULL    = buildClip(FULL_TOP, FULL_BOT);
-export const TORN_CLIP_HALF    = buildClip(HALF_TOP, HALF_BOT);
-export const TORN_BANNER_LEFT  = buildBannerClip(BANNER_TOP, BANNER_BOT, true);
-export const TORN_BANNER_RIGHT = buildBannerClip(BANNER_TOP, BANNER_BOT, false);
-
-// ── SVG stroke overlay ────────────────────────────────────────────────────────
-type EdgeKind = "topbot" | "banner-left" | "banner-right";
-
+// ── SVG stroke overlay — 3-layer: blur shadow + thick black + accent ──────────
 function TornEdgeStrokes({
-  top, bot, accentColor, kind = "topbot",
+  top, bot, accentColor,
 }: {
   top: [number, number][];
   bot: [number, number][];
   accentColor: string;
-  kind?: EdgeKind;
 }) {
   const topPts = top.map(([x, y]) => `${x},${y}`).join(" ");
-  const botPts = bot.map(([x, y]) => `${x},${100 - y}`).join(" ");
-
-  const isBanner = kind !== "topbot";
-  const topLast = top[top.length - 1];
-  const botLast = bot[bot.length - 1];
-  const tipX = kind === "banner-left" ? 100 : 0;
-  const tipPts = isBanner
-    ? `${topLast[0]},${topLast[1]} ${tipX},50 ${botLast[0]},${100 - botLast[1]}`
-    : "";
+  const botPts = bot.map(([x, y]) => `${x},${(100 - y).toFixed(2)}`).join(" ");
 
   return (
     <svg
@@ -162,41 +136,34 @@ function TornEdgeStrokes({
         overflow: "visible",
       }}
     >
-      {/* Soft shadow behind the tear */}
-      <g style={{ filter: "blur(3px)" } as CSSProperties}>
-        <polyline points={topPts} fill="none" stroke="rgba(0,0,0,0.7)"
-          strokeWidth="11" vectorEffect="non-scaling-stroke" strokeLinejoin="miter" />
-        <polyline points={botPts} fill="none" stroke="rgba(0,0,0,0.7)"
-          strokeWidth="11" vectorEffect="non-scaling-stroke" strokeLinejoin="miter" />
-        {isBanner && <polyline points={tipPts} fill="none" stroke="rgba(0,0,0,0.7)"
-          strokeWidth="11" vectorEffect="non-scaling-stroke" strokeLinejoin="miter" />}
+      {/* Soft diffuse shadow */}
+      <g style={{ filter: "blur(4px)" } as CSSProperties}>
+        <polyline points={topPts} fill="none" stroke="rgba(0,0,0,0.75)"
+          strokeWidth="14" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+        <polyline points={botPts} fill="none" stroke="rgba(0,0,0,0.75)"
+          strokeWidth="14" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
       </g>
 
-      {/* Thick black outline */}
+      {/* Hard black outline */}
       <polyline points={topPts} fill="none" stroke="#000"
-        strokeWidth="7" vectorEffect="non-scaling-stroke" strokeLinejoin="miter" />
+        strokeWidth="8" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
       <polyline points={botPts} fill="none" stroke="#000"
-        strokeWidth="7" vectorEffect="non-scaling-stroke" strokeLinejoin="miter" />
-      {isBanner && <polyline points={tipPts} fill="none" stroke="#000"
-        strokeWidth="7" vectorEffect="non-scaling-stroke" strokeLinejoin="miter" />}
+        strokeWidth="8" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
 
-      {/* Thin inner accent */}
+      {/* Thin accent inner line */}
       <polyline points={topPts} fill="none" stroke={accentColor}
-        strokeWidth="2" strokeOpacity="0.8"
-        vectorEffect="non-scaling-stroke" strokeLinejoin="miter" />
+        strokeWidth="2.2" strokeOpacity="0.85"
+        vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
       <polyline points={botPts} fill="none" stroke={accentColor}
-        strokeWidth="2" strokeOpacity="0.8"
-        vectorEffect="non-scaling-stroke" strokeLinejoin="miter" />
-      {isBanner && <polyline points={tipPts} fill="none" stroke={accentColor}
-        strokeWidth="2" strokeOpacity="0.8"
-        vectorEffect="non-scaling-stroke" strokeLinejoin="miter" />}
+        strokeWidth="2.2" strokeOpacity="0.85"
+        vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
     </svg>
   );
 }
 
-// ── Exported wrapper components ───────────────────────────────────────────────
-// Outer div: transparent — outside the torn clip = see-through to game
-// innerStyle: apply background here (inside the clip only)
+// ── Exported wrappers ─────────────────────────────────────────────────────────
+// outer div: transparent  (outside torn area = see-through to game)
+// innerStyle goes on the inner clipped div (set background here)
 
 interface TornProps {
   children: ReactNode;
@@ -208,7 +175,7 @@ interface TornProps {
 export function TornFull({ children, style, innerStyle, accentColor = "#fff" }: TornProps) {
   return (
     <div style={{ position: "relative", ...style }}>
-      <div style={{ position: "absolute", inset: 0, clipPath: TORN_CLIP_FULL, ...innerStyle }}>
+      <div style={{ position: "absolute", inset: 0, clipPath: TORN_CLIP_FULL, overflow: "hidden", ...innerStyle }}>
         {children}
       </div>
       <TornEdgeStrokes top={FULL_TOP} bot={FULL_BOT} accentColor={accentColor} />
@@ -219,7 +186,7 @@ export function TornFull({ children, style, innerStyle, accentColor = "#fff" }: 
 export function TornHalf({ children, style, innerStyle, accentColor = "#fff" }: TornProps) {
   return (
     <div style={{ position: "relative", ...style }}>
-      <div style={{ position: "absolute", inset: 0, clipPath: TORN_CLIP_HALF, ...innerStyle }}>
+      <div style={{ position: "absolute", inset: 0, clipPath: TORN_CLIP_HALF, overflow: "hidden", ...innerStyle }}>
         {children}
       </div>
       <TornEdgeStrokes top={HALF_TOP} bot={HALF_BOT} accentColor={accentColor} />
@@ -227,24 +194,5 @@ export function TornHalf({ children, style, innerStyle, accentColor = "#fff" }: 
   );
 }
 
-export function TornBanner({
-  children, style, innerStyle, accentColor = "#fff", tipAtRight = true,
-}: TornProps & { tipAtRight?: boolean }) {
-  const clip = tipAtRight ? TORN_BANNER_LEFT : TORN_BANNER_RIGHT;
-  const top = tipAtRight
-    ? BANNER_TOP
-    : BANNER_TOP.map(([x, y]) => [100 - x, y] as [number, number]).sort((a, b) => a[0] - b[0]);
-  const bot = tipAtRight
-    ? BANNER_BOT
-    : BANNER_BOT.map(([x, y]) => [100 - x, y] as [number, number]).sort((a, b) => a[0] - b[0]);
-  const kind: EdgeKind = tipAtRight ? "banner-left" : "banner-right";
-
-  return (
-    <div style={{ position: "relative", ...style }}>
-      <div style={{ position: "absolute", inset: 0, clipPath: clip, ...innerStyle }}>
-        {children}
-      </div>
-      <TornEdgeStrokes top={top} bot={bot} accentColor={accentColor} kind={kind} />
-    </div>
-  );
-}
+// Re-export raw arrays for cinematics that need to overlay SVG strokes themselves
+export { FULL_TOP, FULL_BOT, HALF_TOP, HALF_BOT };

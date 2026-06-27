@@ -7,6 +7,8 @@ import CharacterCard from "../components/CharacterCard";
 import AmbientOverlay from "../components/AmbientOverlay";
 import AmbientCanvas from "../components/AmbientCanvas";
 import { BG } from "../backgrounds";
+import CardRevealCinematic from "./CardRevealCinematic";
+import PickSideCinematic from "./PickSideCinematic";
 
 // Which weapons give extra bonus to this card
 function weaponBonusesForCard(defId: string, cardDef: CardDef): { itemId: string; name: string; extra: number; desc: string }[] {
@@ -73,6 +75,7 @@ const RARITY_ORDER = ["X", "SSS", "SS", "S", "A", "B", "C"];
 // ── Card detail panel ─────────────────────────────────────────────────────────
 function CardDetail({ defId, def, onClose }: { defId: string; def: CardDef; onClose: () => void }) {
   const color = rc(def.rarity);
+  const [scene, setScene] = useState<"reveal" | "pick-left" | "pick-right" | null>(null);
   const weapons = weaponBonusesForCard(defId, def);
   const cardSynergies = def.tags
     .filter(t => TAG_SYNERGY[t])
@@ -172,6 +175,37 @@ function CardDetail({ defId, def, onClose }: { defId: string; def: CardDef; onCl
             </div>
           </div>
 
+          {/* Cinematic preview buttons */}
+          {["X","SSS","SS","S","A"].includes(def.rarity) && (
+            <div>
+              <div style={{ fontSize: 10, color: "#445", letterSpacing: 3, marginBottom: 8 }}>CINEMATIC PREVIEW</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  onClick={() => setScene("reveal")}
+                  style={{
+                    padding: "8px 18px", background: color + "18",
+                    border: `1px solid ${color}55`, borderRadius: 8,
+                    color, cursor: "pointer", fontSize: 11,
+                    letterSpacing: 2, fontFamily: "inherit", fontWeight: "bold",
+                  }}
+                >
+                  ▶ Reveal Scene
+                </button>
+                <button
+                  onClick={() => setScene("pick-left")}
+                  style={{
+                    padding: "8px 18px", background: color + "10",
+                    border: `1px solid ${color}33`, borderRadius: 8,
+                    color: color + "cc", cursor: "pointer", fontSize: 11,
+                    letterSpacing: 2, fontFamily: "inherit",
+                  }}
+                >
+                  ▶ Pick Scene
+                </button>
+              </div>
+            </div>
+          )}
+
           <button
             onClick={onClose}
             style={{
@@ -185,6 +219,18 @@ function CardDetail({ defId, def, onClose }: { defId: string; def: CardDef; onCl
           </button>
         </div>
       </div>
+
+      {/* Cinematic overlays */}
+      {scene === "reveal" && (
+        <CardRevealCinematic defId={defId} def={def} onDone={() => setScene(null)} />
+      )}
+      {(scene === "pick-left" || scene === "pick-right") && (
+        <PickSideCinematic
+          defId={defId} def={def}
+          side={scene === "pick-left" ? "left" : "right"}
+          onDone={() => setScene(null)}
+        />
+      )}
     </div>
   );
 }

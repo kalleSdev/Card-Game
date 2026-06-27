@@ -1,145 +1,134 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { CardDef } from "@cg/contracts";
 import CharacterCard from "../components/CharacterCard";
 import { TornHalf } from "./TornPanel";
 
-// Half-screen Persona 5 cinematic when a high-rarity card is PICKED
-// Smaller panel, tilted card, torn edges rip through the card
-
-type Phase = "in" | "hold" | "out";
-
-const RARITY_COLOR: Record<string, string> = {
-  SS:  "#ff22cc",
-  SSS: "#00ff88",
-  X:   "#ff2222",
+// ── Rarity themes ─────────────────────────────────────────────────────────────
+const RARITY_THEME: Record<string, { primary: string; bg: string; dark: string; mid: string }> = {
+  SS:  { primary: "#ff22cc", bg: "#1e0016", dark: "#0c0008", mid: "#3a0028" },
+  SSS: { primary: "#00ff88", bg: "#001a0c", dark: "#000c06", mid: "#003018" },
+  X:   { primary: "#ff3322", bg: "#200000", dark: "#0c0000", mid: "#380000" },
+  S:   { primary: "#ffd700", bg: "#1c1400", dark: "#0a0800", mid: "#2e2200" },
+  A:   { primary: "#cc44ff", bg: "#160020", dark: "#080010", mid: "#280038" },
 };
+const DEFAULT_THEME = RARITY_THEME.SS;
 
+// Diagonal energy flash inside the torn area
+function FlashBars({ color, show }: { color: string; show: boolean }) {
+  return (
+    <>
+      {[
+        { top: "22%", w: "110%", h: 18, delay: 0,    op: 0.16 },
+        { top: "50%", w: "95%",  h: 28, delay: 0.04, op: 0.12 },
+        { top: "74%", w: "105%", h: 14, delay: 0.07, op: 0.14 },
+      ].map((b, i) => (
+        <motion.div key={i}
+          initial={{ x: "-120%", opacity: 0 }}
+          animate={show ? { x: "0%", opacity: b.op } : { x: "120%", opacity: 0 }}
+          transition={{ duration: 0.18, delay: b.delay, ease: [0.2, 1, 0.3, 1] }}
+          style={{
+            position: "absolute", top: b.top, left: "-8%",
+            width: b.w, height: b.h,
+            background: `linear-gradient(90deg, ${color}cc, ${color}44, transparent)`,
+            transform: "skewY(-2.5deg)", mixBlendMode: "screen",
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 export default function PickSideCinematic({
   defId, def, side, onDone,
 }: {
-  defId: string;
-  def: CardDef;
-  side: "left" | "right";
-  onDone: () => void;
+  defId: string; def: CardDef; side: "left" | "right"; onDone: () => void;
 }) {
-  const [phase, setPhase] = useState<Phase>("in");
-  const color = RARITY_COLOR[def.rarity] ?? "#ff22cc";
+  const theme = RARITY_THEME[def.rarity] ?? DEFAULT_THEME;
+  const [phase, setPhase] = useState<"in" | "hold" | "out">("in");
   const isLeft = side === "left";
 
   useEffect(() => {
-    const t1 = setTimeout(() => setPhase("hold"), 100);
+    const t1 = setTimeout(() => setPhase("hold"), 160);
     const t2 = setTimeout(() => setPhase("out"),  2000);
-    const t3 = setTimeout(onDone, 2500);
+    const t3 = setTimeout(onDone, 2600);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
   }, []);
 
-  // Slash bars sweep from the attachment edge inward
-  const bars = [
-    { top: "5%",  h: 55,  wPct: 110, delay: 0     },
-    { top: "30%", h: 40,  wPct: 95,  delay: 0.035  },
-    { top: "55%", h: 48,  wPct: 105, delay: 0.07   },
-    { top: "78%", h: 36,  wPct: 88,  delay: 0.105  },
-  ];
+  const showCard = phase !== "out";
+  const cardTilt = isLeft ? -5 : 5;
 
-  // Card tilt: lean toward the player's side
-  const cardTilt = isLeft ? -10 : 10;
+  // Container: tight — just enough for the torn panel + a little padding
+  // Narrower than before: 36% of screen width
+  const containerStyle: React.CSSProperties = isLeft
+    ? { position: "fixed", left: 0, top: 0, bottom: 0, width: "36%" }
+    : { position: "fixed", right: 0, top: 0, bottom: 0, width: "36%" };
 
   return (
     <AnimatePresence>
       {phase !== "out" && (
         <motion.div
-          initial={{ opacity: 0, scaleX: 0 }}
-          animate={{ opacity: 1, scaleX: 1 }}
-          exit={{ opacity: 0, scaleX: 0 }}
-          transition={{ duration: 0.16, ease: [0.2, 1, 0.3, 1] }}
-          style={{
-            position: "fixed",
-            top: "12%", bottom: "12%",
-            [isLeft ? "left" : "right"]: 0,
-            width: "36%",
-            zIndex: 150,
-            transformOrigin: isLeft ? "left center" : "right center",
-            fontFamily: "'Segoe UI', system-ui, sans-serif",
-          }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          style={{ ...containerStyle, zIndex: 150, pointerEvents: "none",
+            fontFamily: "'Segoe UI', system-ui, sans-serif" }}
         >
+          {/* TornHalf panel — compact vertical slice, 20% vertical margin */}
           <TornHalf
-            accentColor={color}
-            style={{ position: "absolute", inset: 0 }}
-            innerStyle={{ background: "#000" }}
+            style={{ position: "absolute", left: 0, top: "16%", right: 0, bottom: "16%" }}
+            innerStyle={{
+              background: `linear-gradient(160deg, ${theme.dark} 0%, ${theme.bg} 45%, ${theme.mid} 100%)`,
+            }}
+            accentColor={theme.primary}
           >
-            {/* BG — radial wash from card center */}
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              style={{
-                position: "absolute", inset: 0,
-                background: `radial-gradient(ellipse at 50% 50%, ${color}2a 0%, #000 68%)`,
-                zIndex: 0,
-              }}
-            />
+            {/* Radial bloom */}
+            <div style={{
+              position: "absolute", inset: 0,
+              background: `radial-gradient(ellipse at 50% 50%, ${theme.primary}33 0%, transparent 65%)`,
+            }} />
 
-            {/* Slash bars sweep in */}
-            {bars.map((b, i) => (
-              <motion.div
-                key={i}
-                initial={{ x: isLeft ? "-115%" : "115%" }}
-                animate={{ x: "0%" }}
-                transition={{ duration: 0.15, delay: b.delay, ease: [0.2, 1, 0.3, 1] }}
-                style={{
-                  position: "absolute",
-                  top: b.top,
-                  [isLeft ? "left" : "right"]: "-5%",
-                  width: `${b.wPct}%`, height: b.h,
-                  background: `linear-gradient(${isLeft ? "90deg" : "270deg"}, ${color}30, ${color}14, transparent)`,
-                  border: `1px solid ${color}40`,
-                  transform: "skewY(-6deg)",
-                  zIndex: 2,
-                }}
-              />
-            ))}
+            <FlashBars color={theme.primary} show={showCard} />
 
-            {/* Bloom behind card */}
-            <motion.div
-              animate={{ opacity: [0.28, 0.5, 0.28] }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-              style={{
-                position: "absolute", left: "50%", top: "50%",
-                width: 420, height: 420,
-                transform: "translate(-50%, -50%)",
-                background: `radial-gradient(ellipse at center, ${color}44 0%, transparent 65%)`,
-                borderRadius: "50%", zIndex: 3, pointerEvents: "none",
-              }}
-            />
-
-            {/* Card — tilted, centered, slams down from above */}
-            <motion.div
-              initial={{ y: -260, rotate: cardTilt * 2, scale: 0.6, opacity: 0 }}
-              animate={{ y: 0, rotate: cardTilt, scale: 1, opacity: 1 }}
-              exit={{ y: 40, opacity: 0 }}
-              transition={{ duration: 0.36, ease: [0.15, 1.7, 0.3, 1] }}
-              style={{
-                position: "absolute",
-                left: "50%", top: "50%",
-                transform: `translate(-50%, -50%) rotate(${cardTilt}deg)`,
-                zIndex: 10,
-                filter: `drop-shadow(0 0 55px ${color}99) drop-shadow(0 22px 44px rgba(0,0,0,0.98))`,
-              }}
-            >
-              {/* Pulse ring */}
-              <motion.div
-                animate={{ scale: [1, 1.07, 1], opacity: [0.32, 0.58, 0.32] }}
-                transition={{ duration: 1.2, repeat: Infinity }}
-                style={{
-                  position: "absolute", inset: -18,
-                  border: `2px solid ${color}77`,
-                  borderRadius: 22, zIndex: -1,
-                  boxShadow: `0 0 44px ${color}44`,
-                }}
-              />
-              <div style={{ transform: "scale(1.85)", transformOrigin: "center center" }}>
-                <CharacterCard defId={defId} def={def} size="lg" />
-              </div>
-            </motion.div>
+            {/* Card — centered in panel, slams in from above, same scale as before */}
+            <AnimatePresence>
+              {showCard && (
+                <motion.div
+                  initial={{ y: -200, rotate: cardTilt - 20, scale: 0.5, opacity: 0 }}
+                  animate={{ y: 0, rotate: cardTilt, scale: 1, opacity: 1 }}
+                  exit={{ y: 30, opacity: 0 }}
+                  transition={{ duration: 0.4, ease: [0.12, 1.7, 0.26, 1] }}
+                  style={{
+                    position: "absolute",
+                    left: "50%", top: "48%",
+                    transform: "translate(-50%, -50%)",
+                    zIndex: 8,
+                    filter: `
+                      drop-shadow(0 0 48px ${theme.primary}cc)
+                      drop-shadow(0 0 18px ${theme.primary}55)
+                      drop-shadow(0 18px 44px rgba(0,0,0,0.99))
+                    `,
+                  }}
+                >
+                  {/* Aura ring */}
+                  <motion.div
+                    animate={{ scale: [1, 1.09, 1], opacity: [0.4, 0.72, 0.4] }}
+                    transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+                    style={{
+                      position: "absolute", inset: -20,
+                      border: `3px solid ${theme.primary}77`,
+                      borderRadius: 18, zIndex: -1,
+                      boxShadow: `0 0 55px ${theme.primary}44`,
+                    }}
+                  />
+                  <div style={{ transform: "scale(1.5)", transformOrigin: "center center" }}>
+                    <CharacterCard defId={defId} def={def} size="lg" />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </TornHalf>
         </motion.div>
       )}

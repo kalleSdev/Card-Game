@@ -8,10 +8,38 @@ NEXT TIME:
 Resolution screen cinematic
 refine all cinematics
 
+have a "Reveal Scene", "Pick Scene" in the gallery when you click on a card as options to play the cinematics
 have the reveal cinematic play for the domain expansion
 yuji and geto synergy
 no need for the card to be a "card" in the cinematics, just have it be still for dramatic effect and quality of the cinematic. 
 vfx
+
+NEXT CLAUDE MSG: 
+the reveal cinematic, have the card further up by about 35%, have the cuts vary in sizes a lot more, so some  only cut a little bit, then a little more, then a big jump, then a smaller etc right now all the cuts are really deep. no need for them to be random, make it aesthetically pleasing so the card is cut through but visible etc. 
+
+for the pick cinematic no need for the exclamation marks, and make the area of the torn paper smaller but keep the card inside it the same size, just make it more focused on the cards placement. 
+
+the pick cinmeatic, make the area of the torn paper that appears smaller but keep the card the same size.
+
+have a "Reveal Scene", "Pick Scene" in the gallery when you click on a card as options to play the cinematics. so you click on a card to see its specifications which we already have a function for, just add those 2 options on the right of it. 
+
+in the resolution screen, dont display any numbers in the square of, also we can skip the pop up of an entire screen for the esclamation marks, instead just have them appear in the middle of the screen so you can still see the square off, then after a player wins, have their cards go to the center of the page as well. also, the leaders png is displayed translucently in the background of each player in the square off, zoom it out a lot more, fit it to the players half of the screen so you see the entire card not a zoomed in version. 
+
+give panda "culling game" synergy, make it so if you have 2 culling game participants you get +3% and then scales like before with more of them.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #NOTES
 Domain Unleash becomes a rock paper scissors type of game where winner gets bonus points

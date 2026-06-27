@@ -1,47 +1,44 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { CardDef } from "@cg/contracts";
 import CharacterCard from "../components/CharacterCard";
 import { TornFull } from "./TornPanel";
 
-// Persona 5-style full-screen cinematic for SS / SSS / X reveals via the Reveal spell
-
-type CinPhase = "flash" | "slash" | "card" | "hold" | "exit";
-
-// Rarity themes — map to actual rarity colors from the game
+// ── Rarity themes ─────────────────────────────────────────────────────────────
 const RARITY_THEME: Record<string, {
-  primary: string; secondary: string; label: string; bg: string;
-  panelColor: string; textOnPrimary: string;
+  primary: string; bg: string; dark: string; mid: string; textOn: string;
 }> = {
-  SS:  { primary: "#ff22cc", secondary: "#ffaaee", label: "SS",   bg: "rgba(50,0,35,0.97)",  panelColor: "#ff22cc", textOnPrimary: "#fff" },
-  SSS: { primary: "#00ff88", secondary: "#aaffdd", label: "SSS",  bg: "rgba(0,28,14,0.97)",  panelColor: "#00ff88", textOnPrimary: "#001a0a" },
-  X:   { primary: "#ff2222", secondary: "#ffaaaa", label: "X",    bg: "rgba(22,0,0,0.97)",   panelColor: "#ff2222", textOnPrimary: "#fff" },
+  SS:  { primary: "#ff22cc", bg: "#1e0016",  dark: "#0c0008",  mid: "#3a0028",  textOn: "#fff" },
+  SSS: { primary: "#00ff88", bg: "#001a0c",  dark: "#000c06",  mid: "#003018",  textOn: "#001a0a" },
+  X:   { primary: "#ff3322", bg: "#200000",  dark: "#0c0000",  mid: "#380000",  textOn: "#fff" },
+  S:   { primary: "#ffd700", bg: "#1c1400",  dark: "#0a0800",  mid: "#2e2200",  textOn: "#0a0800" },
+  A:   { primary: "#cc44ff", bg: "#160020",  dark: "#080010",  mid: "#280038",  textOn: "#fff" },
 };
+const DEFAULT_THEME = RARITY_THEME.SS;
 
-// ── Diagonal sweep bars ───────────────────────────────────────────────────────
-function SlashBars({ color, show }: { color: string; show: boolean }) {
+type Phase = "in" | "card" | "hold" | "out";
+
+// ── P5 energy bars inside the panel ──────────────────────────────────────────
+function EnergyBars({ color, show }: { color: string; show: boolean }) {
   const bars = [
-    { top: "5%",  width: "115%", delay: 0,     h: 55 },
-    { top: "30%", width: "100%", delay: 0.04,  h: 40 },
-    { top: "54%", width: "110%", delay: 0.08,  h: 50 },
-    { top: "78%", width: "92%",  delay: 0.12,  h: 38 },
+    { top: "18%", w: "95%",  h: 28, delay: 0,     opacity: 0.18 },
+    { top: "38%", w: "110%", h: 42, delay: 0.03,  opacity: 0.13 },
+    { top: "58%", w: "90%",  h: 22, delay: 0.055, opacity: 0.16 },
+    { top: "75%", w: "105%", h: 30, delay: 0.08,  opacity: 0.11 },
   ];
   return (
     <>
       {bars.map((b, i) => (
-        <motion.div
-          key={i}
-          initial={{ x: "-115%", opacity: 0 }}
-          animate={show ? { x: "0%", opacity: 1 } : { x: "115%", opacity: 0 }}
-          transition={{ duration: 0.16, delay: b.delay, ease: [0.2, 1, 0.3, 1] }}
+        <motion.div key={i}
+          initial={{ x: "-120%", opacity: 0 }}
+          animate={show ? { x: "0%", opacity: b.opacity } : { x: "120%", opacity: 0 }}
+          transition={{ duration: 0.2, delay: b.delay, ease: [0.2, 1, 0.3, 1] }}
           style={{
-            position: "absolute",
-            top: b.top, left: "-8%",
-            width: b.width, height: b.h,
-            background: `linear-gradient(90deg, ${color}44, ${color}22, transparent)`,
-            border: `1px solid ${color}55`,
-            transform: "skewY(-7deg)",
-            zIndex: 2,
+            position: "absolute", top: b.top, left: "-8%",
+            width: b.w, height: b.h,
+            background: `linear-gradient(90deg, ${color}cc, ${color}66, transparent)`,
+            transform: "skewY(-3deg)",
+            mixBlendMode: "screen",
           }}
         />
       ))}
@@ -49,320 +46,275 @@ function SlashBars({ color, show }: { color: string; show: boolean }) {
   );
 }
 
-// ── Thick accent bars ─────────────────────────────────────────────────────────
-function AccentBars({ color, show }: { color: string; show: boolean }) {
+// ── Corner accent lines (P5 signature) ───────────────────────────────────────
+function CornerAccents({ color, show }: { color: string; show: boolean }) {
   return (
     <AnimatePresence>
       {show && (
         <>
-          {/* Top-left solid bar */}
-          <motion.div
-            initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} exit={{ scaleX: 0 }}
-            transition={{ duration: 0.12, ease: "easeOut" }}
-            style={{ position: "absolute", top: 0, left: 0, zIndex: 6,
-              width: 260, height: 10, background: color, transformOrigin: "left center" }}
-          />
-          {/* Second thin line below */}
-          <motion.div
-            initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} exit={{ scaleX: 0 }}
-            transition={{ duration: 0.12, delay: 0.03, ease: "easeOut" }}
-            style={{ position: "absolute", top: 12, left: 0, zIndex: 6,
-              width: 140, height: 3, background: color, transformOrigin: "left center" }}
-          />
-          {/* Bottom-right */}
-          <motion.div
-            initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} exit={{ scaleX: 0 }}
-            transition={{ duration: 0.12, delay: 0.05, ease: "easeOut" }}
-            style={{ position: "absolute", bottom: 0, right: 0, zIndex: 6,
-              width: 310, height: 10, background: color, transformOrigin: "right center" }}
-          />
-          <motion.div
-            initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} exit={{ scaleX: 0 }}
-            transition={{ duration: 0.12, delay: 0.08, ease: "easeOut" }}
-            style={{ position: "absolute", bottom: 12, right: 0, zIndex: 6,
-              width: 160, height: 3, background: color, transformOrigin: "right center" }}
-          />
-          {/* Left vertical line */}
-          <motion.div
-            initial={{ scaleY: 0 }} animate={{ scaleY: 1 }} exit={{ scaleY: 0 }}
-            transition={{ duration: 0.18 }}
-            style={{ position: "absolute", top: 0, left: 28, bottom: 0, zIndex: 5,
-              width: 4, background: `linear-gradient(180deg, ${color}, transparent)`, transformOrigin: "top center" }}
-          />
-          {/* Right vertical line */}
-          <motion.div
-            initial={{ scaleY: 0 }} animate={{ scaleY: 1 }} exit={{ scaleY: 0 }}
-            transition={{ duration: 0.18, delay: 0.04 }}
-            style={{ position: "absolute", top: 0, right: 28, bottom: 0, zIndex: 5,
-              width: 4, background: `linear-gradient(180deg, transparent, ${color})`, transformOrigin: "bottom center" }}
-          />
+          {/* Top-left cluster */}
+          <motion.div initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} exit={{ scaleX: 0 }}
+            transition={{ duration: 0.12 }}
+            style={{ position: "absolute", top: "12%", left: 0, width: 200, height: 10,
+              background: color, transformOrigin: "left center", zIndex: 6 }} />
+          <motion.div initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} exit={{ scaleX: 0 }}
+            transition={{ duration: 0.12, delay: 0.04 }}
+            style={{ position: "absolute", top: "calc(12% + 14px)", left: 0, width: 100, height: 4,
+              background: color + "99", transformOrigin: "left center", zIndex: 6 }} />
+          {/* Bottom-right cluster */}
+          <motion.div initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} exit={{ scaleX: 0 }}
+            transition={{ duration: 0.12, delay: 0.06 }}
+            style={{ position: "absolute", bottom: "12%", right: 0, width: 240, height: 10,
+              background: color, transformOrigin: "right center", zIndex: 6 }} />
+          <motion.div initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} exit={{ scaleX: 0 }}
+            transition={{ duration: 0.12, delay: 0.09 }}
+            style={{ position: "absolute", bottom: "calc(12% + 14px)", right: 0, width: 120, height: 4,
+              background: color + "99", transformOrigin: "right center", zIndex: 6 }} />
         </>
       )}
     </AnimatePresence>
   );
 }
 
-// ── Card section (left side) ──────────────────────────────────────────────────
-function CardSection({ defId, def, color, show }: { defId: string; def: CardDef; color: string; show: boolean }) {
+// ── !! exclamation impact marks ───────────────────────────────────────────────
+function ExclaimMarks({ color, show }: { color: string; show: boolean }) {
   return (
     <AnimatePresence>
       {show && (
         <motion.div
-          initial={{ y: -220, rotate: -18, scale: 0.65, opacity: 0 }}
-          animate={{ y: 0, rotate: def.rarity === "X" ? -4 : -9, scale: 1, opacity: 1 }}
-          exit={{ y: 50, opacity: 0, scale: 0.9 }}
-          transition={{ duration: 0.38, ease: [0.15, 1.6, 0.3, 1] }}
+          initial={{ x: 80, y: -40, opacity: 0, scale: 0.4 }}
+          animate={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.7 }}
+          transition={{ duration: 0.3, ease: [0.12, 1.8, 0.28, 1] }}
           style={{
             position: "absolute",
-            left: "50%", top: "44%",
-            transform: "translate(-50%, -50%)",
-            zIndex: 10,
-            filter: `drop-shadow(0 0 50px ${color}88) drop-shadow(0 20px 40px rgba(0,0,0,0.95))`,
+            right: "3%", top: "-1%",
+            zIndex: 25, display: "flex", alignItems: "flex-end",
+            gap: -10, pointerEvents: "none",
           }}
         >
-          <div style={{ transform: "scale(1.9)", transformOrigin: "center center" }}>
-            <CharacterCard defId={defId} def={def} size="lg" />
+          {[
+            { rot: -13, scale: 0.78, blur: 0.5 },
+            { rot:  -5, scale: 1.00, blur: 0 },
+          ].map(({ rot, scale, blur }, i) => (
+            <div key={i} style={{
+              fontSize: "clamp(120px, 22vh, 250px)",
+              fontWeight: 900, fontStyle: "italic",
+              color: "#fff",
+              WebkitTextStroke: "clamp(5px, 1vw, 13px) #000",
+              lineHeight: 0.82,
+              transform: `rotate(${rot}deg) scale(${scale})`,
+              transformOrigin: "bottom center",
+              userSelect: "none",
+              filter: `drop-shadow(0 0 18px ${color}bb) blur(${blur}px)`,
+            }}>!</div>
+          ))}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+export default function CardRevealCinematic({
+  defId, def, onDone,
+}: {
+  defId: string; def: CardDef; onDone: () => void;
+}) {
+  const theme = RARITY_THEME[def.rarity] ?? DEFAULT_THEME;
+  const [phase, setPhase] = useState<Phase>("in");
+
+  useEffect(() => {
+    const seq: [number, Phase][] = [
+      [180,  "card"],
+      [460,  "hold"],
+      [2900, "out"],
+    ];
+    const timers = seq.map(([ms, p]) => setTimeout(() => setPhase(p), ms));
+    const done = setTimeout(onDone, 3600);
+    return () => { timers.forEach(clearTimeout); clearTimeout(done); };
+  }, []);
+
+  const showPanel = phase !== "out";
+  const showCard  = ["card", "hold"].includes(phase);
+  const showText  = phase === "hold";
+
+  // Rarity-specific tilt
+  const cardTilt = def.rarity === "X" ? -4 : def.rarity === "SSS" ? -7 : -9;
+
+  return (
+    <AnimatePresence>
+      {showPanel && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0, transition: { duration: 0.3 } }}
+          transition={{ duration: 0.18 }}
+          style={{
+            position: "fixed", inset: 0, zIndex: 200,
+            fontFamily: "'Segoe UI', system-ui, sans-serif",
+            pointerEvents: "none",
+          }}
+        >
+          {/* Torn panel — 88% wide, 80% tall, centered */}
+          <TornFull
+            style={{ position: "absolute", left: "6%", top: "10%", right: "6%", bottom: "10%" }}
+            innerStyle={{
+              background: `linear-gradient(160deg, ${theme.dark} 0%, ${theme.bg} 40%, ${theme.mid} 100%)`,
+            }}
+            accentColor={theme.primary}
+          >
+            {/* Radial color bloom from card position */}
+            <div style={{
+              position: "absolute", inset: 0,
+              background: `radial-gradient(ellipse at 32% 50%, ${theme.primary}3a 0%, transparent 60%)`,
+              pointerEvents: "none",
+            }} />
+
+            {/* Diagonal energy bars */}
+            <EnergyBars color={theme.primary} show={showCard} />
+
+            {/* Corner accents */}
+            <CornerAccents color={theme.primary} show={showCard} />
+
+            {/* ── Card — slams in, tilted, centered-left ─────────────────── */}
+            <AnimatePresence>
+              {showCard && (
+                <motion.div
+                  initial={{ y: -180, rotate: cardTilt - 18, scale: 0.5, opacity: 0 }}
+                  animate={{ y: 0, rotate: cardTilt, scale: 1, opacity: 1 }}
+                  exit={{ y: 40, opacity: 0 }}
+                  transition={{ duration: 0.42, ease: [0.12, 1.7, 0.26, 1] }}
+                  style={{
+                    position: "absolute",
+                    left: "28%", top: "33%",
+                    transform: "translate(-50%, -50%)",
+                    zIndex: 8,
+                    filter: `
+                      drop-shadow(0 0 50px ${theme.primary}cc)
+                      drop-shadow(0 0 20px ${theme.primary}66)
+                      drop-shadow(0 20px 48px rgba(0,0,0,0.99))
+                    `,
+                  }}
+                >
+                  {/* Pulsing rarity aura ring */}
+                  <motion.div
+                    animate={{ scale: [1, 1.08, 1], opacity: [0.45, 0.75, 0.45] }}
+                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                    style={{
+                      position: "absolute", inset: -24,
+                      border: `3px solid ${theme.primary}88`,
+                      borderRadius: 20, zIndex: -1,
+                      boxShadow: `0 0 60px ${theme.primary}55, inset 0 0 30px ${theme.primary}11`,
+                    }}
+                  />
+                  {/* Second smaller ring */}
+                  <motion.div
+                    animate={{ scale: [1, 1.04, 1], opacity: [0.25, 0.55, 0.25] }}
+                    transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
+                    style={{
+                      position: "absolute", inset: -8,
+                      border: `2px solid ${theme.primary}55`,
+                      borderRadius: 16, zIndex: -1,
+                    }}
+                  />
+                  <div style={{ transform: "scale(1.75)", transformOrigin: "center center" }}>
+                    <CharacterCard defId={defId} def={def} size="lg" />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* ── Info panel — right of card ─────────────────────────────── */}
+            <AnimatePresence>
+              {showText && (
+                <motion.div
+                  initial={{ x: 100, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.22, ease: [0.18, 1.4, 0.3, 1] }}
+                  style={{
+                    position: "absolute",
+                    left: "54%", top: "33%",
+                    transform: "translateY(-50%)",
+                    zIndex: 12,
+                  }}
+                >
+                  {/* JUJUTSU KAISEN header */}
+                  <div style={{
+                    background: theme.primary, padding: "4px 20px 4px 14px",
+                    transform: "skewX(-12deg)", marginBottom: 12, display: "inline-block",
+                    boxShadow: `0 0 28px ${theme.primary}aa`,
+                  }}>
+                    <span style={{
+                      fontSize: 9, letterSpacing: 8, color: theme.textOn,
+                      fontWeight: 900, display: "block", transform: "skewX(12deg)",
+                    }}>JUJUTSU KAISEN</span>
+                  </div>
+
+                  {/* Giant rarity */}
+                  <div style={{
+                    fontSize: "clamp(72px, 10vw, 110px)",
+                    fontWeight: 900, color: theme.primary,
+                    letterSpacing: -4, lineHeight: 0.82, fontStyle: "italic",
+                    WebkitTextStroke: "3px #000",
+                    textShadow: `0 0 40px ${theme.primary}dd, 0 0 90px ${theme.primary}55`,
+                    marginBottom: 6,
+                  }}>
+                    {def.rarity}
+                  </div>
+
+                  {/* Name block */}
+                  <div style={{
+                    display: "inline-block",
+                    background: "#000", padding: "10px 24px 10px 18px", marginBottom: 10,
+                    transform: "skewX(-9deg)",
+                    borderLeft: `6px solid ${theme.primary}`,
+                    boxShadow: `0 0 18px rgba(0,0,0,0.95), 0 0 8px ${theme.primary}33`,
+                  }}>
+                    <div style={{
+                      fontSize: 24, fontWeight: 900, color: "#fff",
+                      letterSpacing: 2, transform: "skewX(9deg)",
+                      textShadow: `0 0 14px ${theme.primary}77`,
+                    }}>
+                      {def.name.toUpperCase()}
+                    </div>
+                    <div style={{
+                      fontSize: 9, color: theme.primary + "bb", letterSpacing: 6,
+                      marginTop: 5, transform: "skewX(9deg)", fontWeight: 700,
+                    }}>
+                      {def.affinity === "LEADER" ? "— LEADER CLASS —"
+                        : def.affinity === "COMBAT" ? "— COMBAT CLASS —"
+                        : "— SUPPORT CLASS —"}
+                    </div>
+                  </div>
+
+                  {/* REVEALED badge */}
+                  <div>
+                    <div style={{
+                      display: "inline-block",
+                      background: "#000", padding: "5px 22px",
+                      transform: "skewX(-9deg)",
+                      border: `2px solid ${theme.primary}`,
+                      boxShadow: `0 0 18px ${theme.primary}66`,
+                    }}>
+                      <span style={{
+                        fontSize: 14, fontWeight: 900, letterSpacing: 11,
+                        color: "#fff", display: "block", transform: "skewX(9deg)",
+                      }}>REVEALED</span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </TornFull>
+
+          {/* !! marks — outside the torn panel, top-right corner */}
+          <div style={{ position: "absolute", right: "2%", top: "5%", zIndex: 220 }}>
+            <ExclaimMarks color={theme.primary} show={showCard} />
           </div>
         </motion.div>
       )}
     </AnimatePresence>
-  );
-}
-
-// ── Info panel (right side) ───────────────────────────────────────────────────
-function InfoPanel({
-  def, theme, show,
-}: { def: CardDef; theme: typeof RARITY_THEME[string]; show: boolean }) {
-  return (
-    <AnimatePresence>
-      {show && (
-        <motion.div
-          initial={{ x: 160, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.25, ease: [0.2, 1.4, 0.3, 1] }}
-          style={{
-            position: "absolute",
-            right: "4%", top: "50%",
-            transform: "translateY(-50%)",
-            zIndex: 10,
-            maxWidth: "38%",
-          }}
-        >
-          {/* Series tag */}
-          <motion.div
-            initial={{ x: 60, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ delay: 0.06, duration: 0.18 }}
-            style={{
-              display: "inline-block",
-              background: theme.panelColor,
-              padding: "5px 18px 5px 14px",
-              marginBottom: 14,
-              transform: "skewX(-10deg)",
-              boxShadow: `0 0 24px ${theme.primary}88`,
-            }}
-          >
-            <span style={{
-              fontSize: 10, letterSpacing: 7,
-              color: theme.textOnPrimary,
-              fontWeight: 900, display: "block",
-              transform: "skewX(10deg)",
-            }}>
-              JUJUTSU KAISEN
-            </span>
-          </motion.div>
-
-          {/* Giant rarity label */}
-          <motion.div
-            initial={{ scale: 1.8, opacity: 0, skewX: -8 }}
-            animate={{ scale: 1, opacity: 1, skewX: -4 }}
-            transition={{ delay: 0.1, duration: 0.28, ease: [0.15, 1.5, 0.3, 1] }}
-            style={{
-              fontSize: 100, fontWeight: 900,
-              color: theme.primary,
-              letterSpacing: -4, lineHeight: 0.85,
-              textShadow: `0 0 0 2px #000, 0 0 30px ${theme.primary}cc, 0 0 80px ${theme.primary}55`,
-              WebkitTextStroke: `3px ${theme.textOnPrimary === "#fff" ? "#000" : "#fff"}`,
-              fontStyle: "italic",
-            }}
-          >
-            {theme.label}
-          </motion.div>
-
-          {/* "RATED" label */}
-          <motion.div
-            initial={{ x: 50, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ delay: 0.2, duration: 0.2 }}
-            style={{
-              display: "inline-block",
-              background: "#000",
-              padding: "4px 18px",
-              marginTop: 10,
-              transform: "skewX(-8deg)",
-              border: `2px solid ${theme.primary}`,
-              boxShadow: `0 0 16px ${theme.primary}55`,
-            }}
-          >
-            <span style={{
-              fontSize: 18, fontWeight: 900, letterSpacing: 12,
-              color: "#fff",
-              transform: "skewX(8deg)",
-              display: "block",
-            }}>
-              RATED
-            </span>
-          </motion.div>
-
-          {/* Card name */}
-          <motion.div
-            initial={{ y: 24, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.28, duration: 0.22 }}
-            style={{
-              marginTop: 24,
-              display: "inline-block",
-              background: "#000",
-              padding: "10px 22px",
-              transform: "skewX(-8deg)",
-              borderLeft: `5px solid ${theme.primary}`,
-              boxShadow: `inset 0 0 20px rgba(0,0,0,0.8)`,
-            }}
-          >
-            <div style={{
-              fontSize: 26, fontWeight: 900, color: "#fff",
-              letterSpacing: 2, transform: "skewX(8deg)",
-              textShadow: `0 0 14px ${theme.primary}66`,
-            }}>
-              {def.name.toUpperCase()}
-            </div>
-            <div style={{
-              fontSize: 10, color: theme.primary, letterSpacing: 5,
-              marginTop: 5, transform: "skewX(8deg)",
-              fontWeight: 700,
-            }}>
-              {def.affinity === "LEADER" ? "— LEADER CLASS —" : def.affinity === "COMBAT" ? "— COMBAT CLASS —" : "— SUPPORT CLASS —"}
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
-
-// ── Pulse ring behind card ────────────────────────────────────────────────────
-function PulseRing({ color, show }: { color: string; show: boolean }) {
-  return (
-    <AnimatePresence>
-      {show && (
-        <>
-          <motion.div
-            animate={{ scale: [1, 1.1, 1], opacity: [0.4, 0.65, 0.4] }}
-            transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
-            style={{
-              position: "absolute", left: "50%", top: "44%",
-              width: 280, height: 390,
-              transform: "translate(-50%, -50%) scale(1.9)",
-              border: `2px solid ${color}66`,
-              borderRadius: 18, zIndex: 4,
-              boxShadow: `0 0 60px ${color}44, inset 0 0 40px ${color}11`,
-            }}
-          />
-          {/* Glow bloom behind card */}
-          <motion.div
-            animate={{ opacity: [0.35, 0.55, 0.35] }}
-            transition={{ duration: 1.8, repeat: Infinity }}
-            style={{
-              position: "absolute", left: "50%", top: "44%",
-              width: 600, height: 600,
-              transform: "translate(-50%, -50%)",
-              background: `radial-gradient(ellipse at center, ${color}33 0%, transparent 65%)`,
-              borderRadius: "50%", zIndex: 3, pointerEvents: "none",
-            }}
-          />
-        </>
-      )}
-    </AnimatePresence>
-  );
-}
-
-// ── Main component ─────────────────────────────────────────────────────────────
-export default function CardRevealCinematic({
-  defId, def, onDone,
-}: {
-  defId: string;
-  def: CardDef;
-  onDone: () => void;
-}) {
-  const theme = RARITY_THEME[def.rarity] ?? RARITY_THEME.SS;
-  const [phase, setPhase] = useState<CinPhase>("flash");
-
-  useEffect(() => {
-    const seq: [number, CinPhase][] = [
-      [70,   "slash"],
-      [280,  "card"],
-      [520,  "hold"],
-      [2900, "exit"],
-    ];
-    const timers = seq.map(([ms, p]) => setTimeout(() => setPhase(p), ms));
-    const done = setTimeout(onDone, 3500);
-    return () => { timers.forEach(clearTimeout); clearTimeout(done); };
-  }, []);
-
-  const showSlash = ["slash", "card", "hold"].includes(phase);
-  const showCard  = ["card", "hold"].includes(phase);
-  const showText  = phase === "hold";
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: phase === "exit" ? 0 : 1 }}
-      transition={{ duration: phase === "exit" ? 0.4 : 0.03 }}
-      style={{
-        position: "fixed",
-        left: "10%", top: "8%",
-        width: "80%", height: "84%",
-        zIndex: 200,
-        fontFamily: "'Segoe UI', system-ui, sans-serif",
-      }}
-    >
-      <TornFull
-        accentColor={theme.primary}
-        style={{ position: "absolute", inset: 0 }}
-        innerStyle={{ background: "#000" }}
-      >
-        {/* Colored background wash */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: showCard ? 1 : 0 }}
-          transition={{ duration: 0.28 }}
-          style={{ position: "absolute", inset: 0, background: theme.bg, zIndex: 0 }}
-        />
-
-        {/* Film grain overlay */}
-        <div style={{
-          position: "absolute", inset: 0, zIndex: 1, pointerEvents: "none",
-          backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E\")",
-          backgroundSize: "180px 180px", opacity: 0.45, mixBlendMode: "overlay",
-        }} />
-
-        <SlashBars color={theme.primary} show={showSlash} />
-        <AccentBars color={theme.primary} show={showSlash} />
-        <PulseRing color={theme.primary} show={showCard} />
-        <CardSection defId={defId} def={def} color={theme.primary} show={showCard} />
-        <InfoPanel def={def} theme={theme} show={showText} />
-
-        <AnimatePresence>
-          {phase === "flash" && (
-            <motion.div
-              initial={{ opacity: 1 }} animate={{ opacity: 0 }}
-              transition={{ duration: 0.07 }}
-              style={{ position: "absolute", inset: 0, background: "#fff", zIndex: 50 }}
-            />
-          )}
-        </AnimatePresence>
-      </TornFull>
-    </motion.div>
   );
 }
