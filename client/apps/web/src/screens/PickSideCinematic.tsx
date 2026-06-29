@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { CardDef } from "@cg/contracts";
 import CharacterCard from "../components/CharacterCard";
-import { TornHalf } from "./TornPanel";
 
 // ── Rarity themes ─────────────────────────────────────────────────────────────
 const RARITY_THEME: Record<string, { primary: string; bg: string; dark: string; mid: string }> = {
@@ -14,28 +13,103 @@ const RARITY_THEME: Record<string, { primary: string; bg: string; dark: string; 
 };
 const DEFAULT_THEME = RARITY_THEME.SS;
 
-// Diagonal energy flash inside the torn area
-function FlashBars({ color, show }: { color: string; show: boolean }) {
+// Corner bracket accent — P5 styled corner frame pieces
+function CornerBrackets({ color }: { color: string }) {
+  const size = 28;
+  const thick = 4;
+  const corners = [
+    { top: 0,    left: 0,    borderTop: thick, borderLeft: thick,  borderBottom: 0, borderRight: 0 },
+    { top: 0,    right: 0,   borderTop: thick, borderRight: thick, borderBottom: 0, borderLeft: 0  },
+    { bottom: 0, left: 0,    borderBottom: thick, borderLeft: thick, borderTop: 0, borderRight: 0  },
+    { bottom: 0, right: 0,   borderBottom: thick, borderRight: thick, borderTop: 0, borderLeft: 0  },
+  ];
   return (
     <>
-      {[
-        { top: "22%", w: "110%", h: 18, delay: 0,    op: 0.16 },
-        { top: "50%", w: "95%",  h: 28, delay: 0.04, op: 0.12 },
-        { top: "74%", w: "105%", h: 14, delay: 0.07, op: 0.14 },
-      ].map((b, i) => (
-        <motion.div key={i}
-          initial={{ x: "-120%", opacity: 0 }}
-          animate={show ? { x: "0%", opacity: b.op } : { x: "120%", opacity: 0 }}
-          transition={{ duration: 0.18, delay: b.delay, ease: [0.2, 1, 0.3, 1] }}
+      {corners.map((c, i) => (
+        <motion.div
+          key={i}
+          initial={{ opacity: 0, scale: 0.6 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.18, delay: 0.05 + i * 0.03, ease: [0.12, 1.8, 0.3, 1] }}
           style={{
-            position: "absolute", top: b.top, left: "-8%",
-            width: b.w, height: b.h,
-            background: `linear-gradient(90deg, ${color}cc, ${color}44, transparent)`,
-            transform: "skewY(-2.5deg)", mixBlendMode: "screen",
+            position: "absolute",
+            width: size, height: size,
+            borderColor: color,
+            borderStyle: "solid",
+            borderTopWidth: c.borderTop ?? 0,
+            borderLeftWidth: c.borderLeft ?? 0,
+            borderBottomWidth: c.borderBottom ?? 0,
+            borderRightWidth: c.borderRight ?? 0,
+            ...("top" in c ? { top: c.top } : {}),
+            ...("bottom" in c ? { bottom: c.bottom } : {}),
+            ...("left" in c ? { left: c.left } : {}),
+            ...("right" in c ? { right: c.right } : {}),
+            zIndex: 4,
+            boxShadow: `0 0 12px ${color}88`,
           }}
         />
       ))}
     </>
+  );
+}
+
+// Diagonal P5 flash bars — behind the card
+function FlashBars({ color, show }: { color: string; show: boolean }) {
+  return (
+    <>
+      {[
+        { top: "15%", w: "160%", h: 22, delay: 0,    op: 0.13 },
+        { top: "44%", w: "140%", h: 36, delay: 0.03, op: 0.09 },
+        { top: "70%", w: "150%", h: 18, delay: 0.06, op: 0.11 },
+      ].map((b, i) => (
+        <motion.div key={i}
+          initial={{ x: "-130%", opacity: 0 }}
+          animate={show ? { x: "0%", opacity: b.op } : { x: "130%", opacity: 0 }}
+          transition={{ duration: 0.2, delay: b.delay, ease: [0.2, 1, 0.3, 1] }}
+          style={{
+            position: "absolute", top: b.top, left: "-30%",
+            width: b.w, height: b.h,
+            background: `linear-gradient(90deg, transparent, ${color}cc, ${color}44, transparent)`,
+            transform: "skewY(-3deg)", mixBlendMode: "screen",
+            pointerEvents: "none",
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
+// Rarity label strip — slides in from the side
+function RarityLabel({ rarity, color, show, isLeft }: { rarity: string; color: string; show: boolean; isLeft: boolean }) {
+  return (
+    <AnimatePresence>
+      {show && (
+        <motion.div
+          initial={{ x: isLeft ? -80 : 80, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.22, delay: 0.1, ease: [0.18, 1.4, 0.3, 1] }}
+          style={{
+            position: "absolute",
+            bottom: -36,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: color,
+            padding: "3px 20px",
+            transform: "translateX(-50%) skewX(-12deg)",
+            zIndex: 6,
+          }}
+        >
+          <span style={{
+            fontSize: 11, fontWeight: 900, letterSpacing: 8,
+            color: "#000", display: "block", transform: "skewX(12deg)",
+            fontFamily: "'Segoe UI', system-ui, sans-serif",
+          }}>
+            {rarity}
+          </span>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -52,18 +126,17 @@ export default function PickSideCinematic({
   useEffect(() => {
     const t1 = setTimeout(() => setPhase("hold"), 160);
     const t2 = setTimeout(() => setPhase("out"),  2000);
-    const t3 = setTimeout(onDone, 2600);
+    const t3 = setTimeout(onDone, 2500);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
   }, []);
 
   const showCard = phase !== "out";
-  const cardTilt = isLeft ? -5 : 5;
+  const showInfo = phase === "hold";
+  const cardTilt = isLeft ? -4 : 4;
 
-  // Container: tight — just enough for the torn panel + a little padding
-  // Narrower than before: 36% of screen width
   const containerStyle: React.CSSProperties = isLeft
-    ? { position: "fixed", left: 0, top: 0, bottom: 0, width: "36%" }
-    : { position: "fixed", right: 0, top: 0, bottom: 0, width: "36%" };
+    ? { position: "fixed", left: "4%", top: 0, bottom: 0, display: "flex", alignItems: "center" }
+    : { position: "fixed", right: "4%", top: 0, bottom: 0, display: "flex", alignItems: "center" };
 
   return (
     <AnimatePresence>
@@ -73,63 +146,93 @@ export default function PickSideCinematic({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          style={{ ...containerStyle, zIndex: 150, pointerEvents: "none",
-            fontFamily: "'Segoe UI', system-ui, sans-serif" }}
+          style={{ ...containerStyle, zIndex: 150, pointerEvents: "none" }}
         >
-          {/* TornHalf panel — compact vertical slice, 20% vertical margin */}
-          <TornHalf
-            style={{ position: "absolute", left: 0, top: "16%", right: 0, bottom: "16%" }}
-            innerStyle={{
-              background: `linear-gradient(160deg, ${theme.dark} 0%, ${theme.bg} 45%, ${theme.mid} 100%)`,
-            }}
-            accentColor={theme.primary}
-          >
-            {/* Radial bloom */}
-            <div style={{
-              position: "absolute", inset: 0,
-              background: `radial-gradient(ellipse at 50% 50%, ${theme.primary}33 0%, transparent 65%)`,
-            }} />
-
+          {/* Background flash bars (no background panel — transparent) */}
+          <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
             <FlashBars color={theme.primary} show={showCard} />
+          </div>
 
-            {/* Card — centered in panel, slams in from above, same scale as before */}
-            <AnimatePresence>
-              {showCard && (
+          {/* Card + border frame */}
+          <AnimatePresence>
+            {showCard && (
+              <motion.div
+                initial={{ y: isLeft ? -240 : -240, rotate: cardTilt - 18, scale: 0.45, opacity: 0 }}
+                animate={{ y: 0, rotate: cardTilt, scale: 1, opacity: 1 }}
+                exit={{ y: 40, scale: 0.9, opacity: 0 }}
+                transition={{ duration: 0.44, ease: [0.12, 1.7, 0.26, 1] }}
+                style={{ position: "relative", zIndex: 8 }}
+              >
+                {/* Outer glow halo */}
                 <motion.div
-                  initial={{ y: -200, rotate: cardTilt - 20, scale: 0.5, opacity: 0 }}
-                  animate={{ y: 0, rotate: cardTilt, scale: 1, opacity: 1 }}
-                  exit={{ y: 30, opacity: 0 }}
-                  transition={{ duration: 0.4, ease: [0.12, 1.7, 0.26, 1] }}
+                  animate={{ opacity: [0.5, 0.9, 0.5] }}
+                  transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
                   style={{
                     position: "absolute",
-                    left: "50%", top: "48%",
-                    transform: "translate(-50%, -50%)",
-                    zIndex: 8,
-                    filter: `
-                      drop-shadow(0 0 48px ${theme.primary}cc)
-                      drop-shadow(0 0 18px ${theme.primary}55)
-                      drop-shadow(0 18px 44px rgba(0,0,0,0.99))
-                    `,
+                    inset: -28,
+                    borderRadius: 22,
+                    background: `radial-gradient(ellipse at 50% 50%, ${theme.primary}44 0%, transparent 70%)`,
+                    zIndex: -1,
                   }}
-                >
-                  {/* Aura ring */}
-                  <motion.div
-                    animate={{ scale: [1, 1.09, 1], opacity: [0.4, 0.72, 0.4] }}
-                    transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
-                    style={{
-                      position: "absolute", inset: -20,
-                      border: `3px solid ${theme.primary}77`,
-                      borderRadius: 18, zIndex: -1,
-                      boxShadow: `0 0 55px ${theme.primary}44`,
-                    }}
-                  />
-                  <div style={{ transform: "scale(1.5)", transformOrigin: "center center" }}>
-                    <CharacterCard defId={defId} def={def} size="lg" />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </TornHalf>
+                />
+
+                {/* Solid border frame */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.12, delay: 0.08 }}
+                  style={{
+                    position: "absolute",
+                    inset: -6,
+                    borderRadius: 16,
+                    border: `2px solid ${theme.primary}`,
+                    boxShadow: `
+                      0 0 0 1px #000,
+                      0 0 20px ${theme.primary}99,
+                      0 0 50px ${theme.primary}44,
+                      inset 0 0 12px ${theme.primary}22
+                    `,
+                    zIndex: 3,
+                  }}
+                />
+
+                {/* Inner thin accent border */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.1, delay: 0.12 }}
+                  style={{
+                    position: "absolute",
+                    inset: -12,
+                    borderRadius: 20,
+                    border: `1px solid ${theme.primary}55`,
+                    boxShadow: `0 0 30px ${theme.primary}33`,
+                    zIndex: 2,
+                  }}
+                />
+
+                {/* P5 corner brackets on outer border */}
+                <div style={{ position: "absolute", inset: -12, zIndex: 4 }}>
+                  <CornerBrackets color={theme.primary} />
+                </div>
+
+                {/* Drop shadow behind card */}
+                <div style={{
+                  position: "absolute", inset: 0, borderRadius: 12,
+                  boxShadow: `0 24px 60px rgba(0,0,0,0.95), 0 8px 20px rgba(0,0,0,0.8)`,
+                  zIndex: -1,
+                }} />
+
+                {/* The card itself — full size, unclipped */}
+                <div style={{ transform: "scale(1.45)", transformOrigin: "center center", display: "block" }}>
+                  <CharacterCard defId={defId} def={def} size="lg" />
+                </div>
+
+                {/* Rarity strip below card */}
+                <RarityLabel rarity={def.rarity} color={theme.primary} show={showInfo} isLeft={isLeft} />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       )}
     </AnimatePresence>

@@ -87,6 +87,7 @@ export const ROULETTE_ITEM_MAP: Record<string, RouletteItemDef> = {
   "electric-guitar":  { id: "electric-guitar",   name: "Electric Guitar",           baseBonus: 500,  conditionalDesc: "+1,500 if on Gakuganji" },
   "black-rope":       { id: "black-rope",         name: "Black Rope",                baseBonus: 1000, conditionalDesc: "+2,000 if on Miguel" },
   "miwa-sword":       { id: "miwa-sword",         name: "Miwa's Sword",              baseBonus: 500,  conditionalDesc: "+500 if on Miwa" },
+  "Rikas-Ring":       { id: "Rikas-Ring",         name: "Rika's Ring",               baseBonus: 1000, conditionalDesc: "+2,000 if on Yuta" }, 
 };
 
 const ALL_ROULETTE_IDS = Object.keys(ROULETTE_ITEM_MAP);
@@ -173,10 +174,10 @@ const computeItemBonus = (
   if (itemId === "festering-life"  && targetDefId === "kurourushi")   bonus += 1000;
   if (itemId === "split-soul-katana" && targetDefId === "toji")       bonus += 1000;
   if (itemId === "miwa-sword"        && targetDefId === "miwa")        bonus += 500;
-  // Naoya appreciates any weapon — +1000 flat bonus on all weapons
+  // Naoya+1000 flat bonus on all weapons
   if (targetDefId === "naoya") bonus += 1000;
 
-  // Weapon perk scaling — Toji doubles, Maki +50%, Todo +35%
+  // Weapon perk scaling, Toji doubles, Maki +50%, Todo +35%
   const targetCardDef = cardDb[targetDefId];
   switch (targetCardDef?.perks?.weaponEfficiency) {
     case "double": bonus = Math.round(bonus * 2);    break;
@@ -294,8 +295,8 @@ const CARD_DB: GameState["cardDb"] = {
   "yuta": {
     id: "yuta",
     name: "Yuta Okkotsu",
-    rarity: "SS",
-    basePoints: 12500,
+    rarity: "SSS",
+    basePoints: 13000,
     affinity: "LEADER",
     tags: ["sorcerer", "jujutsu-high", "six-eyes", "rika"],
     offRolePenalties: { combat: 0.9, support: 0.8 },
