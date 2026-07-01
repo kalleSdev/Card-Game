@@ -5,6 +5,54 @@ npm run dev
 
 
 NEXT TIME: 
+heavy weapon buff make it make sense, stronger weapons or new type of buffs that play a role strategically.
+TFT like items and building 
+
+
+after weapon or instead of weapon, we get a screen for a pandoras box type gamble you can take: 
+
+Draft game/normal mode
+HAKARIS GAMBLE (potential crazy buffs, characters maybe, weapons, perks and meme or other worldly related things for fun)
+DEAL WITH THE DEVIL (sukuna just slashes everything, a bunch of coin flips on who lives, chances of surviving)
+
+
+Deck draft mode 
+
+play a shorter fun minigame to draft cards like hearthstone draft one or fifa draft
+after building your drafted deck
+
+building a deck expansion, you play, at the end do a roulette, get a card in your main deck.
+your main deck gets built up then you play a hearthstone style card game against others. 
+
+
+
+
+Mindmap: 
+weapon system refinement like above 
+
+draft minigame to build a deck, then hearthstone tft type battle.
+
+saved players decks with names and dedicated memory, better presentation. 
+
+sound comes last
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Resolution screen cinematic
 refine all cinematics
 
