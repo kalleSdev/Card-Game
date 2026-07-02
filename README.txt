@@ -50,9 +50,6 @@ sound comes last
 
 
 
-
-
-
 Resolution screen cinematic
 refine all cinematics
 

@@ -1,12 +1,15 @@
 import { useMemo, useState } from "react";
-import type { GameState, Intent } from "@cg/contracts";
+import type { GameState, Intent, PlayerId } from "@cg/contracts";
 import { createEngine, createInitialState } from "@cg/engine";
 import type { PlayerIcons, PlayerNames } from "./types";
+import { recordMatchResult } from "./profiles";
+import type { Profile } from "./profiles";
 
 import SplashScreen from "./screens/SplashScreen";
 import HomeScreen from "./screens/HomeScreen";
 import CardGallery from "./screens/CardGallery";
 import SetupScreen from "./screens/SetupScreen";
+import ProfileSelectScreen from "./screens/ProfileSelectScreen";
 import BindingVowScreen from "./screens/BindingVowScreen";
 import CoinFlipScreen from "./screens/CoinFlipScreen";
 import DraftScreen from "./screens/DraftScreen";
@@ -16,12 +19,14 @@ import AugmentScreen from "./screens/AugmentScreen";
 import LockedInScreen from "./screens/LockedInScreen";
 import ResolutionScreen from "./screens/ResolutionScreen";
 
-type AppScreen = "SPLASH" | "HOME" | "SETUP" | "GAME" | "GALLERY";
+type AppScreen = "SPLASH" | "HOME" | "PROFILE_SELECT" | "SETUP" | "GAME" | "GALLERY";
 
 export default function App() {
   const [appScreen, setAppScreen] = useState<AppScreen>("SPLASH");
   const [playerNames, setPlayerNames] = useState<PlayerNames>({ P1: "Player 1", P2: "Player 2" });
-  const [playerIcons, setPlayerIcons] = useState<PlayerIcons>({ P1: "⚡", P2: "💀" });
+  const [playerIcons, setPlayerIcons] = useState<PlayerIcons>({ P1: "player-1", P2: "player-7" });
+  const [p1Profile, setP1Profile] = useState<Profile | null>(null);
+  const [p2Profile, setP2Profile] = useState<Profile | null>(null);
   const [key, setKey] = useState(0);
   const engine = useMemo(() => createEngine(createInitialState()), [key]);
   const [state, setState] = useState<GameState>(engine.getState());
@@ -29,7 +34,22 @@ export default function App() {
 
   useMemo(() => { setState(engine.getState()); }, [engine]);
 
-  const restart = () => { setKey(k => k + 1); setSelectedCard(null); setAppScreen("SETUP"); };
+  const recordAndRestart = () => {
+    // Record match result into profiles before resetting state
+    if (p1Profile && p2Profile && state.phase === "RESOLUTION") {
+      const p1Score = state.players.P1.scorePreview;
+      const p2Score = state.players.P2.scorePreview;
+      const winner: PlayerId | "DRAW" = p1Score > p2Score ? "P1" : p2Score > p1Score ? "P2" : "DRAW";
+      if (winner !== "DRAW") {
+        const winnerId = winner === "P1" ? p1Profile.id : p2Profile.id;
+        const loserId  = winner === "P1" ? p2Profile.id : p1Profile.id;
+        recordMatchResult(winnerId, loserId);
+      }
+    }
+    setKey(k => k + 1);
+    setSelectedCard(null);
+    setAppScreen("PROFILE_SELECT");
+  };
 
   const send = (intent: Intent) => {
     const res = engine.applyIntent(intent);
@@ -37,15 +57,41 @@ export default function App() {
   };
 
   if (appScreen === "SPLASH") return <SplashScreen onSelectJJK={() => setAppScreen("HOME")} />;
-  if (appScreen === "HOME") return <HomeScreen onSelect={() => setAppScreen("SETUP")} onGallery={() => setAppScreen("GALLERY")} onBack={() => setAppScreen("SPLASH")} />;
+  if (appScreen === "HOME") return (
+    <HomeScreen
+      onSelect={() => setAppScreen("PROFILE_SELECT")}
+      onGallery={() => setAppScreen("GALLERY")}
+      onBack={() => setAppScreen("SPLASH")}
+    />
+  );
   if (appScreen === "GALLERY") return <CardGallery cardDb={state.cardDb} onBack={() => setAppScreen("HOME")} />;
 
+  if (appScreen === "PROFILE_SELECT") {
+    return (
+      <ProfileSelectScreen
+        onBack={() => setAppScreen("HOME")}
+        onStart={(p1, p2) => {
+          setP1Profile(p1);
+          setP2Profile(p2);
+          setPlayerNames({ P1: p1.name, P2: p2.name });
+          setPlayerIcons({ P1: p1.icon, P2: p2.icon });
+          setAppScreen("SETUP");
+        }}
+      />
+    );
+  }
+
   if (appScreen === "SETUP") {
-    return <SetupScreen onHome={() => setAppScreen("HOME")} onStart={(names, icons) => {
-      setPlayerNames(names);
-      setPlayerIcons(icons);
-      setAppScreen("GAME");
-    }} />;
+    return <SetupScreen
+      initialNames={playerNames}
+      initialIcons={playerIcons}
+      onHome={() => setAppScreen("PROFILE_SELECT")}
+      onStart={(names, icons) => {
+        setPlayerNames(names);
+        setPlayerIcons(icons);
+        setAppScreen("GAME");
+      }}
+    />;
   }
 
   if (state.phase === "BINDING_VOW") {
@@ -84,7 +130,7 @@ export default function App() {
   }
 
   if (state.phase === "RESOLUTION") {
-    return <ResolutionScreen state={state} playerNames={playerNames} playerIcons={playerIcons} onRestart={restart} />;
+    return <ResolutionScreen state={state} playerNames={playerNames} playerIcons={playerIcons} onRestart={recordAndRestart} />;
   }
 
   // PLACEMENT + LOCK_IN phases

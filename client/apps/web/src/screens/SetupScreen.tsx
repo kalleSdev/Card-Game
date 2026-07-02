@@ -98,11 +98,16 @@ function PlayerPanel({ pid, name, icon, onNameChange, onIconChange, color, iconO
   );
 }
 
-export default function SetupScreen({ onStart, onHome }: { onStart: (names: PlayerNames, icons: PlayerIcons) => void; onHome: () => void }) {
-  const [p1Name, setP1Name] = useState("Player 1");
-  const [p2Name, setP2Name] = useState("Player 2");
-  const [p1Icon, setP1Icon] = useState("player-1");
-  const [p2Icon, setP2Icon] = useState("player-7");
+export default function SetupScreen({ onStart, onHome, initialNames, initialIcons }: {
+  onStart: (names: PlayerNames, icons: PlayerIcons) => void;
+  onHome: () => void;
+  initialNames?: PlayerNames;
+  initialIcons?: PlayerIcons;
+}) {
+  const [p1Name, setP1Name] = useState(initialNames?.P1 ?? "Player 1");
+  const [p2Name, setP2Name] = useState(initialNames?.P2 ?? "Player 2");
+  const [p1Icon, setP1Icon] = useState(initialIcons?.P1 ?? "player-1");
+  const [p2Icon, setP2Icon] = useState(initialIcons?.P2 ?? "player-7");
 
   const canStart = p1Name.trim().length > 0 && p2Name.trim().length > 0;
   const p1Color = "#4a9eff";
