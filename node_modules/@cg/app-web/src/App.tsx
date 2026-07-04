@@ -10,6 +10,9 @@ import HomeScreen from "./screens/HomeScreen";
 import CardGallery from "./screens/CardGallery";
 import SetupScreen from "./screens/SetupScreen";
 import ProfileSelectScreen from "./screens/ProfileSelectScreen";
+import DraftBattleScreen from "./screens/DraftBattleScreen";
+import type { PlayerDraftResult } from "./screens/DraftBattleScreen";
+import BattleBoardScreen from "./screens/BattleBoardScreen";
 import BindingVowScreen from "./screens/BindingVowScreen";
 import CoinFlipScreen from "./screens/CoinFlipScreen";
 import DraftScreen from "./screens/DraftScreen";
@@ -19,7 +22,7 @@ import AugmentScreen from "./screens/AugmentScreen";
 import LockedInScreen from "./screens/LockedInScreen";
 import ResolutionScreen from "./screens/ResolutionScreen";
 
-type AppScreen = "SPLASH" | "HOME" | "PROFILE_SELECT" | "SETUP" | "GAME" | "GALLERY";
+type AppScreen = "SPLASH" | "HOME" | "PROFILE_SELECT" | "DRAFT_BATTLE" | "SETUP" | "GAME" | "BATTLE_BOARD" | "GALLERY";
 
 export default function App() {
   const [appScreen, setAppScreen] = useState<AppScreen>("SPLASH");
@@ -27,6 +30,9 @@ export default function App() {
   const [playerIcons, setPlayerIcons] = useState<PlayerIcons>({ P1: "player-1", P2: "player-7" });
   const [p1Profile, setP1Profile] = useState<Profile | null>(null);
   const [p2Profile, setP2Profile] = useState<Profile | null>(null);
+  const [draftMode, setDraftMode] = useState(false);
+  const [p1DraftResult, setP1DraftResult] = useState<PlayerDraftResult | null>(null);
+  const [p2DraftResult, setP2DraftResult] = useState<PlayerDraftResult | null>(null);
   const [key, setKey] = useState(0);
   const engine = useMemo(() => createEngine(createInitialState()), [key]);
   const [state, setState] = useState<GameState>(engine.getState());
@@ -59,7 +65,8 @@ export default function App() {
   if (appScreen === "SPLASH") return <SplashScreen onSelectJJK={() => setAppScreen("HOME")} />;
   if (appScreen === "HOME") return (
     <HomeScreen
-      onSelect={() => setAppScreen("PROFILE_SELECT")}
+      onSelect={() => { setDraftMode(false); setAppScreen("PROFILE_SELECT"); }}
+      onDraftBattle={() => { setDraftMode(true); setAppScreen("PROFILE_SELECT"); }}
       onGallery={() => setAppScreen("GALLERY")}
       onBack={() => setAppScreen("SPLASH")}
     />
@@ -75,7 +82,43 @@ export default function App() {
           setP2Profile(p2);
           setPlayerNames({ P1: p1.name, P2: p2.name });
           setPlayerIcons({ P1: p1.icon, P2: p2.icon });
-          setAppScreen("SETUP");
+          setAppScreen(draftMode ? "DRAFT_BATTLE" : "SETUP");
+        }}
+      />
+    );
+  }
+
+  if (appScreen === "DRAFT_BATTLE" && p1Profile && p2Profile) {
+    return (
+      <DraftBattleScreen
+        cardDb={state.cardDb}
+        p1Profile={p1Profile}
+        p2Profile={p2Profile}
+        onBack={() => setAppScreen("PROFILE_SELECT")}
+        onBattleStart={(p1Result, p2Result) => {
+          setP1DraftResult(p1Result);
+          setP2DraftResult(p2Result);
+          setAppScreen("BATTLE_BOARD");
+        }}
+      />
+    );
+  }
+
+  if (appScreen === "BATTLE_BOARD" && p1DraftResult && p2DraftResult && p1Profile && p2Profile) {
+    return (
+      <BattleBoardScreen
+        p1Draft={p1DraftResult}
+        p2Draft={p2DraftResult}
+        cardDb={state.cardDb}
+        p1Name={p1Profile.name}
+        p2Name={p2Profile.name}
+        p1Icon={p1Profile.icon}
+        p2Icon={p2Profile.icon}
+        onGameOver={(winner) => {
+          const winnerId = winner === "P1" ? p1Profile.id : p2Profile.id;
+          const loserId  = winner === "P1" ? p2Profile.id : p1Profile.id;
+          recordMatchResult(winnerId, loserId);
+          setAppScreen("HOME");
         }}
       />
     );

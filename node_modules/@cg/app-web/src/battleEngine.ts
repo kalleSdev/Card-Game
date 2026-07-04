@@ -1,0 +1,818 @@
+/**
+ * Battle Engine — Hearthstone-style card combat for Draft Battle mode.
+ *
+ * Architecture:
+ *   - All state is plain data (no classes, no mutation)
+ *   - Every player action is a BattleIntent dispatched to applyIntent()
+ *   - applyIntent() returns { state, events } — UI renders state, events drive animations
+ *   - Stats are derived from existing CardDef (no schema changes to contracts)
+ *   - Synergies use the same tag system as Quick Match
+ *   - Domain effects are looked up by leaderId — add new entries to DOMAIN_BATTLE_EFFECTS
+ *     to support One Piece or any future set without touching engine logic
+ *
+ * Scaling notes:
+ *   - RARITY_STATS table controls base ATK/HP/cost per rarity tier — adjust for balance
+ *   - AFFINITY_MOD controls role modifiers — extend for new affinities
+ *   - SYNERGY_RULES drives all passive buffs — add new rules as tuples
+ *   - DOMAIN_BATTLE_EFFECTS keys are leaderId strings — One Piece leaders just get new entries
+ *   - Board size and draft constants (PICK_AFFINITY in DraftBattleScreen) are independent
+ */
+
+import type { CardDef, PlayerId } from "@cg/contracts";
+import type { PlayerDraftResult } from "./screens/DraftBattleScreen";
+import { ROULETTE_ITEM_MAP } from "@cg/engine";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stat derivation — rarity × affinity → ATK, HP, cost
+// Tweak this table to rebalance without touching any logic
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RARITY_STATS: Record<string, { atk: number; hp: number; cost: number }> = {
+  C:   { atk: 10, hp: 20,  cost: 1 },
+  B:   { atk: 20, hp: 35,  cost: 2 },
+  A:   { atk: 35, hp: 55,  cost: 3 },
+  S:   { atk: 50, hp: 75,  cost: 4 },
+  SS:  { atk: 70, hp: 100, cost: 5 },
+  SSS: { atk: 90, hp: 130, cost: 6 },
+  X:   { atk: 120, hp: 150, cost: 7 },
+};
+
+const AFFINITY_MOD: Record<string, { atk: number; hp: number }> = {
+  LEADER:  { atk: 1.2, hp: 1.8 },  // leaders are durable tanks
+  COMBAT:  { atk: 1.4, hp: 0.9 },  // combat cards hit hard but fragile
+  SUPPORT: { atk: 0.7, hp: 1.3 },  // support survives but doesn't deal much
+};
+
+export function deriveStats(def: CardDef): { atk: number; hp: number; cost: number } {
+  const base = RARITY_STATS[def.rarity] ?? RARITY_STATS.B;
+  const mod  = AFFINITY_MOD[def.affinity] ?? { atk: 1, hp: 1 };
+  return {
+    atk:  Math.round(base.atk * mod.atk),
+    hp:   Math.round(base.hp  * mod.hp),
+    cost: base.cost,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Synergy rules — tag combinations → { atk bonus, hp bonus }
+// Add new tuples to support more synergies without changing engine code
+// ─────────────────────────────────────────────────────────────────────────────
+
+type SynergyRule = {
+  id: string;
+  tags: string[];        // all tags must appear on the board (across any cards)
+  minCount: number;      // how many cards carrying these tags are needed
+  atkBonus: number;      // flat ATK added to each card sharing the tags
+  hpBonus: number;       // flat HP added to each card sharing the tags
+  label: string;
+};
+
+export const BATTLE_SYNERGY_RULES: SynergyRule[] = [
+  { id: "strongest_2",      tags: ["strongest"],       minCount: 2, atkBonus: 15, hpBonus: 0,  label: "The Strongest ×2" },
+  { id: "strongest_3",      tags: ["strongest"],       minCount: 3, atkBonus: 30, hpBonus: 10, label: "The Strongest ×3" },
+  { id: "disaster_curse_2", tags: ["disaster-curse"],  minCount: 2, atkBonus: 8,  hpBonus: 5,  label: "Disaster Curse ×2" },
+  { id: "disaster_curse_3", tags: ["disaster-curse"],  minCount: 3, atkBonus: 18, hpBonus: 10, label: "Disaster Curse ×3" },
+  { id: "jujutsu_high_3",   tags: ["jujutsu-high"],    minCount: 3, atkBonus: 10, hpBonus: 15, label: "Jujutsu High ×3" },
+  { id: "zenin_clan_2",     tags: ["zenin-clan"],      minCount: 2, atkBonus: 12, hpBonus: 8,  label: "Zenin Clan ×2" },
+  { id: "brotherhood",      tags: ["brother"],         minCount: 2, atkBonus: 20, hpBonus: 0,  label: "Brotherhood" },
+  { id: "heavenly_2",       tags: ["heavenly-restriction"], minCount: 2, atkBonus: 5, hpBonus: 25, label: "Heavenly Restriction ×2" },
+  { id: "tokyo_trio_3",     tags: ["tokyo-senior"],    minCount: 3, atkBonus: 10, hpBonus: 10, label: "Tokyo Trio ×3" },
+  { id: "culling_game_3",   tags: ["culling-game"],    minCount: 3, atkBonus: 12, hpBonus: 12, label: "Culling Game ×3" },
+  { id: "six_eyes",         tags: ["six-eyes"],        minCount: 2, atkBonus: 25, hpBonus: 5,  label: "Six Eyes" },
+  { id: "gojo_students_2",  tags: ["gojo-student"],    minCount: 2, atkBonus: 8,  hpBonus: 8,  label: "Gojo's Students ×2" },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Domain effects — keyed by leaderId, one entry per character
+// Add entries for One Piece leaders without changing any engine logic
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type DomainEffect =
+  | { kind: "STUN_ENEMY_BOARD"; turns: number }          // enemy board can't attack for N turns
+  | { kind: "DAMAGE_ALL_ENEMIES"; amount: number }       // split damage across enemy board
+  | { kind: "BUFF_OWN_BOARD"; atkBonus: number; hpBonus: number; turns: number }
+  | { kind: "HEAL_LEADER"; amount: number }              // restore leader HP
+  | { kind: "DRAW_CARDS"; count: number }                // draw extra cards
+  | { kind: "REDUCE_COSTS"; amount: number; turns: number }; // all cards cheaper
+
+export const DOMAIN_BATTLE_EFFECTS: Record<string, { name: string; effect: DomainEffect }> = {
+  "gojo-base": { name: "Infinite Void",              effect: { kind: "STUN_ENEMY_BOARD",   turns: 2 } },
+  "sukuna":    { name: "Malevolent Shrine",           effect: { kind: "DAMAGE_ALL_ENEMIES", amount: 40 } },
+  "mahito":    { name: "Self-Embodiment of Perfection", effect: { kind: "BUFF_OWN_BOARD",  atkBonus: 25, hpBonus: 0, turns: 2 } },
+  "yuta":      { name: "Rika Orimoto",               effect: { kind: "BUFF_OWN_BOARD",     atkBonus: 15, hpBonus: 20, turns: 2 } },
+  "geto":      { name: "Maximum: Uzumaki",            effect: { kind: "DAMAGE_ALL_ENEMIES", amount: 25 } },
+  "megumi":    { name: "Chimera Shadow Garden",       effect: { kind: "BUFF_OWN_BOARD",     atkBonus: 20, hpBonus: 15, turns: 3 } },
+  "hakari":    { name: "Idle Death Gamble",           effect: { kind: "DRAW_CARDS",         count: 3 } },
+  "higuruma":  { name: "Deadly Sentencing",           effect: { kind: "STUN_ENEMY_BOARD",   turns: 1 } },
+  "jogo":      { name: "Coffin of the Iron Mountain", effect: { kind: "DAMAGE_ALL_ENEMIES", amount: 30 } },
+  "dagon":     { name: "Horizon of the Captivating Skandha", effect: { kind: "DAMAGE_ALL_ENEMIES", amount: 20 } },
+  "toji":      { name: "Heavenly Restriction Assault", effect: { kind: "BUFF_OWN_BOARD",   atkBonus: 35, hpBonus: 0, turns: 1 } },
+  "kashimo":   { name: "Mythological Beast Amber",   effect: { kind: "DAMAGE_ALL_ENEMIES", amount: 35 } },
+  "mahoraga":  { name: "Adaptation",                 effect: { kind: "BUFF_OWN_BOARD",     atkBonus: 40, hpBonus: 20, turns: 2 } },
+  "uro":       { name: "Shattered Heaven",           effect: { kind: "REDUCE_COSTS",        amount: 2, turns: 2 } },
+  "dabura":    { name: "Demon Realm",                effect: { kind: "STUN_ENEMY_BOARD",    turns: 2 } },
+  "naoya":     { name: "Projection Strike",          effect: { kind: "BUFF_OWN_BOARD",      atkBonus: 30, hpBonus: 0, turns: 1 } },
+};
+
+const DEFAULT_DOMAIN_EFFECT: { name: string; effect: DomainEffect } = {
+  name: "Cursed Technique",
+  effect: { kind: "BUFF_OWN_BOARD", atkBonus: 15, hpBonus: 10, turns: 1 },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Battle card — a card on board or in hand with live combat stats
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface BattleCard {
+  instanceId: string;
+  defId: string;
+  name: string;
+  rarity: string;
+  affinity: "LEADER" | "COMBAT" | "SUPPORT";
+  tags: string[];
+  // Base stats (from deriveStats, never change)
+  baseAtk: number;
+  baseHp: number;
+  cost: number;
+  // Live stats (affected by synergies and domain buffs)
+  atk: number;
+  currentHp: number;
+  maxHp: number;
+  // Turn-based flags
+  canAttack: boolean;     // false on turn played (summoning sickness), true from next turn
+  exhausted: boolean;     // true after attacking this turn, reset at turn start
+  stunTurns: number;      // can't attack for N turns (domain effect)
+  // Temporary buffs (expire after N turns)
+  tempAtkBonus: number;
+  tempHpBonus: number;
+  tempBonusTurns: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Player state within a battle
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface BattlePlayer {
+  pid: PlayerId;
+  leader: BattleCard;          // always on board; when leader.currentHp ≤ 0 → game over
+  board: (BattleCard | null)[]; // up to 5 non-leader slots
+  hand: BattleCard[];
+  deck: BattleCard[];           // draw pile
+  energy: number;
+  maxEnergy: number;            // grows by 1 per turn, capped at 10
+  domainMeter: number;          // 0–100; fills as you play cards and take damage
+  domainActive: boolean;        // true during domain effect's active turns
+  domainCooldown: number;       // turns until domain can be activated again
+  domainUsed: boolean;          // once per match flag (optional limit — set false to allow multi-use)
+  activeSynergies: string[];    // currently active synergy rule ids
+  weaponIds: string[];          // equipped weapons (affect ATK calc)
+  costReduction: number;        // from domain effects
+  costReductionTurns: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Battle state
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type BattlePhase = "DRAW" | "MAIN" | "GAME_OVER";
+
+export interface BattleState {
+  phase: BattlePhase;
+  turn: number;
+  activePlayer: PlayerId;
+  players: Record<PlayerId, BattlePlayer>;
+  winner: PlayerId | null;
+  log: BattleEvent[];
+  // Pending attack: set when player selects an attacker, cleared after attack
+  pendingAttackerId: string | null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Events — returned alongside new state; UI uses these to drive animations
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type BattleEvent =
+  | { type: "TURN_START"; pid: PlayerId; turn: number; drew: string | null }
+  | { type: "CARD_PLAYED"; pid: PlayerId; instanceId: string; slot: number }
+  | { type: "ATTACK_CARD"; attackerPid: PlayerId; attackerId: string; targetId: string; damage: number; counterDamage: number }
+  | { type: "ATTACK_LEADER"; attackerPid: PlayerId; attackerId: string; damage: number; leaderHpLeft: number }
+  | { type: "CARD_DIED"; pid: PlayerId; instanceId: string }
+  | { type: "DOMAIN_ACTIVATED"; pid: PlayerId; name: string; effect: DomainEffect }
+  | { type: "SYNERGY_UPDATE"; pid: PlayerId; active: string[] }
+  | { type: "TURN_END"; pid: PlayerId }
+  | { type: "GAME_OVER"; winner: PlayerId }
+  | { type: "ILLEGAL"; reason: string };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Battle intents
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type BattleIntent =
+  | { type: "SELECT_ATTACKER"; pid: PlayerId; instanceId: string }
+  | { type: "ATTACK_CARD";     pid: PlayerId; targetInstanceId: string }
+  | { type: "ATTACK_LEADER";   pid: PlayerId }
+  | { type: "PLAY_CARD";       pid: PlayerId; instanceId: string; slot: number }
+  | { type: "ACTIVATE_DOMAIN"; pid: PlayerId }
+  | { type: "END_TURN";        pid: PlayerId }
+  | { type: "CANCEL_ATTACK";   pid: PlayerId };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Factory — build BattleCard from CardDef
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _instanceCounter = 0;
+
+export function makeBattleCard(defId: string, def: CardDef): BattleCard {
+  const stats = deriveStats(def);
+  return {
+    instanceId: `bc-${defId}-${++_instanceCounter}`,
+    defId,
+    name: def.name,
+    rarity: def.rarity,
+    affinity: def.affinity as "LEADER" | "COMBAT" | "SUPPORT",
+    tags: def.tags,
+    baseAtk: stats.atk,
+    baseHp: stats.hp,
+    cost: stats.cost,
+    atk: stats.atk,
+    currentHp: stats.hp,
+    maxHp: stats.hp,
+    canAttack: false,
+    exhausted: false,
+    stunTurns: 0,
+    tempAtkBonus: 0,
+    tempHpBonus: 0,
+    tempBonusTurns: 0,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Synergy calculation
+// Returns updated cards (with synergy bonuses applied) and active synergy ids
+// ─────────────────────────────────────────────────────────────────────────────
+
+function calcSynergies(
+  leader: BattleCard,
+  board: (BattleCard | null)[],
+): { activeIds: string[]; atkBonus: Record<string, number>; hpBonus: Record<string, number> } {
+  const allCards = [leader, ...board.filter(Boolean)] as BattleCard[];
+  const activeIds: string[] = [];
+  const atkBonus: Record<string, number> = {};
+  const hpBonus:  Record<string, number> = {};
+
+  for (const rule of BATTLE_SYNERGY_RULES) {
+    const matching = allCards.filter(c =>
+      rule.tags.every(tag => c.tags.includes(tag))
+    );
+    if (matching.length >= rule.minCount) {
+      activeIds.push(rule.id);
+      for (const card of matching) {
+        atkBonus[card.instanceId] = (atkBonus[card.instanceId] ?? 0) + rule.atkBonus;
+        hpBonus[card.instanceId]  = (hpBonus[card.instanceId]  ?? 0) + rule.hpBonus;
+      }
+    }
+  }
+  return { activeIds, atkBonus, hpBonus };
+}
+
+function applySynergies(player: BattlePlayer): BattlePlayer {
+  const { activeIds, atkBonus, hpBonus } = calcSynergies(player.leader, player.board);
+
+  const applyToCard = (card: BattleCard): BattleCard => {
+    const addAtk = atkBonus[card.instanceId] ?? 0;
+    const addHp  = hpBonus[card.instanceId]  ?? 0;
+    const newMaxHp = card.baseHp + addHp + card.tempHpBonus;
+    const newAtk   = card.baseAtk + addAtk + card.tempAtkBonus;
+    // Preserve current HP ratio if max changes
+    const hpRatio  = card.maxHp > 0 ? card.currentHp / card.maxHp : 1;
+    return {
+      ...card,
+      atk:       newAtk,
+      maxHp:     newMaxHp,
+      currentHp: Math.min(card.currentHp, newMaxHp),
+    };
+  };
+
+  return {
+    ...player,
+    leader: applyToCard(player.leader),
+    board:  player.board.map(c => c ? applyToCard(c) : null),
+    activeSynergies: activeIds,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Weapon ATK bonus (weapons boost a player's overall damage output slightly)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function weaponAtkBonus(weaponIds: string[]): number {
+  return weaponIds.reduce((sum, id) => {
+    const w = ROULETTE_ITEM_MAP[id];
+    return sum + Math.round((w?.baseBonus ?? 0) / 200); // scaled down for combat context
+  }, 0);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Build initial player state from draft result
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildPlayer(
+  pid: PlayerId,
+  draft: PlayerDraftResult,
+  cardDb: Record<string, CardDef>,
+): BattlePlayer {
+  const leaderDef = cardDb[draft.leaderId];
+  if (!leaderDef) throw new Error(`Leader ${draft.leaderId} not found in cardDb`);
+
+  const leader = makeBattleCard(draft.leaderId, leaderDef);
+  leader.canAttack = true; // leader can always attack from turn 1
+
+  // Build deck from non-leader cards
+  const deckCards: BattleCard[] = [
+    ...draft.combatIds,
+    ...draft.supportIds,
+  ].map(id => {
+    const def = cardDb[id];
+    if (!def) throw new Error(`Card ${id} not found`);
+    return makeBattleCard(id, def);
+  });
+
+  // Shuffle and deal opening hand of 3
+  const shuffled = shuffle(deckCards);
+  const hand = shuffled.slice(0, 3);
+  const deck = shuffled.slice(3);
+
+  const weaponBonus = weaponAtkBonus(draft.weaponIds);
+  // Apply weapon bonus to leader and all cards
+  const applyWeapon = (c: BattleCard): BattleCard => ({
+    ...c, baseAtk: c.baseAtk + weaponBonus, atk: c.atk + weaponBonus,
+  });
+
+  const player: BattlePlayer = {
+    pid,
+    leader: applyWeapon(leader),
+    board: [null, null, null, null, null],
+    hand:  hand.map(applyWeapon),
+    deck:  deck.map(applyWeapon),
+    energy: 1,
+    maxEnergy: 1,
+    domainMeter: 0,
+    domainActive: false,
+    domainCooldown: 0,
+    domainUsed: false,
+    activeSynergies: [],
+    weaponIds: draft.weaponIds,
+    costReduction: 0,
+    costReductionTurns: 0,
+  };
+
+  return applySynergies(player);
+}
+
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Initial state factory
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function createBattleState(
+  p1Draft: PlayerDraftResult,
+  p2Draft: PlayerDraftResult,
+  cardDb: Record<string, CardDef>,
+): BattleState {
+  _instanceCounter = 0;
+  const p1 = buildPlayer("P1", p1Draft, cardDb);
+  const p2 = buildPlayer("P2", p2Draft, cardDb);
+
+  return {
+    phase: "DRAW",
+    turn: 1,
+    activePlayer: "P1",
+    players: { P1: p1, P2: p2 },
+    winner: null,
+    log: [],
+    pendingAttackerId: null,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: find a card anywhere (board or hand) for a player
+// ─────────────────────────────────────────────────────────────────────────────
+
+function findOnBoard(player: BattlePlayer, instanceId: string): BattleCard | null {
+  if (player.leader.instanceId === instanceId) return player.leader;
+  return player.board.find(c => c?.instanceId === instanceId) ?? null;
+}
+
+function findInHand(player: BattlePlayer, instanceId: string): BattleCard | null {
+  return player.hand.find(c => c.instanceId === instanceId) ?? null;
+}
+
+function boardCards(player: BattlePlayer): BattleCard[] {
+  return player.board.filter(Boolean) as BattleCard[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Apply domain effect
+// ─────────────────────────────────────────────────────────────────────────────
+
+function applyDomainEffect(
+  state: BattleState,
+  pid: PlayerId,
+  effect: DomainEffect,
+): BattleState {
+  const opp   = pid === "P1" ? "P2" : "P1";
+  let p = { ...state.players[pid] };
+  let o = { ...state.players[opp] };
+
+  switch (effect.kind) {
+    case "STUN_ENEMY_BOARD": {
+      o = {
+        ...o,
+        leader: { ...o.leader, stunTurns: effect.turns },
+        board:  o.board.map(c => c ? { ...c, stunTurns: effect.turns } : null),
+      };
+      break;
+    }
+    case "DAMAGE_ALL_ENEMIES": {
+      const targets = [o.leader, ...boardCards(o)];
+      const dmgEach = Math.floor(effect.amount / Math.max(targets.length, 1));
+      o = {
+        ...o,
+        leader: { ...o.leader, currentHp: o.leader.currentHp - dmgEach },
+        board:  o.board.map(c => c ? { ...c, currentHp: c.currentHp - dmgEach } : null),
+      };
+      // Remove dead board cards
+      o = { ...o, board: o.board.map(c => c && c.currentHp > 0 ? c : null) };
+      break;
+    }
+    case "BUFF_OWN_BOARD": {
+      const applyBuff = (c: BattleCard): BattleCard => ({
+        ...c,
+        atk:            c.atk + effect.atkBonus,
+        tempAtkBonus:   c.tempAtkBonus + effect.atkBonus,
+        tempHpBonus:    c.tempHpBonus + effect.hpBonus,
+        maxHp:          c.maxHp + effect.hpBonus,
+        currentHp:      c.currentHp + effect.hpBonus,
+        tempBonusTurns: effect.turns,
+      });
+      p = { ...p, leader: applyBuff(p.leader), board: p.board.map(c => c ? applyBuff(c) : null) };
+      break;
+    }
+    case "HEAL_LEADER": {
+      p = { ...p, leader: { ...p.leader, currentHp: Math.min(p.leader.currentHp + effect.amount, p.leader.maxHp) } };
+      break;
+    }
+    case "DRAW_CARDS": {
+      let drew = 0;
+      while (drew < effect.count && p.deck.length > 0) {
+        const [card, ...rest] = p.deck;
+        p = { ...p, hand: [...p.hand, card], deck: rest };
+        drew++;
+      }
+      break;
+    }
+    case "REDUCE_COSTS": {
+      p = { ...p, costReduction: effect.amount, costReductionTurns: effect.turns };
+      break;
+    }
+  }
+
+  return { ...state, players: { ...state.players, [pid]: p, [opp]: o } };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Turn start: draw, energy refill, reset card flags
+// ─────────────────────────────────────────────────────────────────────────────
+
+function processTurnStart(state: BattleState): { state: BattleState; drew: string | null } {
+  const pid = state.activePlayer;
+  let p = { ...state.players[pid] };
+
+  // Energy
+  const newMax = Math.min(p.maxEnergy + 1, 10);
+  p = { ...p, maxEnergy: newMax, energy: newMax };
+
+  // Cost reduction decay
+  if (p.costReductionTurns > 0) {
+    const newTurns = p.costReductionTurns - 1;
+    p = { ...p, costReductionTurns: newTurns, costReduction: newTurns > 0 ? p.costReduction : 0 };
+  }
+
+  // Temp buff decay on all board cards
+  const decayBuff = (c: BattleCard): BattleCard => {
+    if (c.tempBonusTurns <= 0) return c;
+    const newTurns = c.tempBonusTurns - 1;
+    if (newTurns === 0) {
+      return {
+        ...c, tempBonusTurns: 0,
+        atk: c.baseAtk, tempAtkBonus: 0, tempHpBonus: 0,
+        maxHp: c.baseHp, currentHp: Math.min(c.currentHp, c.baseHp),
+      };
+    }
+    return { ...c, tempBonusTurns: newTurns };
+  };
+  p = { ...p, leader: decayBuff(p.leader), board: p.board.map(c => c ? decayBuff(c) : null) };
+
+  // Reset exhausted/stun/canAttack flags
+  const resetFlags = (c: BattleCard): BattleCard => ({
+    ...c,
+    exhausted:  false,
+    canAttack:  c.stunTurns <= 0,
+    stunTurns:  Math.max(0, c.stunTurns - 1),
+  });
+  p = {
+    ...p,
+    leader: resetFlags(p.leader),
+    board:  p.board.map(c => c ? resetFlags(c) : null),
+    // Newly played cards become able to attack next turn — handled at play time
+  };
+
+  // Domain cooldown
+  if (p.domainCooldown > 0) p = { ...p, domainCooldown: p.domainCooldown - 1 };
+
+  // Draw a card
+  let drew: string | null = null;
+  if (p.deck.length > 0) {
+    const [card, ...rest] = p.deck;
+    drew = card.instanceId;
+    p = { ...p, hand: [...p.hand, card], deck: rest };
+  }
+
+  p = applySynergies(p);
+
+  return {
+    state: { ...state, phase: "MAIN", players: { ...state.players, [pid]: p } },
+    drew,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Check win condition
+// ─────────────────────────────────────────────────────────────────────────────
+
+function checkWin(state: BattleState): BattleState {
+  const p1Dead = state.players.P1.leader.currentHp <= 0;
+  const p2Dead = state.players.P2.leader.currentHp <= 0;
+  if (p1Dead || p2Dead) {
+    const winner: PlayerId = p2Dead ? "P1" : "P2";
+    return { ...state, phase: "GAME_OVER", winner };
+  }
+  return state;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main intent handler
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type BattleResult = { state: BattleState; events: BattleEvent[] };
+
+export function applyBattleIntent(state: BattleState, intent: BattleIntent): BattleResult {
+  const events: BattleEvent[] = [];
+  const illegal = (reason: string): BattleResult => ({
+    state, events: [{ type: "ILLEGAL", reason }],
+  });
+
+  // ── DRAW phase: auto-advance to MAIN ─────────────────────────────────────
+  if (state.phase === "DRAW" && intent.type === "END_TURN") {
+    // This intent triggers the draw phase processing
+    const { state: s2, drew } = processTurnStart(state);
+    events.push({ type: "TURN_START", pid: state.activePlayer, turn: state.turn, drew });
+    return { state: s2, events };
+  }
+
+  if (state.phase === "GAME_OVER") return illegal("Game is already over");
+  if (intent.pid !== state.activePlayer) return illegal("Not your turn");
+
+  const pid = state.activePlayer;
+  const opp = pid === "P1" ? "P2" : "P1";
+
+  switch (intent.type) {
+
+    // ── SELECT_ATTACKER ───────────────────────────────────────────────────
+    case "SELECT_ATTACKER": {
+      const card = findOnBoard(state.players[pid], intent.instanceId);
+      if (!card) return illegal("Card not on board");
+      if (!card.canAttack || card.exhausted) return illegal("Card cannot attack");
+      return { state: { ...state, pendingAttackerId: intent.instanceId }, events };
+    }
+
+    case "CANCEL_ATTACK": {
+      return { state: { ...state, pendingAttackerId: null }, events };
+    }
+
+    // ── ATTACK_CARD ───────────────────────────────────────────────────────
+    case "ATTACK_CARD": {
+      if (!state.pendingAttackerId) return illegal("No attacker selected");
+      const attacker = findOnBoard(state.players[pid], state.pendingAttackerId);
+      if (!attacker) return illegal("Attacker not found");
+      if (!attacker.canAttack || attacker.exhausted) return illegal("Attacker cannot attack");
+
+      const target = findOnBoard(state.players[opp], intent.targetInstanceId);
+      if (!target) return illegal("Target not found");
+
+      // Deal damage both ways (counterattack)
+      const damage        = attacker.atk;
+      const counterDamage = target.atk;
+
+      let p = { ...state.players[pid] };
+      let o = { ...state.players[opp] };
+
+      // Apply damage to target
+      const updateTarget = (c: BattleCard): BattleCard => ({
+        ...c, currentHp: c.currentHp - damage,
+      });
+      // Apply counter to attacker
+      const updateAttacker = (c: BattleCard): BattleCard => ({
+        ...c, currentHp: c.currentHp - counterDamage, exhausted: true,
+      });
+
+      // Is target the leader?
+      const isLeaderTarget = target.instanceId === o.leader.instanceId;
+      const isLeaderAttacker = attacker.instanceId === p.leader.instanceId;
+
+      if (isLeaderAttacker) {
+        p = { ...p, leader: updateAttacker(p.leader) };
+      } else {
+        p = { ...p, board: p.board.map(c => c?.instanceId === attacker.instanceId ? updateAttacker(c) : c) };
+      }
+
+      if (isLeaderTarget) {
+        o = { ...o, leader: updateTarget(o.leader) };
+      } else {
+        o = { ...o, board: o.board.map(c => c?.instanceId === target.instanceId ? updateTarget(c) : c) };
+      }
+
+      // Domain meter boost on damage dealt
+      p = { ...p, domainMeter: Math.min(100, p.domainMeter + 5) };
+      o = { ...o, domainMeter: Math.min(100, o.domainMeter + Math.ceil(damage / 20)) };
+
+      events.push({ type: "ATTACK_CARD", attackerPid: pid, attackerId: attacker.instanceId, targetId: target.instanceId, damage, counterDamage });
+
+      // Remove dead non-leader board cards
+      const removeDeadBoard = (player: BattlePlayer): BattlePlayer => ({
+        ...player,
+        board: player.board.map(c => (c && c.currentHp <= 0) ? null : c),
+      });
+      p = removeDeadBoard(p);
+      o = removeDeadBoard(o);
+      if (attacker.currentHp - counterDamage <= 0) events.push({ type: "CARD_DIED", pid, instanceId: attacker.instanceId });
+      if (target.currentHp - damage <= 0)          events.push({ type: "CARD_DIED", pid: opp, instanceId: target.instanceId });
+
+      // Re-sync synergies after board changes
+      p = applySynergies(p);
+      o = applySynergies(o);
+
+      let nextState: BattleState = { ...state, players: { ...state.players, [pid]: p, [opp]: o }, pendingAttackerId: null };
+      nextState = checkWin(nextState);
+      if (nextState.winner) events.push({ type: "GAME_OVER", winner: nextState.winner });
+      return { state: nextState, events };
+    }
+
+    // ── ATTACK_LEADER ─────────────────────────────────────────────────────
+    case "ATTACK_LEADER": {
+      if (!state.pendingAttackerId) return illegal("No attacker selected");
+      const attacker = findOnBoard(state.players[pid], state.pendingAttackerId);
+      if (!attacker) return illegal("Attacker not found");
+      if (!attacker.canAttack || attacker.exhausted) return illegal("Attacker cannot attack");
+
+      const damage = attacker.atk;
+      let p = { ...state.players[pid] };
+      let o = { ...state.players[opp] };
+
+      // Exhaust attacker (no counterattack from leader direct hit — leader HP is separate pool)
+      const isLeaderAttacking = attacker.instanceId === p.leader.instanceId;
+      if (isLeaderAttacking) {
+        p = { ...p, leader: { ...p.leader, exhausted: true } };
+      } else {
+        p = { ...p, board: p.board.map(c => c?.instanceId === attacker.instanceId ? { ...c, exhausted: true } : c) };
+      }
+
+      o = { ...o, leader: { ...o.leader, currentHp: o.leader.currentHp - damage } };
+      p = { ...p, domainMeter: Math.min(100, p.domainMeter + 8) };
+      o = { ...o, domainMeter: Math.min(100, o.domainMeter + Math.ceil(damage / 15)) };
+
+      events.push({ type: "ATTACK_LEADER", attackerPid: pid, attackerId: attacker.instanceId, damage, leaderHpLeft: o.leader.currentHp });
+
+      let nextState: BattleState = { ...state, players: { ...state.players, [pid]: p, [opp]: o }, pendingAttackerId: null };
+      nextState = checkWin(nextState);
+      if (nextState.winner) events.push({ type: "GAME_OVER", winner: nextState.winner });
+      return { state: nextState, events };
+    }
+
+    // ── PLAY_CARD ─────────────────────────────────────────────────────────
+    case "PLAY_CARD": {
+      const card = findInHand(state.players[pid], intent.instanceId);
+      if (!card) return illegal("Card not in hand");
+      if (intent.slot < 0 || intent.slot > 4) return illegal("Invalid slot");
+
+      let p = { ...state.players[pid] };
+      if (p.board[intent.slot] !== null) return illegal("Slot occupied");
+
+      const cost = Math.max(0, card.cost - p.costReduction);
+      if (p.energy < cost) return illegal("Not enough energy");
+
+      // Place card
+      const playedCard: BattleCard = { ...card, canAttack: false, exhausted: false }; // summoning sickness
+      const newBoard = [...p.board] as BattlePlayer["board"];
+      newBoard[intent.slot] = playedCard;
+      p = {
+        ...p,
+        hand:  p.hand.filter(c => c.instanceId !== card.instanceId),
+        board: newBoard,
+        energy: p.energy - cost,
+        domainMeter: Math.min(100, p.domainMeter + 5),
+      };
+      p = applySynergies(p);
+
+      events.push({ type: "CARD_PLAYED", pid, instanceId: card.instanceId, slot: intent.slot });
+      if (p.activeSynergies.length !== state.players[pid].activeSynergies.length) {
+        events.push({ type: "SYNERGY_UPDATE", pid, active: p.activeSynergies });
+      }
+
+      return { state: { ...state, players: { ...state.players, [pid]: p } }, events };
+    }
+
+    // ── ACTIVATE_DOMAIN ───────────────────────────────────────────────────
+    case "ACTIVATE_DOMAIN": {
+      const p0 = state.players[pid];
+      if (p0.domainMeter < 100)    return illegal("Domain meter not full");
+      if (p0.domainCooldown > 0)   return illegal("Domain on cooldown");
+
+      const domainDef = DOMAIN_BATTLE_EFFECTS[p0.leader.defId] ?? DEFAULT_DOMAIN_EFFECT;
+      let nextState = applyDomainEffect(state, pid, domainDef.effect);
+
+      nextState = {
+        ...nextState,
+        players: {
+          ...nextState.players,
+          [pid]: {
+            ...nextState.players[pid],
+            domainMeter:   0,
+            domainActive:  true,
+            domainCooldown: 4,
+            domainUsed:    true,
+          },
+        },
+      };
+
+      events.push({ type: "DOMAIN_ACTIVATED", pid, name: domainDef.name, effect: domainDef.effect });
+      nextState = checkWin(nextState);
+      if (nextState.winner) events.push({ type: "GAME_OVER", winner: nextState.winner });
+      return { state: nextState, events };
+    }
+
+    // ── END_TURN ──────────────────────────────────────────────────────────
+    case "END_TURN": {
+      events.push({ type: "TURN_END", pid });
+
+      const nextPid = opp;
+      const nextTurn = pid === "P2" ? state.turn + 1 : state.turn;
+
+      const midState: BattleState = {
+        ...state,
+        phase: "DRAW",
+        turn: nextTurn,
+        activePlayer: nextPid,
+        pendingAttackerId: null,
+      };
+
+      // Process draw phase for next player immediately
+      const { state: s2, drew } = processTurnStart(midState);
+      events.push({ type: "TURN_START", pid: nextPid, turn: nextTurn, drew });
+
+      return { state: s2, events };
+    }
+
+    default:
+      return illegal("Unknown intent");
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Engine wrapper — mirrors the Quick Match Engine interface
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type BattleEngine = {
+  getState(): BattleState;
+  apply(intent: BattleIntent): BattleResult;
+};
+
+export function createBattleEngine(initial: BattleState): BattleEngine {
+  let state = initial;
+  return {
+    getState: () => state,
+    apply: (intent) => {
+      const result = applyBattleIntent(state, intent);
+      state = result.state;
+      return result;
+    },
+  };
+}

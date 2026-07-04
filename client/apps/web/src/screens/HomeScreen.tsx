@@ -72,9 +72,8 @@ function AmbientCanvas() {
   );
 }
 
-export default function HomeScreen({ onSelect, onGallery, onBack }: { onSelect: () => void; onGallery: () => void; onBack?: () => void }) {
-  const [hovered, setHovered] = useState(false);
-  const [galleryHovered, setGalleryHovered] = useState(false);
+export default function HomeScreen({ onSelect, onDraftBattle, onGallery, onBack }: { onSelect: () => void; onDraftBattle: () => void; onGallery: () => void; onBack?: () => void }) {
+  const [hovered, setHovered] = useState<string | null>(null);
   const [pulse, setPulse] = useState(false);
 
   // Pulse the kanji every few seconds
@@ -172,127 +171,115 @@ export default function HomeScreen({ onSelect, onGallery, onBack }: { onSelect: 
           />
         </motion.div>
 
-        {/* Mode cards */}
+        {/* Mode buttons */}
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.6, delay: 0.32, ease: "easeOut" }}
-          style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}
+          style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "center" }}
         >
-          {/* JJK — active */}
-          <motion.div
-            onClick={onSelect}
-            onHoverStart={() => setHovered(true)}
-            onHoverEnd={() => setHovered(false)}
-            whileHover={{ y: -6, scale: 1.04 }}
-            whileTap={{ scale: 0.97 }}
-            transition={{ type: "spring", stiffness: 380, damping: 22 }}
-            style={{
-              width: 280, padding: "22px 28px", borderRadius: 16, cursor: "pointer",
-              background: hovered ? "rgba(40,20,70,0.88)" : "rgba(14,8,26,0.82)",
-              border: `2px solid ${hovered ? "#9933ffcc" : "#44226688"}`,
-              backdropFilter: "blur(10px)",
-              textAlign: "center", userSelect: "none",
-              boxShadow: hovered
-                ? "0 0 0 1px #9933ff44, 0 0 48px #6600ff44, 0 8px 40px rgba(0,0,0,0.7)"
-                : "0 0 24px #44007722, 0 4px 20px rgba(0,0,0,0.5)",
-              position: "relative", overflow: "hidden",
-              display: "flex", alignItems: "center", gap: 22,
-            }}
-          >
-            {/* Scanning light on hover */}
-            {hovered && (
+          {([
+            {
+              id: "quick",
+              icon: "⚡",
+              title: "QUICK MATCH",
+              sub: "Fast draft · Score battle",
+              color: "#9933ff",
+              onClick: onSelect,
+            },
+            {
+              id: "draft",
+              icon: "🃏",
+              title: "DRAFT BATTLE",
+              sub: "Build your deck · Hearthstone-style combat",
+              color: "#ff9922",
+              badge: "NEW",
+              onClick: onDraftBattle,
+            },
+            {
+              id: "gallery",
+              icon: "📖",
+              title: "CARD GALLERY",
+              sub: "Browse all 34 characters",
+              color: "#4488ff",
+              onClick: onGallery,
+            },
+          ] as const).map((btn) => {
+            const isHov = hovered === btn.id;
+            return (
               <motion.div
-                animate={{ left: ["-40%", "140%"] }}
-                transition={{ duration: 1.0, repeat: Infinity, ease: "linear" }}
+                key={btn.id}
+                onClick={btn.onClick}
+                onHoverStart={() => setHovered(btn.id)}
+                onHoverEnd={() => setHovered(null)}
+                whileHover={{ y: -5, scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ type: "spring", stiffness: 380, damping: 22 }}
                 style={{
-                  position: "absolute", top: 0, bottom: 0, width: "40%",
-                  background: "linear-gradient(90deg, transparent, rgba(180,100,255,0.12), rgba(255,255,255,0.08), rgba(180,100,255,0.12), transparent)",
-                  transform: "skewX(-12deg)", pointerEvents: "none",
-                }}
-              />
-            )}
-
-            {/* Kanji icon */}
-            <motion.div
-              animate={hovered
-                ? { textShadow: "0 0 20px #cc88ffcc, 0 0 40px #9933ff88" }
-                : { textShadow: "0 0 8px #7722cc44" }}
-              transition={{ duration: 0.3 }}
-              style={{ fontSize: 44, flexShrink: 0, color: hovered ? "#dd99ff" : "#9966cc" }}
-            >
-              呪
-            </motion.div>
-
-            <div style={{ textAlign: "left" }}>
-              <div style={{
-                fontSize: 22, fontWeight: "bold", letterSpacing: 4,
-                color: hovered ? "#ffffff" : "#e0ccf8",
-              }}>JJK</div>
-              <div style={{ fontSize: 10, color: hovered ? "#cc99ee" : "#9977aa", letterSpacing: 1, marginBottom: 10 }}>
-                Jujutsu Kaisen
-              </div>
-              <motion.div
-                animate={hovered ? { opacity: [0.7, 1, 0.7] } : { opacity: 1 }}
-                transition={{ duration: 0.8, repeat: Infinity }}
-                style={{
-                  padding: "4px 16px",
-                  background: hovered ? "rgba(180,80,255,0.18)" : "rgba(255,255,255,0.04)",
-                  border: `1px solid ${hovered ? "#cc66ffcc" : "rgba(255,255,255,0.1)"}`,
-                  borderRadius: 20, display: "inline-block",
-                  boxShadow: hovered ? "0 0 12px #9933ff55" : "none",
+                  width: 300, padding: "18px 24px", borderRadius: 14, cursor: "pointer",
+                  background: isHov ? `rgba(${btn.color === "#9933ff" ? "40,20,70" : btn.color === "#ff9922" ? "60,35,10" : "15,25,50"},0.9)` : "rgba(10,8,20,0.82)",
+                  border: `2px solid ${isHov ? btn.color + "cc" : btn.color + "33"}`,
+                  backdropFilter: "blur(10px)",
+                  boxShadow: isHov ? `0 0 40px ${btn.color}33, 0 8px 32px rgba(0,0,0,0.7)` : "0 2px 16px rgba(0,0,0,0.4)",
+                  display: "flex", alignItems: "center", gap: 18,
+                  position: "relative", overflow: "hidden", userSelect: "none",
                 }}
               >
-                <span style={{ fontSize: 9, color: hovered ? "#dd99ff" : "#9988bb", letterSpacing: 2 }}>
-                  ▶ START GAME
-                </span>
-              </motion.div>
-            </div>
-          </motion.div>
+                {/* Scan shimmer */}
+                {isHov && (
+                  <motion.div
+                    animate={{ left: ["-40%", "140%"] }}
+                    transition={{ duration: 1.1, repeat: Infinity, ease: "linear" }}
+                    style={{
+                      position: "absolute", top: 0, bottom: 0, width: "40%",
+                      background: `linear-gradient(90deg, transparent, ${btn.color}18, ${btn.color}0a, transparent)`,
+                      transform: "skewX(-12deg)", pointerEvents: "none",
+                    }}
+                  />
+                )}
 
-          {/* Card Gallery button */}
-          <motion.div
-            onClick={onGallery}
-            onHoverStart={() => setGalleryHovered(true)}
-            onHoverEnd={() => setGalleryHovered(false)}
-            whileHover={{ y: -4, scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            transition={{ type: "spring", stiffness: 380, damping: 22 }}
-            style={{
-              width: 280, padding: "16px 28px", borderRadius: 14, cursor: "pointer",
-              background: galleryHovered ? "rgba(20,28,50,0.88)" : "rgba(10,14,26,0.72)",
-              border: `1px solid ${galleryHovered ? "#4488ffaa" : "#1a2a4488"}`,
-              backdropFilter: "blur(8px)",
-              display: "flex", alignItems: "center", gap: 18,
-              boxShadow: galleryHovered
-                ? "0 0 0 1px #2244ff33, 0 0 32px #1133ff22, 0 4px 24px rgba(0,0,0,0.5)"
-                : "0 0 12px #00112211, 0 2px 12px rgba(0,0,0,0.4)",
-              position: "relative", overflow: "hidden",
-            }}
-          >
-            {galleryHovered && (
-              <motion.div
-                animate={{ left: ["-40%", "140%"] }}
-                transition={{ duration: 1.1, repeat: Infinity, ease: "linear" }}
-                style={{
-                  position: "absolute", top: 0, bottom: 0, width: "40%",
-                  background: "linear-gradient(90deg, transparent, rgba(80,140,255,0.10), rgba(200,220,255,0.06), rgba(80,140,255,0.10), transparent)",
-                  transform: "skewX(-12deg)", pointerEvents: "none",
-                }}
-              />
-            )}
-            <div style={{ fontSize: 36, flexShrink: 0, color: galleryHovered ? "#88aaff" : "#334466", filter: galleryHovered ? "drop-shadow(0 0 8px #4488ffaa)" : "none" }}>
-              📖
-            </div>
-            <div style={{ textAlign: "left" }}>
-              <div style={{ fontSize: 16, fontWeight: "bold", letterSpacing: 3, color: galleryHovered ? "#bbddff" : "#7799bb" }}>
-                CARD GALLERY
-              </div>
-              <div style={{ fontSize: 9, color: galleryHovered ? "#88aacc" : "#556677", letterSpacing: 1 }}>
-                Browse all 34 characters
-              </div>
-            </div>
-          </motion.div>
+                {/* Left accent bar */}
+                <div style={{
+                  position: "absolute", left: 0, top: "20%", bottom: "20%", width: 3,
+                  background: isHov ? btn.color : btn.color + "44",
+                  borderRadius: 2,
+                  boxShadow: isHov ? `0 0 12px ${btn.color}` : "none",
+                  transition: "all 0.2s",
+                }} />
+
+                <motion.div
+                  animate={isHov ? { textShadow: `0 0 20px ${btn.color}cc` } : { textShadow: "none" }}
+                  style={{ fontSize: 36, flexShrink: 0, marginLeft: 8 }}
+                >
+                  {btn.icon}
+                </motion.div>
+
+                <div style={{ flex: 1, textAlign: "left" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: 3, color: isHov ? "#fff" : "#ccc" }}>
+                      {btn.title}
+                    </div>
+                    {"badge" in btn && btn.badge && (
+                      <div style={{
+                        fontSize: 8, fontWeight: 900, letterSpacing: 2,
+                        background: btn.color, color: "#000",
+                        padding: "2px 7px", borderRadius: 4,
+                        boxShadow: `0 0 8px ${btn.color}88`,
+                      }}>{btn.badge}</div>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 9, color: isHov ? btn.color + "cc" : "#445", letterSpacing: 1, marginTop: 3 }}>
+                    {btn.sub}
+                  </div>
+                </div>
+
+                <motion.div
+                  animate={isHov ? { opacity: 1, x: 0 } : { opacity: 0.3, x: -4 }}
+                  style={{ fontSize: 14, color: btn.color }}
+                >›</motion.div>
+              </motion.div>
+            );
+          })}
         </motion.div>
 
         {/* Footer hint */}
