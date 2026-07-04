@@ -32,13 +32,11 @@ for (const name of CARD_NAMES) {
   i.src = `/cards/${name}.PNG`;
 }
 
-// Weapon images (augment phase)
-const WEAPON_NAMES = [
-  "playful-cloud","split-soul-katana","inverted-spear","higuruma-gavel",
-  "festering-life","dragon-bone","nobara-hammer","electric-guitar",
-  "black-rope","miwa-sword",
-];
-for (const name of WEAPON_NAMES) { const i = new Image(); i.src = `/weapons/${name}.PNG`; }
+// Weapon images — preload only if the folder exists (add PNGs to public/weapons/)
+// Files expected: playful-cloud.PNG, split-soul-katana.PNG, etc.
+// Preload is commented out until weapon images are added to public/weapons/
+// const WEAPON_NAMES = ["playful-cloud","split-soul-katana","inverted-spear","higuruma-gavel","festering-life","dragon-bone","nobara-hammer","electric-guitar","black-rope","miwa-sword"];
+// for (const name of WEAPON_NAMES) { const i = new Image(); i.src = `/weapons/${name}.PNG`; }
 
 export const BG = {
   home:       bg("home",       "jpg"),

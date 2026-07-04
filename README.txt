@@ -5,6 +5,33 @@ npm run dev
 
 
 NEXT TIME: 
+refine card costs to place 
+refine placement of cards to hearthstone visuals 
+weapons when and where are they used 
+
+make the game feel like an actual game, how long it takes to kill the enemy, taunt cards, more energy easier to see and use. 
+
+Have profiles display quick matches W L and draft matches W L and percentage.
+
+when choosing profile, have it be a big display. 
+add 2 controllers on the top of the page, corresponding P1 and P2, player 1 and 2, controllers in the colors and P1 or P2 appears when you
+click on the controller icon you can select one of the profiles to become P1 or P2. have the icons be small clickable controllers in the right colors 
+when you click on it then on a profile then you pick them as each player then confirm to go on. 
+
+add a "View Profiles" under View gallery. (later you can see leaderboards, medals, stats etc.)
+
+
+
+
+
+
+
+
+
+
+
+
+
 heavy weapon buff make it make sense, stronger weapons or new type of buffs that play a role strategically.
 TFT like items and building 
 
