@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { loadProfiles, createProfile, deleteProfile, getTitle, getTitleColor } from "../profiles";
+import { loadProfiles, createProfile, deleteProfile, updateProfile, getTitle, getTitleColor } from "../profiles";
 import type { Profile } from "../profiles";
 import { P1_ICON_OPTIONS, P2_ICON_OPTIONS } from "../constants";
 import PlayerIcon from "../components/PlayerIcon";
@@ -65,15 +65,16 @@ function ProfilePreviewCard({ name, icon, color }: { name: string; icon: string;
 
 // ── Saved profile card ────────────────────────────────────────────────────────
 function SavedProfileCard({
-  profile, color, selected, onSelect, onDelete,
+  profile, color, selected, onSelect, onDelete, onEdit,
 }: {
   profile: Profile; color: string; selected: boolean;
-  onSelect: () => void; onDelete: () => void;
+  onSelect: () => void; onDelete: () => void; onEdit: () => void;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const wr = profile.stats.matches > 0
     ? Math.round((profile.stats.wins / profile.stats.matches) * 100)
     : 0;
+  const blocked = confirmDelete;
 
   return (
     <motion.div
@@ -81,14 +82,14 @@ function SavedProfileCard({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.92 }}
-      whileHover={!confirmDelete ? { y: -3 } : {}}
-      onClick={() => { if (!confirmDelete) onSelect(); }}
+      whileHover={!blocked ? { y: -3 } : {}}
+      onClick={() => { if (!blocked) onSelect(); }}
       style={{
         background: selected ? `rgba(${color === PLAYER_COLOR.P1 ? "30,70,140" : "120,30,30"},0.55)` : "rgba(12,12,24,0.8)",
         border: `2px solid ${selected ? color : color + "22"}`,
         borderRadius: 14,
         padding: "14px 16px",
-        cursor: confirmDelete ? "default" : "pointer",
+        cursor: blocked ? "default" : "pointer",
         position: "relative",
         boxShadow: selected ? `0 0 28px ${color}44` : "none",
         transition: "background 0.2s, border-color 0.2s",
@@ -131,7 +132,7 @@ function SavedProfileCard({
         </div>
       </div>
 
-      {/* Delete controls */}
+      {/* Action controls */}
       <AnimatePresence>
         {confirmDelete ? (
           <motion.div
@@ -143,7 +144,7 @@ function SavedProfileCard({
           >
             <span style={{ fontSize: 9, color: "#ff6666", flex: 1 }}>Delete this profile?</span>
             <button
-              onClick={() => { onDelete(); }}
+              onClick={() => onDelete()}
               style={{ padding: "3px 10px", background: "#ff2233", border: "none", borderRadius: 6, color: "#fff", fontSize: 9, fontWeight: 700, cursor: "pointer" }}
             >Yes</button>
             <button
@@ -152,18 +153,24 @@ function SavedProfileCard({
             >No</button>
           </motion.div>
         ) : (
-          <motion.button
+          <motion.div
             initial={{ opacity: 0 }}
-            animate={{ opacity: 0.35 }}
+            animate={{ opacity: 0 }}
             whileHover={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={e => { e.stopPropagation(); setConfirmDelete(true); }}
-            style={{
-              position: "absolute", bottom: 8, right: 8,
-              background: "none", border: "none",
-              color: "#ff4466", fontSize: 11, cursor: "pointer", padding: 2,
-            }}
-          >✕</motion.button>
+            style={{ position: "absolute", bottom: 7, right: 8, display: "flex", gap: 6 }}
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              onClick={() => onEdit()}
+              style={{ background: "none", border: "none", color: color + "cc", fontSize: 11, cursor: "pointer", padding: 2 }}
+              title="Edit profile"
+            >✎</button>
+            <button
+              onClick={() => setConfirmDelete(true)}
+              style={{ background: "none", border: "none", color: "#ff4466", fontSize: 11, cursor: "pointer", padding: 2 }}
+              title="Delete profile"
+            >✕</button>
+          </motion.div>
         )}
       </AnimatePresence>
     </motion.div>
@@ -279,6 +286,144 @@ function CreateForm({ color, onCreated, onCancel }: {
   );
 }
 
+// ── Edit profile form ─────────────────────────────────────────────────────────
+function EditForm({ profile, color, onSaved, onCancel }: {
+  profile: Profile; color: string; onSaved: () => void; onCancel: () => void;
+}) {
+  const [name, setName] = useState(profile.name);
+  const [icon, setIcon] = useState(profile.icon);
+  const [focused, setFocused] = useState(false);
+  const canSave = name.trim().length > 0;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 8 }}
+      style={{
+        background: "rgba(6,6,16,0.97)",
+        border: `1px solid ${color}44`,
+        borderRadius: 16,
+        padding: "20px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 16,
+      }}
+    >
+      <div style={{ fontSize: 10, color: color, letterSpacing: 4, fontWeight: 700 }}>EDIT PROFILE</div>
+
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 9, color: "#445", letterSpacing: 3, marginBottom: 6 }}>NAME</div>
+            <input
+              autoFocus
+              value={name}
+              onChange={e => setName(e.target.value)}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              maxLength={20}
+              style={{
+                width: "100%", background: "rgba(255,255,255,0.04)",
+                border: `1px solid ${focused ? color + "99" : "#2a2a3a"}`,
+                borderRadius: 8, padding: "8px 12px",
+                color: "#fff", fontSize: 13, fontFamily: "inherit",
+                outline: "none", boxSizing: "border-box",
+                boxShadow: focused ? `0 0 12px ${color}33` : "none",
+              }}
+            />
+          </div>
+
+          <div style={{ fontSize: 9, color: "#445", letterSpacing: 3, marginBottom: 6 }}>AVATAR</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {ALL_ICONS.map(ic => (
+              <motion.div
+                key={ic}
+                onClick={() => setIcon(ic)}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
+                style={{
+                  borderRadius: 8, overflow: "hidden", cursor: "pointer",
+                  border: `2px solid ${ic === icon ? color : "transparent"}`,
+                  boxShadow: ic === icon ? `0 0 10px ${color}66` : "none",
+                }}
+              >
+                <PlayerIcon icon={ic} size={32} style={{ display: "block" }} />
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Live preview with current stats */}
+        <motion.div
+          style={{
+            background: "rgba(8,8,20,0.95)",
+            border: `2px solid ${color}55`,
+            borderRadius: 16, padding: "20px 22px", width: 200,
+            boxShadow: `0 0 40px ${color}22, 0 8px 32px rgba(0,0,0,0.7)`,
+            position: "relative", overflow: "hidden",
+          }}
+        >
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, transparent, ${color}, transparent)` }} />
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+            <motion.div
+              animate={{ boxShadow: [`0 0 20px ${color}44`, `0 0 36px ${color}77`, `0 0 20px ${color}44`] }}
+              transition={{ duration: 2, repeat: Infinity }}
+              style={{ borderRadius: 12, border: `2px solid ${color}66`, overflow: "hidden" }}
+            >
+              <PlayerIcon icon={icon} size={72} style={{ display: "block" }} />
+            </motion.div>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 15, fontWeight: 900, color: "#fff", letterSpacing: 1 }}>
+                {(name.trim() || "—").slice(0, 14)}
+              </div>
+              <div style={{ fontSize: 9, color: getTitleColor(profile.stats.wins), letterSpacing: 3, marginTop: 3 }}>
+                {getTitle(profile.stats.wins)}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
+              {([["W", profile.stats.wins, "#44ff88"], ["L", profile.stats.losses, "#ff4466"], ["M", profile.stats.matches, "#888"]] as const).map(([label, val, clr]) => (
+                <div key={label} style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 14, fontWeight: 900, color: clr }}>{val}</div>
+                  <div style={{ fontSize: 8, color: "#445", letterSpacing: 2 }}>{label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button
+          onClick={onCancel}
+          style={{
+            padding: "8px 18px", background: "rgba(255,255,255,0.04)",
+            border: "1px solid #2a2a3a", borderRadius: 8,
+            color: "#667", fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+          }}
+        >Cancel</button>
+        <motion.button
+          whileHover={canSave ? { scale: 1.04 } : {}}
+          whileTap={canSave ? { scale: 0.97 } : {}}
+          onClick={() => {
+            if (!canSave) return;
+            updateProfile(profile.id, name, icon);
+            onSaved();
+          }}
+          style={{
+            padding: "8px 22px",
+            background: canSave ? color : "rgba(255,255,255,0.05)",
+            border: "none", borderRadius: 8,
+            color: canSave ? "#000" : "#334",
+            fontSize: 11, fontWeight: 800, cursor: canSave ? "pointer" : "default",
+            fontFamily: "inherit", letterSpacing: 2,
+          }}
+        >SAVE</motion.button>
+      </div>
+    </motion.div>
+  );
+}
+
 // ── Player column ─────────────────────────────────────────────────────────────
 function PlayerColumn({
   pid, color, profiles, selected, onSelect, onRefresh,
@@ -291,12 +436,15 @@ function PlayerColumn({
   onRefresh: () => void;
 }) {
   const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const handleDelete = (id: string) => {
     deleteProfile(id);
     if (selected?.id === id) onSelect(null);
     onRefresh();
   };
+
+  const editingProfile = editingId ? profiles.find(p => p.id === editingId) ?? null : null;
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
@@ -306,11 +454,8 @@ function PlayerColumn({
           {pid === "P1" ? "PLAYER 1" : "PLAYER 2"}
         </div>
         {selected && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            style={{ fontSize: 9, color: color + "99", letterSpacing: 2 }}
-          >
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            style={{ fontSize: 9, color: color + "99", letterSpacing: 2 }}>
             ✓ SELECTED
           </motion.div>
         )}
@@ -319,9 +464,7 @@ function PlayerColumn({
       {/* Profile list */}
       <div style={{
         flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8,
-        maxHeight: 380,
-        paddingRight: 4,
-        scrollbarWidth: "thin",
+        maxHeight: 380, paddingRight: 4, scrollbarWidth: "thin",
       }}>
         <AnimatePresence mode="popLayout">
           {profiles.map(p => (
@@ -332,20 +475,37 @@ function PlayerColumn({
               selected={selected?.id === p.id}
               onSelect={() => onSelect(selected?.id === p.id ? null : p)}
               onDelete={() => handleDelete(p.id)}
+              onEdit={() => { setCreating(false); setEditingId(p.id); }}
             />
           ))}
         </AnimatePresence>
 
-        {profiles.length === 0 && !creating && (
+        {profiles.length === 0 && !creating && !editingId && (
           <div style={{ textAlign: "center", padding: "28px 0", color: "#334", fontSize: 11 }}>
             No profiles yet
           </div>
         )}
       </div>
 
-      {/* Create form or button */}
+      {/* Create / Edit form or new-profile button */}
       <AnimatePresence mode="wait">
-        {creating ? (
+        {editingProfile ? (
+          <EditForm
+            key={`edit-${editingProfile.id}`}
+            profile={editingProfile}
+            color={color}
+            onSaved={() => {
+              onRefresh();
+              // If this profile was selected, refresh the selection object so name/icon update
+              if (selected?.id === editingProfile.id) {
+                const updated = loadProfiles().find(p => p.id === editingProfile.id);
+                if (updated) onSelect(updated);
+              }
+              setEditingId(null);
+            }}
+            onCancel={() => setEditingId(null)}
+          />
+        ) : creating ? (
           <CreateForm
             key="form"
             color={color}

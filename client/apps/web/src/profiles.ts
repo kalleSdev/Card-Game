@@ -40,6 +40,12 @@ export function deleteProfile(id: string): void {
   saveProfiles(loadProfiles().filter(p => p.id !== id));
 }
 
+export function updateProfile(id: string, name: string, icon: string): void {
+  saveProfiles(loadProfiles().map(p =>
+    p.id === id ? { ...p, name: name.trim() || p.name, icon } : p
+  ));
+}
+
 export function recordMatchResult(winnerProfileId: string, loserProfileId: string): void {
   const all = loadProfiles();
   for (const p of all) {
