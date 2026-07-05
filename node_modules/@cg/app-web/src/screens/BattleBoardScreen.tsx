@@ -85,20 +85,10 @@ function BoardCardView({
         />
       </div>
 
-      {/* Taunt shield */}
-      {card.hasTaunt && (
-        <div style={{
-          position: "absolute", top: 3, left: 3,
-          background: "rgba(60,130,255,0.88)", borderRadius: 4,
-          fontSize: 7, fontWeight: 900, padding: "1px 5px", color: "#fff",
-          border: "1px solid #6af", letterSpacing: 0.5,
-        }}>🛡 TAUNT</div>
-      )}
-
       {/* Stun */}
       {card.stunTurns > 0 && (
         <div style={{
-          position: "absolute", top: card.hasTaunt ? 18 : 3, right: 3,
+          position: "absolute", top: 3, right: 3,
           background: "#4488ff", borderRadius: 3,
           fontSize: 7, fontWeight: 900, padding: "1px 4px", color: "#fff",
         }}>STUN</div>
@@ -177,13 +167,6 @@ function HandCardView({
         />
       </div>
 
-      {card.hasTaunt && (
-        <div style={{
-          position: "absolute", top: 3, left: 3,
-          background: "rgba(60,130,255,0.8)", borderRadius: 3,
-          fontSize: 6, fontWeight: 900, padding: "1px 4px", color: "#fff",
-        }}>🛡</div>
-      )}
     </motion.div>
   );
 }
@@ -532,8 +515,11 @@ export default function BattleBoardScreen({
 }: Props) {
   // Mulligan phase: players swap cards before battle starts
   type MulliganStep = "P1" | "P2" | "BATTLE";
+  type MulliganSubPhase = "SELECT" | "REPLACED";
   const [mulliganStep, setMulliganStep] = useState<MulliganStep>("P1");
+  const [mulliganSubPhase, setMulliganSubPhase] = useState<MulliganSubPhase>("SELECT");
   const [mulliganReturning, setMulliganReturning] = useState<Set<string>>(new Set());
+  const [newCardIds, setNewCardIds] = useState<Set<string>>(new Set());
 
   const [initialState] = useState(() => createBattleState(p1Draft, p2Draft, cardDb));
   const [engine] = useState(() => createBattleEngine(initialState));
@@ -541,19 +527,29 @@ export default function BattleBoardScreen({
   const [domainFlash, setDomainFlash] = useState<string | null>(null);
   const [gameOverShown, setGameOverShown] = useState(false);
 
-  const confirmMulligan = (pid: PlayerId) => {
-    // Swap selected cards back to deck, draw replacements
+  const doReplace = (pid: PlayerId) => {
+    if (mulliganReturning.size === 0) return;
+    const drawn: string[] = [];
     setBattleState(prev => {
       const p = { ...prev.players[pid] };
       const swapCount = mulliganReturning.size;
       const kept  = p.hand.filter(c => !mulliganReturning.has(c.instanceId));
       const going = p.hand.filter(c =>  mulliganReturning.has(c.instanceId));
       const deck  = shuffle([...p.deck, ...going]);
-      const drawn = deck.slice(0, swapCount);
+      const newCards = deck.slice(0, swapCount);
+      newCards.forEach(c => drawn.push(c.instanceId));
       const rest  = deck.slice(swapCount);
-      return { ...prev, players: { ...prev.players, [pid]: { ...p, hand: [...kept, ...drawn], deck: rest } } };
+      return { ...prev, players: { ...prev.players, [pid]: { ...p, hand: [...kept, ...newCards], deck: rest } } };
     });
+    setNewCardIds(new Set(drawn));
     setMulliganReturning(new Set());
+    setMulliganSubPhase("REPLACED");
+  };
+
+  const keepHand = (pid: PlayerId) => {
+    setMulliganSubPhase("SELECT");
+    setMulliganReturning(new Set());
+    setNewCardIds(new Set());
     setMulliganStep(pid === "P1" ? "P2" : "BATTLE");
   };
 
@@ -603,22 +599,26 @@ export default function BattleBoardScreen({
     dispatch({ type: "ATTACK_LEADER", pid });
   };
 
-  // ── Mulligan phase ──────────────────────────────────────────────────────────
+  // ── Starting hand phase ─────────────────────────────────────────────────────
   if (mulliganStep !== "BATTLE") {
-    const mPid = mulliganStep as "P1" | "P2";
+    const mPid    = mulliganStep as "P1" | "P2";
     const mPlayer = battleState.players[mPid];
     const mName   = mPid === "P1" ? p1Name : p2Name;
     const mIcon   = mPid === "P1" ? p1Icon : p2Icon;
     const mColor  = mPid === "P1" ? "#4a9eff" : "#ff6666";
+    const isReplaced = mulliganSubPhase === "REPLACED";
+
     return (
       <div style={{
         minHeight: "100vh", background: "#04040a",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-        gap: 32, padding: 32, fontFamily: "'Segoe UI', system-ui, sans-serif",
+        gap: 28, padding: 32, fontFamily: "'Segoe UI', system-ui, sans-serif",
         position: "relative", overflow: "hidden",
       }}>
         <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 50% 30%, #0a0a1a, #04040a)", zIndex: 0 }} />
-        <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 24 }}>
+
+        <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 22 }}>
+          {/* Player header */}
           <div style={{ textAlign: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "center", marginBottom: 8 }}>
               <div style={{ width: 36, height: 36, borderRadius: "50%", overflow: "hidden", border: `2px solid ${mColor}66` }}>
@@ -626,59 +626,133 @@ export default function BattleBoardScreen({
               </div>
               <span style={{ fontSize: 14, color: mColor, letterSpacing: 3, fontWeight: 700 }}>{mName}</span>
             </div>
-            <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: 4, color: "#fff", marginBottom: 6 }}>MULLIGAN</div>
-            <div style={{ fontSize: 10, color: "#556", letterSpacing: 2 }}>
-              Tap cards to return them · Replacements drawn from your deck
-            </div>
+
+            {isReplaced ? (
+              <>
+                <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 4, color: "#fff", marginBottom: 6 }}>
+                  YOUR NEW HAND
+                </div>
+                <div style={{ fontSize: 10, color: "#fff", letterSpacing: 2 }}>
+                  Cards highlighted in green were drawn as replacements
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 4, color: "#fff", marginBottom: 6 }}>
+                  YOUR STARTING HAND
+                </div>
+                <div style={{ fontSize: 10, color: "#fff", letterSpacing: 2 }}>
+                  Select cards to send back and draw fresh replacements from your deck
+                </div>
+              </>
+            )}
           </div>
 
-          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", justifyContent: "center" }}>
+          {/* Cards */}
+          <div style={{ display: "flex", gap: 18, flexWrap: "wrap", justifyContent: "center" }}>
             {mPlayer.hand.map(card => {
               const def = cardDb[card.defId];
-              const returning = mulliganReturning.has(card.instanceId);
+              const returning  = !isReplaced && mulliganReturning.has(card.instanceId);
+              const isNew      = isReplaced && newCardIds.has(card.instanceId);
               return (
                 <motion.div key={card.instanceId}
-                  onClick={() => setMulliganReturning(prev => {
-                    const next = new Set(prev);
-                    if (next.has(card.instanceId)) next.delete(card.instanceId);
-                    else next.add(card.instanceId);
-                    return next;
-                  })}
-                  whileHover={{ y: -8, scale: 1.05 }}
-                  whileTap={{ scale: 0.97 }}
-                  style={{ cursor: "pointer", position: "relative", opacity: returning ? 0.45 : 1 }}
+                  initial={isNew ? { scale: 0.7, opacity: 0 } : false}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={isNew ? { type: "spring", stiffness: 300, damping: 20 } : {}}
+                  onClick={() => {
+                    if (isReplaced) return;
+                    setMulliganReturning(prev => {
+                      const next = new Set(prev);
+                      if (next.has(card.instanceId)) next.delete(card.instanceId);
+                      else next.add(card.instanceId);
+                      return next;
+                    });
+                  }}
+                  whileHover={!isReplaced ? { y: -10, scale: 1.06 } : undefined}
+                  whileTap={!isReplaced ? { scale: 0.97 } : undefined}
+                  style={{ cursor: isReplaced ? "default" : "pointer", position: "relative" }}
                 >
                   {def && <CharacterCard defId={card.defId} def={def} size="sm" />}
+
+                  {/* Selected-to-return overlay */}
                   {returning && (
                     <div style={{
                       position: "absolute", inset: 0, borderRadius: 12,
-                      border: "3px solid #ff4444",
-                      background: "rgba(255,0,0,0.18)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 28, color: "#ff4444", fontWeight: 900,
-                    }}>↩</div>
+                      border: "2px solid #ff4444",
+                      background: "rgba(255,40,40,0.22)",
+                      display: "flex", alignItems: "flex-start", justifyContent: "flex-end",
+                      padding: 6, pointerEvents: "none",
+                    }}>
+                      <div style={{
+                        width: 20, height: 20, borderRadius: "50%",
+                        background: "#ff4444", display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 11, color: "#fff", fontWeight: 900,
+                      }}>↩</div>
+                    </div>
+                  )}
+
+                  {/* New card glow badge */}
+                  {isNew && (
+                    <motion.div
+                      animate={{ opacity: [0.6, 1, 0.6] }} transition={{ duration: 1.2, repeat: Infinity }}
+                      style={{
+                        position: "absolute", inset: 0, borderRadius: 12,
+                        border: "2px solid #44ff88",
+                        background: "rgba(40,255,100,0.12)",
+                        pointerEvents: "none",
+                      }}
+                    />
                   )}
                 </motion.div>
               );
             })}
           </div>
 
-          <div style={{ fontSize: 10, color: "#334", letterSpacing: 2 }}>
-            {mulliganReturning.size > 0 ? `Returning ${mulliganReturning.size} card${mulliganReturning.size > 1 ? "s" : ""}` : "No cards selected to return"}
+          {/* Status text */}
+          <div style={{ fontSize: 10, color: "#667", letterSpacing: 2, textAlign: "center" }}>
+            {isReplaced
+              ? `${newCardIds.size} card${newCardIds.size !== 1 ? "s" : ""} replaced`
+              : mulliganReturning.size > 0
+                ? `${mulliganReturning.size} card${mulliganReturning.size > 1 ? "s" : ""} selected to return`
+                : "Click cards to select them for replacement"}
           </div>
 
-          <motion.button
-            whileHover={{ scale: 1.05, y: -2 }} whileTap={{ scale: 0.97 }}
-            onClick={() => confirmMulligan(mPid)}
-            style={{
-              padding: "13px 52px",
-              background: `linear-gradient(135deg, ${mColor}99, ${mColor})`,
-              border: "none", borderRadius: 12,
-              color: "#000", fontSize: 13, fontWeight: 900, letterSpacing: 5,
-              cursor: "pointer", fontFamily: "inherit",
-              boxShadow: `0 0 32px ${mColor}44`,
-            }}
-          >KEEP HAND</motion.button>
+          {/* Buttons */}
+          <div style={{ display: "flex", gap: 12 }}>
+            {!isReplaced && (
+              <motion.button
+                whileHover={mulliganReturning.size > 0 ? { scale: 1.05, y: -2 } : {}}
+                whileTap={mulliganReturning.size > 0 ? { scale: 0.97 } : {}}
+                onClick={() => doReplace(mPid)}
+                style={{
+                  padding: "12px 36px",
+                  background: mulliganReturning.size > 0
+                    ? "linear-gradient(135deg, #994400, #ff6600)"
+                    : "rgba(255,255,255,0.04)",
+                  border: `2px solid ${mulliganReturning.size > 0 ? "#ff6600" : "#2a2a3a"}`,
+                  borderRadius: 12,
+                  color: mulliganReturning.size > 0 ? "#fff" : "#334",
+                  fontSize: 12, fontWeight: 900, letterSpacing: 5,
+                  cursor: mulliganReturning.size > 0 ? "pointer" : "default",
+                  fontFamily: "inherit",
+                  boxShadow: mulliganReturning.size > 0 ? "0 0 24px #ff660044" : "none",
+                }}
+              >REPLACE</motion.button>
+            )}
+
+            <motion.button
+              whileHover={{ scale: 1.05, y: -2 }} whileTap={{ scale: 0.97 }}
+              onClick={() => keepHand(mPid)}
+              style={{
+                padding: "12px 36px",
+                background: `linear-gradient(135deg, ${mColor}aa, ${mColor})`,
+                border: "none", borderRadius: 12,
+                color: "#000", fontSize: 12, fontWeight: 900, letterSpacing: 5,
+                cursor: "pointer", fontFamily: "inherit",
+                boxShadow: `0 0 28px ${mColor}44`,
+              }}
+            >{isReplaced ? "NEXT →" : "KEEP HAND"}</motion.button>
+          </div>
         </div>
       </div>
     );

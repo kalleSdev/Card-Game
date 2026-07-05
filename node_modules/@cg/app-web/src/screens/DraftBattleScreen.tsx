@@ -75,28 +75,22 @@ function getWeaponPool(exclude: string[]): string[] {
   return shuffle(Object.keys(ROULETTE_ITEM_MAP).filter(id => !exclude.includes(id))).slice(0, 5);
 }
 
-// ── Clear selection overlay on chosen card ────────────────────────────────────
-function SelectedOverlay({ color }: { color: string }) {
+// ── Small corner checkmark on selected card ───────────────────────────────────
+function SelectedBadge({ color }: { color: string }) {
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.7 }}
-      animate={{ opacity: 1, scale: 1 }}
+      initial={{ scale: 0, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
       style={{
-        position: "absolute", inset: 0, borderRadius: 14,
-        background: `${color}22`,
-        border: `3px solid ${color}`,
+        position: "absolute", top: 7, right: 7, zIndex: 5,
+        width: 22, height: 22, borderRadius: "50%",
+        background: color,
         display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 12, color: "#000", fontWeight: 900,
+        boxShadow: `0 0 10px ${color}cc, 0 2px 6px rgba(0,0,0,0.5)`,
         pointerEvents: "none",
-        boxShadow: `0 0 32px ${color}88, inset 0 0 20px ${color}22`,
       }}
-    >
-      <div style={{
-        width: 44, height: 44, borderRadius: "50%",
-        background: color, display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 22, color: "#000", fontWeight: 900,
-        boxShadow: `0 0 20px ${color}cc`,
-      }}>✓</div>
-    </motion.div>
+    >✓</motion.div>
   );
 }
 
@@ -141,7 +135,7 @@ function LeaderPickPhase({ pid, profile, color, options, cardDb, onPick }: {
             >
               <div style={{ transform: "scale(1.25)", transformOrigin: "top center", position: "relative" }}>
                 <CharacterCard defId={id} def={def} size="lg" />
-                {isSelected && <SelectedOverlay color={color} />}
+                {isSelected && <SelectedBadge color={color} />}
               </div>
               <div style={{ textAlign: "center", width: 140, paddingTop: 8 }}>
                 <div style={{ fontSize: 12, fontWeight: 800, color: isSelected ? "#fff" : "#aaa" }}>{def.name}</div>
@@ -243,7 +237,7 @@ function CardDraftPhase({ pid, profile, color, pickIndex, options, cardDb, picke
             >
               <div style={{ transform: "scale(1.2)", transformOrigin: "top center", position: "relative" }}>
                 <CharacterCard defId={id} def={def} size="lg" />
-                {isSelected && <SelectedOverlay color={color} />}
+                {isSelected && <SelectedBadge color={color} />}
               </div>
               <div style={{ textAlign: "center", width: 140, paddingTop: 8 }}>
                 <div style={{ fontSize: 11, fontWeight: 800, color: isSelected ? "#fff" : "#aaa" }}>{def.name}</div>
@@ -321,8 +315,18 @@ function EquipmentPhase({ pid, profile, color, weaponPool, leaderId, allPickedId
         </div>
       </div>
 
+      {/* Leader prominent at top */}
+      {cardDb[leaderId] && (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+          <div style={{ fontSize: 8, color: "#334", letterSpacing: 3 }}>YOUR LEADER</div>
+          <div style={{ transform: "scale(0.82)", transformOrigin: "center top" }}>
+            <CharacterCard defId={leaderId} def={cardDb[leaderId]} size="lg" />
+          </div>
+        </div>
+      )}
+      {/* Rest of deck below */}
       <div style={{ display: "flex", gap: 3, flexWrap: "wrap", justifyContent: "center", maxWidth: 560 }}>
-        {[leaderId, ...allPickedIds].map(id => {
+        {allPickedIds.map(id => {
           const def = cardDb[id];
           return def ? (
             <div key={id} style={{ transform: "scale(0.55)", transformOrigin: "center center" }}>
