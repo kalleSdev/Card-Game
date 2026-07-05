@@ -5,20 +5,21 @@ npm run dev
 
 
 NEXT TIME: 
-refine card costs to place 
-refine placement of cards to hearthstone visuals 
+refine card costs to place, make them all 1 cheaper for now. 
+refine placement of cards to hearthstone visuals where the leader is in the back and the cards go in front
+also make it like hearthstone where the leaders both face "down" of the screen regardless of whos turn it is. 
 weapons when and where are they used 
 
-make the game feel like an actual game, how long it takes to kill the enemy, taunt cards, more energy easier to see and use. 
+make an actual system later with hp and attacks, taunt cards that need to die before you can attack the leader, more energy easier to see and use. 
 
 Have profiles display quick matches W L and draft matches W L and percentage.
 
-when choosing profile, have it be a big display. 
-add 2 controllers on the top of the page, corresponding P1 and P2, player 1 and 2, controllers in the colors and P1 or P2 appears when you
-click on the controller icon you can select one of the profiles to become P1 or P2. have the icons be small clickable controllers in the right colors 
+when choosing profile, have it be a bigger nicer display of the profiles.
+add 2 controllers on the top of the page, corresponding P1 and P2, controllers in the colors of P1 or P2 on top of the page in the selecting profile, when you
+click on the controller icon you can select one of the profiles to become P1 or P2. have the controller icons be small clickable controllers in the right colors 
 when you click on it then on a profile then you pick them as each player then confirm to go on. 
 
-add a "View Profiles" under View gallery. (later you can see leaderboards, medals, stats etc.)
+add a "View Profiles" under View gallery. have it look and feel nice. (later you can see leaderboards, medals, stats etc.)
 
 
 
@@ -190,3 +191,12 @@ under is a panel of cards, in a 2x3 grid style inside its panel lined out kinda,
 
 chosen cards from the pool go onto the slots on the panel for each players side now. 
 
+
+
+DRAFT GAME ideas: 
+Titles given if you win against the same player 3 times in a row. 
+Taunt cards. Corresponding to type of character it is. 
+Attack and hp points balancing. 
+
+Weapon introduction and synergy meaning to the game. cards dont die as quickly, have more impact on the game. same with 
+leaders, dont die as quickly. Spell cards introduce later depending on leader. 

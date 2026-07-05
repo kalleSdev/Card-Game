@@ -145,7 +145,7 @@ export default function SetupScreen({ onStart, onHome, initialNames, initialIcon
           letterSpacing: 2, fontFamily: "inherit",
         }}
       >
-        ← HOME
+        ← BACK
       </button>
 
       <div style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: 900, display: "flex", flexDirection: "column", alignItems: "center" }}>

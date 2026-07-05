@@ -1,20 +1,44 @@
+export interface ProfileStats {
+  wins: number;
+  losses: number;
+  matches: number;
+}
+
+export interface MatchRecord {
+  id: string;
+  date: number;
+  mode: "quick" | "draft";
+  opponentId: string;
+  opponentName: string;
+  opponentIcon: string;
+  result: "win" | "loss";
+}
+
 export interface Profile {
   id: string;
   name: string;
-  icon: string; // player-1..12
+  icon: string;
   createdAt: number;
-  stats: {
-    wins: number;
-    losses: number;
-    matches: number;
-  };
+  quickStats: ProfileStats;
+  draftStats: ProfileStats;
+  history: MatchRecord[];
+  /** @deprecated kept for migration only */
+  stats?: ProfileStats;
 }
 
 const KEY = "cg_profiles_v1";
 
+const emptyStats = (): ProfileStats => ({ wins: 0, losses: 0, matches: 0 });
+
 export function loadProfiles(): Profile[] {
   try {
-    return JSON.parse(localStorage.getItem(KEY) ?? "[]");
+    const raw: Profile[] = JSON.parse(localStorage.getItem(KEY) ?? "[]");
+    return raw.map(p => ({
+      ...p,
+      quickStats: p.quickStats ?? p.stats ?? emptyStats(),
+      draftStats: p.draftStats ?? emptyStats(),
+      history: p.history ?? [],
+    }));
   } catch {
     return [];
   }
@@ -30,7 +54,9 @@ export function createProfile(name: string, icon: string): Profile {
     name: name.trim() || "Unnamed",
     icon,
     createdAt: Date.now(),
-    stats: { wins: 0, losses: 0, matches: 0 },
+    quickStats: emptyStats(),
+    draftStats: emptyStats(),
+    history: [],
   };
   saveProfiles([...loadProfiles(), profile]);
   return profile;
@@ -46,13 +72,42 @@ export function updateProfile(id: string, name: string, icon: string): void {
   ));
 }
 
-export function recordMatchResult(winnerProfileId: string, loserProfileId: string): void {
+export function recordMatchResult(
+  winnerProfileId: string,
+  loserProfileId: string,
+  mode: "quick" | "draft",
+  winnerName: string,
+  winnerIcon: string,
+  loserName: string,
+  loserIcon: string,
+): void {
   const all = loadProfiles();
+  const field = mode === "draft" ? "draftStats" : "quickStats";
+  const matchId = crypto.randomUUID();
+  const date = Date.now();
   for (const p of all) {
-    if (p.id === winnerProfileId) { p.stats.wins++;   p.stats.matches++; }
-    if (p.id === loserProfileId)  { p.stats.losses++; p.stats.matches++; }
+    if (p.id === winnerProfileId) {
+      p[field].wins++;
+      p[field].matches++;
+      p.history = [
+        { id: matchId, date, mode, opponentId: loserProfileId, opponentName: loserName, opponentIcon: loserIcon, result: "win" },
+        ...p.history,
+      ];
+    }
+    if (p.id === loserProfileId) {
+      p[field].losses++;
+      p[field].matches++;
+      p.history = [
+        { id: matchId, date, mode, opponentId: winnerProfileId, opponentName: winnerName, opponentIcon: winnerIcon, result: "loss" },
+        ...p.history,
+      ];
+    }
   }
   saveProfiles(all);
+}
+
+export function totalWins(p: Profile): number {
+  return (p.quickStats?.wins ?? 0) + (p.draftStats?.wins ?? 0);
 }
 
 export function getTitle(wins: number): string {

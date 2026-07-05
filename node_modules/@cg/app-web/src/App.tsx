@@ -10,9 +10,11 @@ import HomeScreen from "./screens/HomeScreen";
 import CardGallery from "./screens/CardGallery";
 import SetupScreen from "./screens/SetupScreen";
 import ProfileSelectScreen from "./screens/ProfileSelectScreen";
+import ProfilesViewScreen from "./screens/ProfilesViewScreen";
 import DraftBattleScreen from "./screens/DraftBattleScreen";
 import type { PlayerDraftResult } from "./screens/DraftBattleScreen";
 import BattleBoardScreen from "./screens/BattleBoardScreen";
+import PostGameScreen from "./screens/PostGameScreen";
 import BindingVowScreen from "./screens/BindingVowScreen";
 import CoinFlipScreen from "./screens/CoinFlipScreen";
 import DraftScreen from "./screens/DraftScreen";
@@ -22,7 +24,9 @@ import AugmentScreen from "./screens/AugmentScreen";
 import LockedInScreen from "./screens/LockedInScreen";
 import ResolutionScreen from "./screens/ResolutionScreen";
 
-type AppScreen = "SPLASH" | "HOME" | "PROFILE_SELECT" | "DRAFT_BATTLE" | "SETUP" | "GAME" | "BATTLE_BOARD" | "GALLERY";
+type AppScreen =
+  | "SPLASH" | "HOME" | "PROFILE_SELECT" | "PROFILES_VIEW"
+  | "DRAFT_BATTLE" | "SETUP" | "GAME" | "BATTLE_BOARD" | "POST_GAME" | "GALLERY";
 
 export default function App() {
   const [appScreen, setAppScreen] = useState<AppScreen>("SPLASH");
@@ -33,6 +37,8 @@ export default function App() {
   const [draftMode, setDraftMode] = useState(false);
   const [p1DraftResult, setP1DraftResult] = useState<PlayerDraftResult | null>(null);
   const [p2DraftResult, setP2DraftResult] = useState<PlayerDraftResult | null>(null);
+  const [postGameWinner, setPostGameWinner] = useState<PlayerId | null>(null);
+  const [postGameTurns, setPostGameTurns] = useState(0);
   const [key, setKey] = useState(0);
   const engine = useMemo(() => createEngine(createInitialState()), [key]);
   const [state, setState] = useState<GameState>(engine.getState());
@@ -41,15 +47,13 @@ export default function App() {
   useMemo(() => { setState(engine.getState()); }, [engine]);
 
   const recordAndRestart = () => {
-    // Record match result into profiles before resetting state
     if (p1Profile && p2Profile && state.phase === "RESOLUTION") {
       const p1Score = state.players.P1.scorePreview;
       const p2Score = state.players.P2.scorePreview;
       const winner: PlayerId | "DRAW" = p1Score > p2Score ? "P1" : p2Score > p1Score ? "P2" : "DRAW";
       if (winner !== "DRAW") {
-        const winnerId = winner === "P1" ? p1Profile.id : p2Profile.id;
-        const loserId  = winner === "P1" ? p2Profile.id : p1Profile.id;
-        recordMatchResult(winnerId, loserId);
+        const [wP, lP] = winner === "P1" ? [p1Profile, p2Profile] : [p2Profile, p1Profile];
+        recordMatchResult(wP.id, lP.id, "quick", wP.name, wP.icon, lP.name, lP.icon);
       }
     }
     setKey(k => k + 1);
@@ -63,15 +67,19 @@ export default function App() {
   };
 
   if (appScreen === "SPLASH") return <SplashScreen onSelectJJK={() => setAppScreen("HOME")} />;
+
   if (appScreen === "HOME") return (
     <HomeScreen
       onSelect={() => { setDraftMode(false); setAppScreen("PROFILE_SELECT"); }}
       onDraftBattle={() => { setDraftMode(true); setAppScreen("PROFILE_SELECT"); }}
       onGallery={() => setAppScreen("GALLERY")}
+      onProfiles={() => setAppScreen("PROFILES_VIEW")}
       onBack={() => setAppScreen("SPLASH")}
     />
   );
+
   if (appScreen === "GALLERY") return <CardGallery cardDb={state.cardDb} onBack={() => setAppScreen("HOME")} />;
+  if (appScreen === "PROFILES_VIEW") return <ProfilesViewScreen onBack={() => setAppScreen("HOME")} />;
 
   if (appScreen === "PROFILE_SELECT") {
     return (
@@ -114,12 +122,33 @@ export default function App() {
         p2Name={p2Profile.name}
         p1Icon={p1Profile.icon}
         p2Icon={p2Profile.icon}
-        onGameOver={(winner) => {
-          const winnerId = winner === "P1" ? p1Profile.id : p2Profile.id;
-          const loserId  = winner === "P1" ? p2Profile.id : p1Profile.id;
-          recordMatchResult(winnerId, loserId);
-          setAppScreen("HOME");
+        onGameOver={(winner, turnCount) => {
+          const [wP, lP] = winner === "P1" ? [p1Profile, p2Profile] : [p2Profile, p1Profile];
+          recordMatchResult(wP.id, lP.id, "draft", wP.name, wP.icon, lP.name, lP.icon);
+          setPostGameWinner(winner);
+          setPostGameTurns(turnCount);
+          setAppScreen("POST_GAME");
         }}
+      />
+    );
+  }
+
+  if (appScreen === "POST_GAME" && postGameWinner && p1DraftResult && p2DraftResult && p1Profile && p2Profile) {
+    return (
+      <PostGameScreen
+        winner={postGameWinner}
+        p1Profile={p1Profile}
+        p2Profile={p2Profile}
+        p1Draft={p1DraftResult}
+        p2Draft={p2DraftResult}
+        cardDb={state.cardDb}
+        turnCount={postGameTurns}
+        onPlayAgain={() => {
+          setP1DraftResult(null);
+          setP2DraftResult(null);
+          setAppScreen("DRAFT_BATTLE");
+        }}
+        onMenu={() => setAppScreen("HOME")}
       />
     );
   }
@@ -144,11 +173,9 @@ export default function App() {
   if (state.phase === "DRAFT" && state.draft && !state.draft.coinFlipped) {
     return (
       <div style={{ position: "relative" }}>
-        {/* Draft screen rendered underneath, visually blurred */}
         <div style={{ filter: "blur(3px)", pointerEvents: "none", userSelect: "none" }}>
           <DraftScreen state={state} onSend={() => {}} playerNames={playerNames} playerIcons={playerIcons} />
         </div>
-        {/* Coin flip as a translucent overlay */}
         <div style={{ position: "fixed", inset: 0, zIndex: 50 }}>
           <CoinFlipScreen onFlip={firstPicker => send({ type: "FLIP_COIN", firstPicker })} playerNames={playerNames} playerIcons={playerIcons} onHome={() => { setKey(k => k + 1); setAppScreen("HOME"); }} />
         </div>
@@ -156,27 +183,12 @@ export default function App() {
     );
   }
 
-  if (state.phase === "DRAFT") {
-    return <DraftScreen state={state} onSend={send} playerNames={playerNames} playerIcons={playerIcons} />;
-  }
+  if (state.phase === "DRAFT")      return <DraftScreen    state={state} onSend={send} playerNames={playerNames} playerIcons={playerIcons} />;
+  if (state.phase === "REVEAL")     return <RevealScreen   state={state} onSend={send} playerNames={playerNames} />;
+  if (state.phase === "AUGMENT")    return <AugmentScreen  state={state} onSend={send} playerNames={playerNames} playerIcons={playerIcons} />;
+  if (state.phase === "LOCKED_IN")  return <LockedInScreen state={state} onSend={send} playerNames={playerNames} />;
+  if (state.phase === "RESOLUTION") return <ResolutionScreen state={state} playerNames={playerNames} playerIcons={playerIcons} onRestart={recordAndRestart} />;
 
-  if (state.phase === "REVEAL") {
-    return <RevealScreen state={state} onSend={send} playerNames={playerNames} />;
-  }
-
-  if (state.phase === "AUGMENT") {
-    return <AugmentScreen state={state} onSend={send} playerNames={playerNames} playerIcons={playerIcons} />;
-  }
-
-  if (state.phase === "LOCKED_IN") {
-    return <LockedInScreen state={state} onSend={send} playerNames={playerNames} />;
-  }
-
-  if (state.phase === "RESOLUTION") {
-    return <ResolutionScreen state={state} playerNames={playerNames} playerIcons={playerIcons} onRestart={recordAndRestart} />;
-  }
-
-  // PLACEMENT + LOCK_IN phases
   return (
     <PlacementScreen
       state={state}

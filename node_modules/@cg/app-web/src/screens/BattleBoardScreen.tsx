@@ -1,18 +1,3 @@
-/**
- * BattleBoardScreen — Hearthstone-style local combat board.
- *
- * Cards are rendered with the full CharacterCard component (real art + rarity effects).
- * Battle stats (ATK / HP / cost) are overlaid on each card as translucent bars.
- *
- * Layout:
- *   ┌─────────────────────────────────┐
- *   │  Opponent leader + board (top)  │
- *   │  ─────── center info ─────────  │
- *   │  Active player board (bottom)   │
- *   │  Active player hand             │
- *   └─────────────────────────────────┘
- */
-
 import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { PlayerId, CardDef } from "@cg/contracts";
@@ -22,34 +7,43 @@ import type { PlayerDraftResult } from "./DraftBattleScreen";
 import CharacterCard from "../components/CharacterCard";
 import PlayerIcon from "../components/PlayerIcon";
 
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Props
+// Layout overview:
+//
+//  ┌─────────────────────────────────────────┐
+//  │  [Opponent Leader — centered, top]       │  oppLeader row
+//  │  ──────────── opponent board ───────────  │  oppBoard row  (flex 1)
+//  │  ═══════════ CENTER INFO BAR ═══════════  │  infoBar
+//  │  ──────────── player board ─────────────  │  myBoard row   (flex 1)
+//  │  [My Leader — centered, bottom]          │  myLeader row
+//  │  [Hand]                                  │  hand row
+//  └─────────────────────────────────────────┘
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface Props {
   p1Draft: PlayerDraftResult;
   p2Draft: PlayerDraftResult;
   cardDb: Record<string, CardDef>;
-  p1Name: string;
-  p2Name: string;
-  p1Icon: string;
-  p2Icon: string;
-  onGameOver: (winner: PlayerId) => void;
+  p1Name: string; p2Name: string;
+  p1Icon: string; p2Icon: string;
+  onGameOver: (winner: PlayerId, turnCount: number) => void;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// BoardCardView — CharacterCard with battle-stat overlay
-// ─────────────────────────────────────────────────────────────────────────────
-
+// ── BoardCardView ─────────────────────────────────────────────────────────────
 function BoardCardView({
-  card, cardDb, selected, targetable, onClick, flipped,
+  card, cardDb, selected, targetable, onClick,
 }: {
-  card: BattleCard;
-  cardDb: Record<string, CardDef>;
-  selected?: boolean;
-  targetable?: boolean;
-  onClick?: () => void;
-  flipped?: boolean;
+  card: BattleCard; cardDb: Record<string, CardDef>;
+  selected?: boolean; targetable?: boolean; onClick?: () => void;
 }) {
   const def = cardDb[card.defId];
   const hpPct   = Math.max(0, Math.min(100, (card.currentHp / card.maxHp) * 100));
@@ -60,69 +54,69 @@ function BoardCardView({
       onClick={onClick}
       animate={{
         scale: selected ? 1.08 : 1,
-        filter: targetable ? "brightness(1.15)" : card.exhausted ? "brightness(0.6) saturate(0.5)" : "brightness(1)",
+        filter: targetable
+          ? "brightness(1.2) drop-shadow(0 0 8px #ff4444)"
+          : card.exhausted
+          ? "brightness(0.5) saturate(0.35)"
+          : "brightness(1)",
       }}
-      whileHover={onClick ? { y: -6, scale: selected ? 1.1 : 1.06 } : undefined}
+      whileHover={onClick ? { y: -8, scale: selected ? 1.1 : 1.07 } : undefined}
       whileTap={onClick ? { scale: 0.96 } : undefined}
-      transition={{ type: "spring", stiffness: 380, damping: 22 }}
-      style={{
-        position: "relative",
-        cursor: onClick ? "pointer" : "default",
-        userSelect: "none",
-        transform: flipped ? "scaleY(-1)" : undefined,
-      }}
+      transition={{ type: "spring", stiffness: 400, damping: 22 }}
+      style={{ position: "relative", cursor: onClick ? "pointer" : "default", userSelect: "none" }}
     >
       <CharacterCard defId={card.defId} def={def} size="xs" noHover />
 
-      {/* ATK / HP stat bar over bottom of card */}
+      {/* Stat bar */}
       <div style={{
         position: "absolute", bottom: 22, left: 0, right: 0,
-        display: "flex", justifyContent: "space-around", alignItems: "center",
-        padding: "2px 4px",
-        background: "rgba(0,0,0,0.72)",
-        backdropFilter: "blur(2px)",
-        transform: flipped ? "scaleY(-1)" : undefined,
+        display: "flex", justifyContent: "space-around", padding: "2px 4px",
+        background: "rgba(0,0,0,0.75)", backdropFilter: "blur(2px)",
       }}>
-        <span style={{ fontSize: 10, fontWeight: 900, color: "#ff7755" }}>⚔{card.atk}</span>
+        <span style={{ fontSize: 10, fontWeight: 900, color: "#ff8855" }}>⚔{card.atk}</span>
         <span style={{ fontSize: 10, fontWeight: 900, color: hpColor }}>♥{card.currentHp}</span>
       </div>
 
-      {/* HP bar at very bottom */}
-      <div style={{
-        position: "absolute", bottom: 2, left: 4, right: 4, height: 3,
-        background: "#111", borderRadius: 2,
-        transform: flipped ? "scaleY(-1)" : undefined,
-      }}>
+      {/* HP bar */}
+      <div style={{ position: "absolute", bottom: 2, left: 4, right: 4, height: 3, background: "#111", borderRadius: 2 }}>
         <motion.div
-          animate={{ width: `${hpPct}%` }}
-          transition={{ duration: 0.3 }}
+          animate={{ width: `${hpPct}%` }} transition={{ duration: 0.3 }}
           style={{ height: "100%", background: hpColor, borderRadius: 2 }}
         />
       </div>
 
-      {/* Stun badge */}
-      {card.stunTurns > 0 && (
+      {/* Taunt shield */}
+      {card.hasTaunt && (
         <div style={{
-          position: "absolute", top: 4, left: 4,
-          background: "#4488ff", borderRadius: 3,
-          fontSize: 7, fontWeight: 900, padding: "1px 4px", color: "#fff",
-          transform: flipped ? "scaleY(-1)" : undefined,
-        }}>STUN {card.stunTurns}</div>
+          position: "absolute", top: 3, left: 3,
+          background: "rgba(60,130,255,0.88)", borderRadius: 4,
+          fontSize: 7, fontWeight: 900, padding: "1px 5px", color: "#fff",
+          border: "1px solid #6af", letterSpacing: 0.5,
+        }}>🛡 TAUNT</div>
       )}
 
-      {/* Selection ring (yellow = attacker selected) */}
+      {/* Stun */}
+      {card.stunTurns > 0 && (
+        <div style={{
+          position: "absolute", top: card.hasTaunt ? 18 : 3, right: 3,
+          background: "#4488ff", borderRadius: 3,
+          fontSize: 7, fontWeight: 900, padding: "1px 4px", color: "#fff",
+        }}>STUN</div>
+      )}
+
+      {/* Selection ring */}
       {selected && (
         <motion.div
-          animate={{ boxShadow: ["0 0 0 3px #ffcc00, 0 0 16px #ffcc0088", "0 0 0 3px #ffcc00, 0 0 28px #ffcc00cc"] }}
+          animate={{ boxShadow: ["0 0 0 3px #ffcc00, 0 0 14px #ffcc0077", "0 0 0 3px #ffcc00, 0 0 26px #ffcc00bb"] }}
           transition={{ duration: 0.7, repeat: Infinity, repeatType: "reverse" }}
           style={{ position: "absolute", inset: -2, borderRadius: 12, pointerEvents: "none" }}
         />
       )}
 
-      {/* Target ring (red = attackable) */}
+      {/* Target ring */}
       {targetable && !selected && (
         <motion.div
-          animate={{ boxShadow: ["0 0 0 3px #ff4444, 0 0 14px #ff444488", "0 0 0 3px #ff6666, 0 0 22px #ff4444cc"] }}
+          animate={{ boxShadow: ["0 0 0 3px #ff4444, 0 0 12px #ff444477", "0 0 0 3px #ff6666, 0 0 20px #ff4444aa"] }}
           transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
           style={{ position: "absolute", inset: -2, borderRadius: 12, pointerEvents: "none" }}
         />
@@ -131,18 +125,12 @@ function BoardCardView({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HandCardView — CharacterCard with cost badge + stat strip
-// ─────────────────────────────────────────────────────────────────────────────
-
+// ── HandCardView ──────────────────────────────────────────────────────────────
 function HandCardView({
   card, cardDb, energy, costReduction, onPlay,
 }: {
-  card: BattleCard;
-  cardDb: Record<string, CardDef>;
-  energy: number;
-  costReduction: number;
-  onPlay: () => void;
+  card: BattleCard; cardDb: Record<string, CardDef>;
+  energy: number; costReduction: number; onPlay: () => void;
 }) {
   const def = cardDb[card.defId];
   const cost = Math.max(0, card.cost - costReduction);
@@ -153,252 +141,247 @@ function HandCardView({
   return (
     <motion.div
       onClick={canAfford ? onPlay : undefined}
-      whileHover={canAfford ? { y: -10, scale: 1.08 } : { y: -2 }}
+      whileHover={canAfford ? { y: -14, scale: 1.1 } : { y: -2, opacity: 0.7 }}
       whileTap={canAfford ? { scale: 0.96 } : undefined}
-      transition={{ type: "spring", stiffness: 380, damping: 22 }}
-      style={{
-        position: "relative",
-        cursor: canAfford ? "pointer" : "not-allowed",
-        userSelect: "none",
-        flexShrink: 0,
-      }}
+      transition={{ type: "spring", stiffness: 400, damping: 22 }}
+      style={{ position: "relative", cursor: canAfford ? "pointer" : "not-allowed", userSelect: "none", flexShrink: 0 }}
     >
       <CharacterCard defId={card.defId} def={def} size="s" noHover dimmed={!canAfford} />
 
-      {/* Cost badge top-right */}
+      {/* Cost badge */}
       <div style={{
-        position: "absolute", top: -8, right: -8,
-        width: 22, height: 22, borderRadius: "50%",
-        background: canAfford ? "#4ae" : "#333",
-        border: `2px solid ${canAfford ? "#4aeecc" : "#444"}`,
+        position: "absolute", top: -10, right: -10,
+        width: 26, height: 26, borderRadius: "50%",
+        background: canAfford ? "#4aeecc" : "#222",
+        border: `2px solid ${canAfford ? "#2af" : "#333"}`,
         display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 10, fontWeight: 900, color: canAfford ? "#000" : "#666",
-        boxShadow: canAfford ? "0 0 8px #4aeecc88" : "none",
+        fontSize: 12, fontWeight: 900, color: canAfford ? "#001a16" : "#555",
+        boxShadow: canAfford ? "0 0 12px #4aeecc99" : "none",
       }}>{cost}</div>
 
-      {/* ATK/HP overlay */}
+      {/* Stat bar */}
       <div style={{
         position: "absolute", bottom: 22, left: 0, right: 0,
-        display: "flex", justifyContent: "space-around",
-        padding: "2px 4px",
-        background: "rgba(0,0,0,0.75)",
-        backdropFilter: "blur(2px)",
+        display: "flex", justifyContent: "space-around", padding: "2px 4px",
+        background: "rgba(0,0,0,0.78)", backdropFilter: "blur(2px)",
       }}>
-        <span style={{ fontSize: 10, fontWeight: 900, color: "#ff7755" }}>⚔{card.atk}</span>
+        <span style={{ fontSize: 10, fontWeight: 900, color: "#ff8855" }}>⚔{card.atk}</span>
         <span style={{ fontSize: 10, fontWeight: 900, color: hpColor }}>♥{card.currentHp}</span>
       </div>
 
       {/* HP bar */}
       <div style={{ position: "absolute", bottom: 2, left: 4, right: 4, height: 3, background: "#111", borderRadius: 2 }}>
         <motion.div
-          animate={{ width: `${hpPct}%` }}
-          transition={{ duration: 0.3 }}
+          animate={{ width: `${hpPct}%` }} transition={{ duration: 0.3 }}
           style={{ height: "100%", background: hpColor, borderRadius: 2 }}
         />
       </div>
+
+      {card.hasTaunt && (
+        <div style={{
+          position: "absolute", top: 3, left: 3,
+          background: "rgba(60,130,255,0.8)", borderRadius: 3,
+          fontSize: 6, fontWeight: 900, padding: "1px 4px", color: "#fff",
+        }}>🛡</div>
+      )}
     </motion.div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LeaderView — uses PlayerIcon for avatar, card art for the leader card
-// ─────────────────────────────────────────────────────────────────────────────
-
-function LeaderView({
+// ── CenteredLeader — the leader shown at top or bottom of board ───────────────
+function CenteredLeader({
   leader, cardDb, playerName, playerIcon,
-  flipped, selected, targetable, energy, maxEnergy,
-  domainMeter, showDomainBtn,
+  selected, targetable,
+  energy, maxEnergy, domainMeter, showDomainBtn,
   onSelect, onDomainActivate,
+  isTop,
 }: {
-  leader: BattleCard;
-  cardDb: Record<string, CardDef>;
-  playerName: string;
-  playerIcon: string;
-  flipped?: boolean;
-  selected?: boolean;
-  targetable?: boolean;
-  energy?: number;
-  maxEnergy?: number;
-  domainMeter?: number;
-  showDomainBtn?: boolean;
-  onSelect?: () => void;
-  onDomainActivate?: () => void;
+  leader: BattleCard; cardDb: Record<string, CardDef>;
+  playerName: string; playerIcon: string;
+  selected?: boolean; targetable?: boolean;
+  energy?: number; maxEnergy?: number;
+  domainMeter?: number; showDomainBtn?: boolean;
+  onSelect?: () => void; onDomainActivate?: () => void;
+  isTop: boolean;
 }) {
   const def = cardDb[leader.defId];
   const hpPct   = Math.max(0, Math.min(100, (leader.currentHp / leader.maxHp) * 100));
   const hpColor = hpPct > 50 ? "#44ff88" : hpPct > 25 ? "#ffcc00" : "#ff4444";
   const meterFull = (domainMeter ?? 0) >= 100;
+  const isActivePlayer = energy !== undefined;
 
   return (
     <div style={{
-      display: "flex", flexDirection: flipped ? "column-reverse" : "column",
-      alignItems: "center", gap: 6, flexShrink: 0,
+      display: "flex",
+      flexDirection: isTop ? "column" : "column-reverse",
+      alignItems: "center",
+      gap: 6,
+      padding: isTop ? "8px 0 4px" : "4px 0 8px",
     }}>
-      {/* Player name + icon */}
+      {/* Name + icon row */}
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <div style={{ borderRadius: 6, overflow: "hidden", border: "1px solid #333" }}>
-          <PlayerIcon icon={playerIcon} size={20} style={{ display: "block" }} />
+          <PlayerIcon icon={playerIcon} size={22} style={{ display: "block" }} />
         </div>
-        <span style={{ fontSize: 9, color: "#888", letterSpacing: 1 }}>{playerName}</span>
+        <span style={{ fontSize: 10, color: "#778", letterSpacing: 1, fontWeight: 600 }}>{playerName}</span>
+        {/* HP indicator next to name */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 4,
+          background: "rgba(0,0,0,0.5)", borderRadius: 6, padding: "2px 8px",
+          border: `1px solid ${hpColor}44`,
+        }}>
+          <span style={{ fontSize: 10, fontWeight: 900, color: "#ff8855" }}>⚔{leader.atk}</span>
+          <span style={{ fontSize: 10, color: "#334" }}>·</span>
+          <span style={{ fontSize: 10, fontWeight: 900, color: hpColor }}>♥{leader.currentHp}/{leader.maxHp}</span>
+        </div>
+        {leader.stunTurns > 0 && (
+          <div style={{ background: "#4488ff", borderRadius: 4, fontSize: 8, fontWeight: 900, padding: "1px 6px", color: "#fff" }}>
+            STUN
+          </div>
+        )}
       </div>
 
-      {/* Leader card with overlays */}
-      <motion.div
-        onClick={onSelect}
-        whileHover={onSelect ? { scale: 1.05, y: -4 } : undefined}
-        whileTap={onSelect ? { scale: 0.96 } : undefined}
-        style={{
-          position: "relative", cursor: onSelect ? "pointer" : "default",
-          userSelect: "none",
-          transform: flipped ? "scaleY(-1)" : undefined,
-        }}
-      >
-        <CharacterCard defId={leader.defId} def={def} size="sm" noHover />
+      {/* Leader card + rings */}
+      <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+        {/* Energy/Domain panel — only for active player, shown to the left of their leader */}
+        {isActivePlayer && !isTop && (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, width: 110 }}>
+            {/* Energy header */}
+            <div style={{ fontSize: 9, color: "#4aeecc", fontWeight: 800, letterSpacing: 1 }}>
+              ⚡ ENERGY {energy}/{maxEnergy}
+            </div>
 
-        {/* Stat overlay */}
-        <div style={{
-          position: "absolute", bottom: 26, left: 0, right: 0,
-          display: "flex", justifyContent: "space-around", padding: "2px 4px",
-          background: "rgba(0,0,0,0.75)", backdropFilter: "blur(2px)",
-          transform: flipped ? "scaleY(-1)" : undefined,
-        }}>
-          <span style={{ fontSize: 10, fontWeight: 900, color: "#ff7755" }}>⚔{leader.atk}</span>
-          <span style={{ fontSize: 10, fontWeight: 900, color: hpColor }}>♥{leader.currentHp}</span>
-        </div>
+            {/* Crystal grid */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "center" }}>
+              {Array.from({ length: maxEnergy ?? 0 }).map((_, i) => (
+                <motion.div
+                  key={i}
+                  animate={i < (energy ?? 0)
+                    ? { boxShadow: ["0 0 4px #4aeecc66", "0 0 10px #4aeecc", "0 0 4px #4aeecc66"] }
+                    : {}}
+                  transition={{ duration: 1.6, repeat: Infinity, delay: i * 0.07 }}
+                  style={{
+                    width: 14, height: 14, borderRadius: 3,
+                    background: i < (energy ?? 0)
+                      ? "linear-gradient(135deg, #2af 0%, #4aeecc 100%)"
+                      : "#0d0d18",
+                    border: `1px solid ${i < (energy ?? 0) ? "#4aeecc" : "#1e1e2e"}`,
+                    transition: "background 0.2s, border-color 0.2s",
+                  }}
+                />
+              ))}
+            </div>
 
-        {/* HP bar */}
-        <div style={{
-          position: "absolute", bottom: 2, left: 4, right: 4, height: 4,
-          background: "#111", borderRadius: 2,
-          transform: flipped ? "scaleY(-1)" : undefined,
-        }}>
-          <motion.div
-            animate={{ width: `${hpPct}%` }}
-            transition={{ duration: 0.35 }}
-            style={{ height: "100%", background: hpColor, borderRadius: 2 }}
-          />
-        </div>
-
-        {/* LEADER badge */}
-        <div style={{
-          position: "absolute", top: 4, left: 4,
-          fontSize: 7, fontWeight: 900, letterSpacing: 1,
-          background: "rgba(255,200,0,0.85)", color: "#000",
-          padding: "1px 5px", borderRadius: 3,
-          transform: flipped ? "scaleY(-1)" : undefined,
-        }}>LEADER</div>
-
-        {/* Selection/target rings */}
-        {selected && (
-          <motion.div
-            animate={{ boxShadow: ["0 0 0 3px #ffcc00, 0 0 20px #ffcc0099", "0 0 0 3px #ffcc00, 0 0 32px #ffcc00cc"] }}
-            transition={{ duration: 0.7, repeat: Infinity, repeatType: "reverse" }}
-            style={{ position: "absolute", inset: -3, borderRadius: 14, pointerEvents: "none" }}
-          />
+            {/* Domain meter */}
+            <div style={{ width: "100%" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                <span style={{ fontSize: 7, color: meterFull ? "#cc44ff" : "#2a2a3a", letterSpacing: 1 }}>DOMAIN</span>
+                <span style={{ fontSize: 7, color: meterFull ? "#cc44ff" : "#2a2a3a" }}>{domainMeter ?? 0}%</span>
+              </div>
+              <div style={{ height: 7, background: "#090912", borderRadius: 4, overflow: "hidden", border: "1px solid #1a1a2e" }}>
+                <motion.div
+                  animate={{ width: `${domainMeter ?? 0}%` }} transition={{ duration: 0.4 }}
+                  style={{
+                    height: "100%",
+                    background: meterFull
+                      ? "linear-gradient(90deg, #cc44ff, #ff44cc)"
+                      : "linear-gradient(90deg, #3a1070, #5a1eaa)",
+                    borderRadius: 4,
+                    boxShadow: meterFull ? "0 0 8px #cc44ffaa" : "none",
+                  }}
+                />
+              </div>
+              {showDomainBtn && meterFull && (
+                <motion.button
+                  onClick={onDomainActivate}
+                  animate={{ boxShadow: ["0 0 10px #cc44ff77", "0 0 22px #cc44ffbb", "0 0 10px #cc44ff77"] }}
+                  transition={{ duration: 1.2, repeat: Infinity }}
+                  style={{
+                    width: "100%", marginTop: 5,
+                    background: "linear-gradient(135deg, #3a0066, #7700bb)",
+                    border: "2px solid #cc44ff", borderRadius: 8,
+                    color: "#fff", fontSize: 9, fontWeight: 900, letterSpacing: 2,
+                    padding: "5px 0", cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >✦ DOMAIN</motion.button>
+              )}
+            </div>
+          </div>
         )}
-        {targetable && !selected && (
-          <motion.div
-            animate={{ boxShadow: ["0 0 0 3px #ff4444, 0 0 18px #ff444488", "0 0 0 3px #ff6666, 0 0 28px #ff4444cc"] }}
-            transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
-            style={{ position: "absolute", inset: -3, borderRadius: 14, pointerEvents: "none" }}
-          />
-        )}
 
-        {/* Stun */}
-        {leader.stunTurns > 0 && (
+        {/* The leader card itself */}
+        <motion.div
+          onClick={onSelect}
+          whileHover={onSelect ? { scale: 1.07, y: isTop ? 4 : -4 } : undefined}
+          whileTap={onSelect ? { scale: 0.96 } : undefined}
+          style={{ position: "relative", cursor: onSelect ? "pointer" : "default", userSelect: "none" }}
+        >
+          <CharacterCard defId={leader.defId} def={def} size="sm" noHover />
+
+          {/* LEADER badge */}
           <div style={{
-            position: "absolute", top: 4, right: 4,
-            background: "#4488ff", borderRadius: 3,
-            fontSize: 7, fontWeight: 900, padding: "1px 4px", color: "#fff",
-            transform: flipped ? "scaleY(-1)" : undefined,
-          }}>STUN</div>
-        )}
-      </motion.div>
+            position: "absolute", top: 4, left: 4,
+            fontSize: 7, fontWeight: 900, letterSpacing: 1,
+            background: "rgba(255,200,0,0.88)", color: "#000",
+            padding: "1px 6px", borderRadius: 3,
+          }}>LEADER</div>
 
-      {/* Energy + domain (active player only) */}
-      {energy !== undefined && (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-          {/* Energy crystals */}
-          <div style={{ display: "flex", gap: 3, flexWrap: "wrap", maxWidth: 110, justifyContent: "center" }}>
-            {Array.from({ length: maxEnergy ?? 0 }).map((_, i) => (
-              <div key={i} style={{
-                width: 9, height: 9, borderRadius: "50%",
-                background: i < (energy ?? 0) ? "#4ae" : "#222",
-                border: "1px solid #335",
-                boxShadow: i < (energy ?? 0) ? "0 0 5px #4aeecc88" : "none",
-              }} />
-            ))}
+          {/* HP bar at bottom of card */}
+          <div style={{ position: "absolute", bottom: 2, left: 4, right: 4, height: 4, background: "#111", borderRadius: 2 }}>
+            <motion.div
+              animate={{ width: `${hpPct}%` }} transition={{ duration: 0.35 }}
+              style={{ height: "100%", background: hpColor, borderRadius: 2 }}
+            />
           </div>
-          <div style={{ fontSize: 8, color: "#556", letterSpacing: 1 }}>{energy}/{maxEnergy} ENERGY</div>
 
-          {/* Domain meter */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-            <div style={{ width: 90, height: 5, background: "#111", borderRadius: 3, overflow: "hidden" }}>
-              <motion.div
-                animate={{ width: `${domainMeter ?? 0}%` }}
-                transition={{ duration: 0.4 }}
-                style={{
-                  height: "100%",
-                  background: meterFull
-                    ? "linear-gradient(90deg, #cc44ff, #ff44cc)"
-                    : "linear-gradient(90deg, #5522aa, #8833dd)",
-                  borderRadius: 3,
-                  boxShadow: meterFull ? "0 0 8px #cc44ffaa" : "none",
-                }}
-              />
-            </div>
-            <div style={{ fontSize: 7, color: meterFull ? "#cc44ff" : "#444", letterSpacing: 1 }}>
-              DOMAIN {domainMeter ?? 0}/100
-            </div>
-            {showDomainBtn && meterFull && (
-              <motion.button
-                onClick={onDomainActivate}
-                animate={{ boxShadow: ["0 0 10px #cc44ff88", "0 0 22px #cc44ffcc", "0 0 10px #cc44ff88"] }}
-                transition={{ duration: 1.2, repeat: Infinity }}
-                style={{
-                  background: "linear-gradient(135deg, #4a0080, #8800cc)",
-                  border: "2px solid #cc44ff",
-                  borderRadius: 8, color: "#fff", fontSize: 8,
-                  fontWeight: 900, letterSpacing: 2, padding: "4px 10px",
-                  cursor: "pointer", fontFamily: "inherit",
-                }}
-              >DOMAIN</motion.button>
-            )}
-          </div>
-        </div>
-      )}
+          {/* Selection ring */}
+          {selected && (
+            <motion.div
+              animate={{ boxShadow: ["0 0 0 3px #ffcc00, 0 0 18px #ffcc0088", "0 0 0 3px #ffcc00, 0 0 30px #ffcc00cc"] }}
+              transition={{ duration: 0.7, repeat: Infinity, repeatType: "reverse" }}
+              style={{ position: "absolute", inset: -3, borderRadius: 14, pointerEvents: "none" }}
+            />
+          )}
+
+          {/* Target ring */}
+          {targetable && !selected && (
+            <motion.div
+              animate={{ boxShadow: ["0 0 0 3px #ff4444, 0 0 16px #ff444477", "0 0 0 3px #ff6666, 0 0 26px #ff4444aa"] }}
+              transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
+              style={{ position: "absolute", inset: -3, borderRadius: 14, pointerEvents: "none" }}
+            />
+          )}
+        </motion.div>
+
+        {/* Spacer to balance the energy panel on the other side */}
+        {isActivePlayer && !isTop && <div style={{ width: 110 }} />}
+      </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Board row — 5 slots
-// ─────────────────────────────────────────────────────────────────────────────
-
+// ── Board row (5 slots) ───────────────────────────────────────────────────────
 function BoardRow({
-  board, cardDb, pendingId, targeting, myBoard, flipped,
+  board, cardDb, pendingId, targeting, myBoard,
   onSelectCard, onTargetCard,
 }: {
   board: (BattleCard | null)[];
   cardDb: Record<string, CardDef>;
-  pendingId: string | null;
-  targeting: boolean;
-  myBoard: boolean;
-  flipped?: boolean;
-  onSelectCard?: (id: string) => void;
-  onTargetCard?: (id: string) => void;
+  pendingId: string | null; targeting: boolean; myBoard: boolean;
+  onSelectCard?: (id: string) => void; onTargetCard?: (id: string) => void;
 }) {
   return (
-    <div style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "flex-end", minHeight: 115 }}>
+    <div style={{
+      display: "flex", gap: 10, justifyContent: "center", alignItems: "center",
+      flex: 1, minHeight: 108, padding: "0 8px",
+    }}>
       {board.map((card, i) => (
         <div key={i} style={{ width: 72 }}>
           {card ? (
             <BoardCardView
-              card={card}
-              cardDb={cardDb}
+              card={card} cardDb={cardDb}
               selected={pendingId === card.instanceId}
               targetable={targeting && !myBoard}
-              flipped={flipped}
               onClick={() => {
                 if (myBoard && onSelectCard) onSelectCard(card.instanceId);
                 else if (!myBoard && onTargetCard) onTargetCard(card.instanceId);
@@ -407,8 +390,8 @@ function BoardRow({
           ) : (
             <div style={{
               width: 72, height: 103,
-              border: "1px dashed #1a1a2a", borderRadius: 10,
-              background: "rgba(255,255,255,0.01)",
+              border: `1px dashed ${myBoard ? "#1a2a1a" : "#1a1a2a"}`,
+              borderRadius: 10, background: "rgba(255,255,255,0.005)",
             }} />
           )}
         </div>
@@ -417,101 +400,42 @@ function BoardRow({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Hand row
-// ─────────────────────────────────────────────────────────────────────────────
-
-function HandRow({
-  hand, cardDb, energy, costReduction, onPlay,
-}: {
-  hand: BattleCard[];
-  cardDb: Record<string, CardDef>;
-  energy: number;
-  costReduction: number;
-  onPlay: (id: string) => void;
-}) {
-  return (
-    <div style={{
-      display: "flex", gap: 10, justifyContent: "center",
-      padding: "12px 24px", overflowX: "auto",
-      background: "rgba(0,0,0,0.45)", borderTop: "1px solid #141428",
-      minHeight: 145,
-    }}>
-      {hand.map(card => (
-        <HandCardView
-          key={card.instanceId}
-          card={card}
-          cardDb={cardDb}
-          energy={energy}
-          costReduction={costReduction}
-          onPlay={() => onPlay(card.instanceId)}
-        />
-      ))}
-      {hand.length === 0 && (
-        <div style={{ color: "#333", fontSize: 10, letterSpacing: 2, alignSelf: "center" }}>
-          NO CARDS IN HAND
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Handoff overlay
-// ─────────────────────────────────────────────────────────────────────────────
-
+// ── Handoff overlay ───────────────────────────────────────────────────────────
 function HandoffOverlay({ name, icon, onReady }: { name: string; icon: string; onReady: () => void }) {
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       style={{
         position: "fixed", inset: 0, zIndex: 100,
         background: "rgba(2,2,10,0.97)",
-        display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center",
-        gap: 24,
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 24,
       }}
     >
       <motion.div
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.15 }}
-        style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}
+        initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.15 }}
+        style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}
       >
-        <div style={{ fontSize: 11, letterSpacing: 6, color: "#445", marginBottom: 4 }}>TURN END</div>
+        <div style={{ fontSize: 11, letterSpacing: 6, color: "#334" }}>TURN END</div>
         <motion.div
-          animate={{ boxShadow: ["0 0 24px #ffcc0044", "0 0 40px #ffcc0088", "0 0 24px #ffcc0044"] }}
+          animate={{ boxShadow: ["0 0 24px #ffcc0033", "0 0 48px #ffcc0077", "0 0 24px #ffcc0033"] }}
           transition={{ duration: 1.4, repeat: Infinity }}
-          style={{ borderRadius: "50%", overflow: "hidden", border: "3px solid #ffcc0066" }}
+          style={{ borderRadius: "50%", overflow: "hidden", border: "3px solid #ffcc0055" }}
         >
-          <PlayerIcon icon={icon} size={72} style={{ display: "block" }} />
+          <PlayerIcon icon={icon} size={80} style={{ display: "block" }} />
         </motion.div>
-        <div style={{ fontSize: 32, fontWeight: 900, letterSpacing: 4, color: "#fff" }}>
-          PASS TO
-        </div>
-        <div style={{ fontSize: 36, fontWeight: 900, color: "#ffcc00", letterSpacing: 2 }}>
-          {name}
-        </div>
-        <div style={{ fontSize: 9, color: "#445", letterSpacing: 3, marginTop: 4 }}>
-          COVER YOUR SCREEN, THEN CONTINUE
-        </div>
+        <div style={{ fontSize: 34, fontWeight: 900, letterSpacing: 4, color: "#fff" }}>PASS TO</div>
+        <div style={{ fontSize: 40, fontWeight: 900, color: "#ffcc00", letterSpacing: 2 }}>{name}</div>
+        <div style={{ fontSize: 9, color: "#334", letterSpacing: 4 }}>COVER YOUR SCREEN, THEN CONTINUE</div>
       </motion.div>
-
       <motion.button
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ delay: 0.55 }}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
+        initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.6 }}
+        whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
         onClick={onReady}
         style={{
-          padding: "14px 48px",
+          padding: "14px 52px",
           background: "linear-gradient(135deg, #1a1a3a, #2a1a4a)",
-          border: "2px solid #4a4a7a",
-          borderRadius: 12, color: "#aaa",
-          fontSize: 13, fontWeight: 900, letterSpacing: 4,
+          border: "2px solid #4a4a7a", borderRadius: 12,
+          color: "#aaa", fontSize: 13, fontWeight: 900, letterSpacing: 4,
           cursor: "pointer", fontFamily: "inherit",
         }}
       >I'M READY →</motion.button>
@@ -519,10 +443,7 @@ function HandoffOverlay({ name, icon, onReady }: { name: string; icon: string; o
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Domain activation flash
-// ─────────────────────────────────────────────────────────────────────────────
-
+// ── Domain flash ──────────────────────────────────────────────────────────────
 function DomainFlash({ name, onDone }: { name: string; onDone: () => void }) {
   useEffect(() => { const t = setTimeout(onDone, 2200); return () => clearTimeout(t); }, [onDone]);
   return (
@@ -532,7 +453,7 @@ function DomainFlash({ name, onDone }: { name: string; onDone: () => void }) {
       transition={{ duration: 2.2, times: [0, 0.08, 0.85, 1] }}
       style={{
         position: "fixed", inset: 0, zIndex: 200,
-        background: "radial-gradient(ellipse at center, #6600cc44 0%, transparent 70%)",
+        background: "radial-gradient(ellipse at center, #6600cc55 0%, transparent 70%)",
         display: "flex", alignItems: "center", justifyContent: "center",
         pointerEvents: "none",
       }}
@@ -543,11 +464,9 @@ function DomainFlash({ name, onDone }: { name: string; onDone: () => void }) {
         transition={{ duration: 0.5, ease: "backOut" }}
         style={{ textAlign: "center" }}
       >
-        <div style={{ fontSize: 10, letterSpacing: 8, color: "#cc44ff", marginBottom: 8 }}>
-          DOMAIN EXPANSION
-        </div>
+        <div style={{ fontSize: 10, letterSpacing: 8, color: "#cc44ff", marginBottom: 10 }}>DOMAIN EXPANSION</div>
         <div style={{
-          fontSize: 38, fontWeight: 900, letterSpacing: 3, color: "#fff",
+          fontSize: 42, fontWeight: 900, letterSpacing: 3, color: "#fff",
           textShadow: "0 0 40px #cc44ffcc, 0 0 80px #8800aa88",
         }}>{name}</div>
       </motion.div>
@@ -555,59 +474,47 @@ function DomainFlash({ name, onDone }: { name: string; onDone: () => void }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Game over overlay
-// ─────────────────────────────────────────────────────────────────────────────
-
+// ── Game over overlay ─────────────────────────────────────────────────────────
 function GameOverOverlay({ winnerName, winnerIcon, onDone }: {
   winnerName: string; winnerIcon: string; onDone: () => void;
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }}
       style={{
         position: "fixed", inset: 0, zIndex: 300,
-        background: "rgba(2,2,10,0.93)",
-        display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center",
-        gap: 24,
+        background: "rgba(2,2,10,0.95)",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 28,
       }}
     >
       <motion.div
-        initial={{ scale: 0.6, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
+        initial={{ scale: 0.6, y: 20 }} animate={{ scale: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 200, damping: 18, delay: 0.2 }}
-        style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}
+        style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}
       >
-        <div style={{ fontSize: 11, letterSpacing: 8, color: "#555", marginBottom: 4 }}>BATTLE OVER</div>
+        <div style={{ fontSize: 11, letterSpacing: 8, color: "#444" }}>BATTLE OVER</div>
         <motion.div
-          animate={{ boxShadow: ["0 0 24px #ffcc0055", "0 0 48px #ffcc0099", "0 0 24px #ffcc0055"] }}
+          animate={{ boxShadow: ["0 0 24px #ffcc0044", "0 0 56px #ffcc0099", "0 0 24px #ffcc0044"] }}
           transition={{ duration: 1.4, repeat: Infinity }}
-          style={{ borderRadius: "50%", overflow: "hidden", border: "3px solid #ffcc00" }}
+          style={{ borderRadius: "50%", overflow: "hidden", border: "3px solid #ffcc0088" }}
         >
-          <PlayerIcon icon={winnerIcon} size={80} style={{ display: "block" }} />
+          <PlayerIcon icon={winnerIcon} size={88} style={{ display: "block" }} />
         </motion.div>
         <div style={{
-          fontSize: 48, fontWeight: 900, color: "#ffcc00", letterSpacing: 3,
-          textShadow: "0 0 40px #ffcc0066",
+          fontSize: 52, fontWeight: 900, color: "#ffcc00", letterSpacing: 3,
+          textShadow: "0 0 40px #ffcc0077",
         }}>{winnerName}</div>
-        <div style={{ fontSize: 14, letterSpacing: 6, color: "#aaa" }}>WINS</div>
+        <div style={{ fontSize: 14, letterSpacing: 8, color: "#888" }}>WINS</div>
       </motion.div>
-
       <motion.button
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1.2 }}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }}
+        whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
         onClick={onDone}
         style={{
-          padding: "14px 48px",
+          padding: "14px 52px",
           background: "linear-gradient(135deg, #2a1a00, #4a3000)",
-          border: "2px solid #ffcc0088",
-          borderRadius: 12, color: "#ffcc00",
-          fontSize: 13, fontWeight: 900, letterSpacing: 4,
+          border: "2px solid #ffcc0077", borderRadius: 12,
+          color: "#ffcc00", fontSize: 13, fontWeight: 900, letterSpacing: 4,
           cursor: "pointer", fontFamily: "inherit",
         }}
       >CONTINUE</motion.button>
@@ -618,19 +525,37 @@ function GameOverOverlay({ winnerName, winnerIcon, onDone }: {
 // ─────────────────────────────────────────────────────────────────────────────
 // Main screen
 // ─────────────────────────────────────────────────────────────────────────────
-
 export default function BattleBoardScreen({
   p1Draft, p2Draft, cardDb,
   p1Name, p2Name, p1Icon, p2Icon,
   onGameOver,
 }: Props) {
-  const [engine] = useState(() =>
-    createBattleEngine(createBattleState(p1Draft, p2Draft, cardDb))
-  );
+  // Mulligan phase: players swap cards before battle starts
+  type MulliganStep = "P1" | "P2" | "BATTLE";
+  const [mulliganStep, setMulliganStep] = useState<MulliganStep>("P1");
+  const [mulliganReturning, setMulliganReturning] = useState<Set<string>>(new Set());
+
+  const [initialState] = useState(() => createBattleState(p1Draft, p2Draft, cardDb));
+  const [engine] = useState(() => createBattleEngine(initialState));
   const [battleState, setBattleState] = useState<BattleState>(() => engine.getState());
-  const [showHandoff, setShowHandoff] = useState<{ pid: PlayerId; name: string; icon: string } | null>(null);
   const [domainFlash, setDomainFlash] = useState<string | null>(null);
   const [gameOverShown, setGameOverShown] = useState(false);
+
+  const confirmMulligan = (pid: PlayerId) => {
+    // Swap selected cards back to deck, draw replacements
+    setBattleState(prev => {
+      const p = { ...prev.players[pid] };
+      const swapCount = mulliganReturning.size;
+      const kept  = p.hand.filter(c => !mulliganReturning.has(c.instanceId));
+      const going = p.hand.filter(c =>  mulliganReturning.has(c.instanceId));
+      const deck  = shuffle([...p.deck, ...going]);
+      const drawn = deck.slice(0, swapCount);
+      const rest  = deck.slice(swapCount);
+      return { ...prev, players: { ...prev.players, [pid]: { ...p, hand: [...kept, ...drawn], deck: rest } } };
+    });
+    setMulliganReturning(new Set());
+    setMulliganStep(pid === "P1" ? "P2" : "BATTLE");
+  };
 
   const dispatch = useCallback((intent: BattleIntent) => {
     const result = engine.apply(intent);
@@ -641,7 +566,6 @@ export default function BattleBoardScreen({
     }
   }, [engine]);
 
-  // Process initial DRAW phase on mount
   useEffect(() => {
     if (battleState.phase === "DRAW") {
       dispatch({ type: "END_TURN", pid: battleState.activePlayer });
@@ -652,32 +576,22 @@ export default function BattleBoardScreen({
   const handleEndTurn = () => {
     const pid = battleState.activePlayer;
     dispatch({ type: "END_TURN", pid });
-    const nextPid: PlayerId = pid === "P1" ? "P2" : "P1";
-    setShowHandoff({
-      pid: nextPid,
-      name: nextPid === "P1" ? p1Name : p2Name,
-      icon: nextPid === "P1" ? p1Icon : p2Icon,
-    });
   };
 
   const handlePlayCard = (instanceId: string) => {
     const pid = battleState.activePlayer;
-    const player = battleState.players[pid];
-    const slot = player.board.findIndex(s => s === null);
+    const slot = battleState.players[pid].board.findIndex(s => s === null);
     if (slot === -1) return;
     dispatch({ type: "PLAY_CARD", pid, instanceId, slot });
   };
 
   const handleSelectAttacker = (instanceId: string) => {
     const pid = battleState.activePlayer;
-    if (battleState.pendingAttackerId === instanceId) {
-      dispatch({ type: "CANCEL_ATTACK", pid });
-    } else {
-      dispatch({ type: "SELECT_ATTACKER", pid, instanceId });
-    }
+    if (battleState.pendingAttackerId === instanceId) dispatch({ type: "CANCEL_ATTACK", pid });
+    else dispatch({ type: "SELECT_ATTACKER", pid, instanceId });
   };
 
-  const handleTargetCard = (instanceId: string) => {
+  const handleTargetCard   = (instanceId: string) => {
     const pid = battleState.activePlayer;
     if (!battleState.pendingAttackerId) return;
     dispatch({ type: "ATTACK_CARD", pid, targetInstanceId: instanceId });
@@ -689,131 +603,206 @@ export default function BattleBoardScreen({
     dispatch({ type: "ATTACK_LEADER", pid });
   };
 
-  if (!battleState || battleState.phase === "DRAW") {
+  // ── Mulligan phase ──────────────────────────────────────────────────────────
+  if (mulliganStep !== "BATTLE") {
+    const mPid = mulliganStep as "P1" | "P2";
+    const mPlayer = battleState.players[mPid];
+    const mName   = mPid === "P1" ? p1Name : p2Name;
+    const mIcon   = mPid === "P1" ? p1Icon : p2Icon;
+    const mColor  = mPid === "P1" ? "#4a9eff" : "#ff6666";
     return (
       <div style={{
-        background: "#04040a", minHeight: "100vh",
-        display: "flex", alignItems: "center", justifyContent: "center",
+        minHeight: "100vh", background: "#04040a",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        gap: 32, padding: 32, fontFamily: "'Segoe UI', system-ui, sans-serif",
+        position: "relative", overflow: "hidden",
       }}>
-        <div style={{ color: "#556", letterSpacing: 4, fontSize: 12 }}>PREPARING BOARD…</div>
+        <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 50% 30%, #0a0a1a, #04040a)", zIndex: 0 }} />
+        <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 24 }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "center", marginBottom: 8 }}>
+              <div style={{ width: 36, height: 36, borderRadius: "50%", overflow: "hidden", border: `2px solid ${mColor}66` }}>
+                <img src={`/players/${mIcon}.jpg`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              </div>
+              <span style={{ fontSize: 14, color: mColor, letterSpacing: 3, fontWeight: 700 }}>{mName}</span>
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: 4, color: "#fff", marginBottom: 6 }}>MULLIGAN</div>
+            <div style={{ fontSize: 10, color: "#556", letterSpacing: 2 }}>
+              Tap cards to return them · Replacements drawn from your deck
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", justifyContent: "center" }}>
+            {mPlayer.hand.map(card => {
+              const def = cardDb[card.defId];
+              const returning = mulliganReturning.has(card.instanceId);
+              return (
+                <motion.div key={card.instanceId}
+                  onClick={() => setMulliganReturning(prev => {
+                    const next = new Set(prev);
+                    if (next.has(card.instanceId)) next.delete(card.instanceId);
+                    else next.add(card.instanceId);
+                    return next;
+                  })}
+                  whileHover={{ y: -8, scale: 1.05 }}
+                  whileTap={{ scale: 0.97 }}
+                  style={{ cursor: "pointer", position: "relative", opacity: returning ? 0.45 : 1 }}
+                >
+                  {def && <CharacterCard defId={card.defId} def={def} size="sm" />}
+                  {returning && (
+                    <div style={{
+                      position: "absolute", inset: 0, borderRadius: 12,
+                      border: "3px solid #ff4444",
+                      background: "rgba(255,0,0,0.18)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 28, color: "#ff4444", fontWeight: 900,
+                    }}>↩</div>
+                  )}
+                </motion.div>
+              );
+            })}
+          </div>
+
+          <div style={{ fontSize: 10, color: "#334", letterSpacing: 2 }}>
+            {mulliganReturning.size > 0 ? `Returning ${mulliganReturning.size} card${mulliganReturning.size > 1 ? "s" : ""}` : "No cards selected to return"}
+          </div>
+
+          <motion.button
+            whileHover={{ scale: 1.05, y: -2 }} whileTap={{ scale: 0.97 }}
+            onClick={() => confirmMulligan(mPid)}
+            style={{
+              padding: "13px 52px",
+              background: `linear-gradient(135deg, ${mColor}99, ${mColor})`,
+              border: "none", borderRadius: 12,
+              color: "#000", fontSize: 13, fontWeight: 900, letterSpacing: 5,
+              cursor: "pointer", fontFamily: "inherit",
+              boxShadow: `0 0 32px ${mColor}44`,
+            }}
+          >KEEP HAND</motion.button>
+        </div>
       </div>
     );
   }
 
-  const pid   = battleState.activePlayer;
+  if (!battleState || battleState.phase === "DRAW") {
+    return (
+      <div style={{ background: "#04040a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ color: "#445", letterSpacing: 4, fontSize: 12 }}>PREPARING BOARD…</div>
+      </div>
+    );
+  }
+
+  const pid    = battleState.activePlayer;
   const oppId: PlayerId = pid === "P1" ? "P2" : "P1";
   const player: BattlePlayer = battleState.players[pid];
-  const opp:   BattlePlayer = battleState.players[oppId];
+  const opp:   BattlePlayer  = battleState.players[oppId];
   const name    = pid === "P1" ? p1Name : p2Name;
   const icon    = pid === "P1" ? p1Icon : p2Icon;
-  const oppName = pid === "P1" ? p2Name : p1Name;
-  const oppIcon = pid === "P1" ? p2Icon : p1Icon;
+  const oppName = oppId === "P1" ? p1Name : p2Name;
+  const oppIcon = oppId === "P1" ? p1Icon : p2Icon;
   const targeting = battleState.pendingAttackerId !== null;
 
-  const winnerIcon = battleState.winner
-    ? battleState.winner === "P1" ? p1Icon : p2Icon
-    : "";
-  const winnerName = battleState.winner
-    ? battleState.winner === "P1" ? p1Name : p2Name
-    : "";
+  const winnerName = battleState.winner ? (battleState.winner === "P1" ? p1Name : p2Name) : "";
+  const winnerIcon = battleState.winner ? (battleState.winner === "P1" ? p1Icon : p2Icon) : "";
 
   return (
     <div style={{
       minHeight: "100vh", maxHeight: "100vh",
-      background: "linear-gradient(180deg, #02020a 0%, #050310 100%)",
+      background: "linear-gradient(180deg, #020209 0%, #04021a 50%, #020209 100%)",
       display: "flex", flexDirection: "column",
       fontFamily: "'Segoe UI', system-ui, sans-serif",
       overflow: "hidden", position: "relative",
     }}>
-      {/* Subtle grid overlay */}
+      {/* Subtle grid */}
       <div style={{
         position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0,
-        background: "repeating-linear-gradient(0deg,transparent,transparent 49px,#0a0a1a 50px)",
-        opacity: 0.35,
+        background: "repeating-linear-gradient(0deg,transparent,transparent 47px,#080818 48px)",
+        opacity: 0.4,
       }} />
 
-      {/* ── OPPONENT AREA ────────────────────────────────────────────────── */}
+      {/* ── OPPONENT LEADER (top, centered) ──────────────────────────────── */}
       <div style={{
-        flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-        padding: "12px 16px 6px", gap: 16,
-        borderBottom: "1px solid #0d0d20", position: "relative", zIndex: 1,
+        borderBottom: "1px solid #0c0c1e", background: "rgba(0,0,0,0.2)",
+        position: "relative", zIndex: 1, flexShrink: 0,
       }}>
-        <div style={{ position: "absolute", top: 6, left: 14, fontSize: 9, letterSpacing: 3, color: "#2a2a38" }}>
-          OPPONENT
-        </div>
-        <LeaderView
-          leader={opp.leader}
-          cardDb={cardDb}
-          playerName={oppName}
-          playerIcon={oppIcon}
-          flipped
+        <CenteredLeader
+          leader={opp.leader} cardDb={cardDb}
+          playerName={oppName} playerIcon={oppIcon}
           targetable={targeting}
           onSelect={targeting ? handleTargetLeader : undefined}
+          isTop
         />
+      </div>
+
+      {/* ── OPPONENT BOARD ────────────────────────────────────────────────── */}
+      <div style={{
+        flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+        borderBottom: "2px solid #0d0d22", position: "relative", zIndex: 1,
+        background: "rgba(0,0,0,0.1)",
+        minHeight: 120,
+      }}>
+        <div style={{ position: "absolute", top: 4, left: 14, fontSize: 8, letterSpacing: 4, color: "#1a1a2a" }}>
+          OPPONENT
+        </div>
         <BoardRow
-          board={opp.board}
-          cardDb={cardDb}
-          pendingId={null}
-          targeting={targeting}
-          myBoard={false}
-          flipped
+          board={opp.board} cardDb={cardDb}
+          pendingId={null} targeting={targeting} myBoard={false}
           onTargetCard={handleTargetCard}
         />
       </div>
 
-      {/* ── CENTER INFO BAR ──────────────────────────────────────────────── */}
+      {/* ── CENTER INFO BAR ───────────────────────────────────────────────── */}
       <div style={{
-        padding: "7px 20px", zIndex: 1,
-        background: "rgba(0,0,0,0.6)",
+        padding: "6px 24px", zIndex: 2,
+        background: "rgba(0,0,0,0.7)",
         display: "flex", alignItems: "center", justifyContent: "space-between",
         borderTop: "1px solid #0d0d1e", borderBottom: "1px solid #0d0d1e",
+        flexShrink: 0,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ fontSize: 9, color: "#2a2a38", letterSpacing: 3 }}>TURN {battleState.turn}</div>
+          <div style={{ fontSize: 8, color: "#1c1c2c", letterSpacing: 3 }}>TURN {battleState.turn}</div>
           <div style={{
             fontSize: 10, fontWeight: 800, letterSpacing: 2,
             color: pid === "P1" ? "#4a9eff" : "#ff6666",
-            background: pid === "P1" ? "rgba(74,158,255,0.08)" : "rgba(255,102,102,0.08)",
-            padding: "3px 10px", borderRadius: 6,
+            background: pid === "P1" ? "rgba(74,158,255,0.07)" : "rgba(255,102,102,0.07)",
+            padding: "3px 12px", borderRadius: 6,
             border: `1px solid ${pid === "P1" ? "#4a9eff33" : "#ff666633"}`,
           }}>{name}'s TURN</div>
         </div>
 
-        {/* Active synergies */}
         {player.activeSynergies.length > 0 && (
-          <div style={{ display: "flex", gap: 4 }}>
+          <div style={{ display: "flex", gap: 5 }}>
             {player.activeSynergies.slice(0, 3).map(id => (
               <div key={id} style={{
-                fontSize: 7, padding: "2px 5px", borderRadius: 4,
-                background: "rgba(255,200,50,0.08)", border: "1px solid #ffcc0044",
-                color: "#ffcc00", letterSpacing: 1,
+                fontSize: 7, padding: "2px 6px", borderRadius: 4,
+                background: "rgba(255,200,50,0.07)", border: "1px solid #ffcc0033",
+                color: "#ffcc00aa", letterSpacing: 1,
               }}>{id.replace(/_/g, " ").toUpperCase()}</div>
             ))}
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {targeting && (
             <motion.button
               onClick={() => dispatch({ type: "CANCEL_ATTACK", pid })}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
               style={{
-                padding: "7px 14px",
-                background: "rgba(255,80,40,0.08)", border: "1px solid #ff644433",
+                padding: "6px 14px",
+                background: "rgba(255,70,40,0.07)", border: "1px solid #ff644422",
                 borderRadius: 8, color: "#ff6444", fontSize: 9, fontWeight: 800,
                 letterSpacing: 2, cursor: "pointer", fontFamily: "inherit",
               }}
-            >CANCEL</motion.button>
+            >✕ CANCEL</motion.button>
           )}
           <motion.button
             onClick={handleEndTurn}
-            whileHover={{ scale: 1.05, boxShadow: "0 0 18px #44ff8855" }}
+            whileHover={{ scale: 1.05, boxShadow: "0 0 16px #44ff8844" }}
             whileTap={{ scale: 0.95 }}
             style={{
-              padding: "7px 18px",
-              background: "linear-gradient(135deg, #0a2a10, #0d3a15)",
-              border: "1px solid #44ff8833",
+              padding: "7px 20px",
+              background: "linear-gradient(135deg, #0a2a12, #0d3a16)",
+              border: "1px solid #44ff8822",
               borderRadius: 8, color: "#44ff88", fontSize: 10, fontWeight: 900,
               letterSpacing: 2, cursor: "pointer", fontFamily: "inherit",
             }}
@@ -821,77 +810,72 @@ export default function BattleBoardScreen({
         </div>
       </div>
 
-      {/* ── ACTIVE PLAYER BOARD ──────────────────────────────────────────── */}
+      {/* ── PLAYER BOARD ─────────────────────────────────────────────────── */}
       <div style={{
         flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-        padding: "6px 16px 10px", gap: 16,
-        position: "relative", zIndex: 1,
+        borderTop: "0", position: "relative", zIndex: 1,
+        minHeight: 120,
       }}>
-        <div style={{ position: "absolute", bottom: 6, left: 14, fontSize: 9, letterSpacing: 3, color: "#2a2a38" }}>
+        <div style={{ position: "absolute", bottom: 4, left: 14, fontSize: 8, letterSpacing: 4, color: "#1a1a2a" }}>
           YOUR BOARD
         </div>
-        <LeaderView
-          leader={player.leader}
-          cardDb={cardDb}
-          playerName={name}
-          playerIcon={icon}
-          selected={battleState.pendingAttackerId === player.leader.instanceId}
-          energy={player.energy}
-          maxEnergy={player.maxEnergy}
-          domainMeter={player.domainMeter}
-          showDomainBtn
-          onSelect={() => handleSelectAttacker(player.leader.instanceId)}
-          onDomainActivate={() => dispatch({ type: "ACTIVATE_DOMAIN", pid })}
-        />
         <BoardRow
-          board={player.board}
-          cardDb={cardDb}
+          board={player.board} cardDb={cardDb}
           pendingId={battleState.pendingAttackerId}
-          targeting={false}
-          myBoard
+          targeting={false} myBoard
           onSelectCard={handleSelectAttacker}
         />
       </div>
 
+      {/* ── MY LEADER (bottom, centered) ─────────────────────────────────── */}
+      <div style={{
+        borderTop: "1px solid #0c0c1e", background: "rgba(0,0,0,0.2)",
+        position: "relative", zIndex: 1, flexShrink: 0,
+      }}>
+        <CenteredLeader
+          leader={player.leader} cardDb={cardDb}
+          playerName={name} playerIcon={icon}
+          selected={battleState.pendingAttackerId === player.leader.instanceId}
+          energy={player.energy} maxEnergy={player.maxEnergy}
+          domainMeter={player.domainMeter} showDomainBtn
+          onSelect={() => handleSelectAttacker(player.leader.instanceId)}
+          onDomainActivate={() => dispatch({ type: "ACTIVATE_DOMAIN", pid })}
+          isTop={false}
+        />
+      </div>
+
       {/* ── HAND ─────────────────────────────────────────────────────────── */}
-      <HandRow
-        hand={player.hand}
-        cardDb={cardDb}
-        energy={player.energy}
-        costReduction={player.costReduction}
-        onPlay={handlePlayCard}
-      />
+      <div style={{
+        display: "flex", gap: 12, justifyContent: "center",
+        padding: "12px 28px", overflowX: "auto",
+        background: "rgba(0,0,0,0.55)", borderTop: "1px solid #111128",
+        minHeight: 138, flexShrink: 0, zIndex: 2, position: "relative",
+        alignItems: "flex-end",
+      }}>
+        {player.hand.map(card => (
+          <HandCardView
+            key={card.instanceId}
+            card={card} cardDb={cardDb}
+            energy={player.energy} costReduction={player.costReduction}
+            onPlay={() => handlePlayCard(card.instanceId)}
+          />
+        ))}
+        {player.hand.length === 0 && (
+          <div style={{ color: "#2a2a38", fontSize: 10, letterSpacing: 3, alignSelf: "center" }}>
+            NO CARDS IN HAND
+          </div>
+        )}
+      </div>
 
       {/* ── Overlays ─────────────────────────────────────────────────────── */}
       <AnimatePresence>
-        {showHandoff && (
-          <HandoffOverlay
-            key="handoff"
-            name={showHandoff.name}
-            icon={showHandoff.icon}
-            onReady={() => setShowHandoff(null)}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
         {domainFlash && (
-          <DomainFlash
-            key="domain"
-            name={domainFlash}
-            onDone={() => setDomainFlash(null)}
-          />
+          <DomainFlash key="domain" name={domainFlash} onDone={() => setDomainFlash(null)} />
         )}
       </AnimatePresence>
-
       <AnimatePresence>
         {gameOverShown && battleState.winner && (
-          <GameOverOverlay
-            key="gameover"
-            winnerName={winnerName}
-            winnerIcon={winnerIcon}
-            onDone={() => onGameOver(battleState.winner!)}
-          />
+          <GameOverOverlay key="gameover" winnerName={winnerName} winnerIcon={winnerIcon} onDone={() => onGameOver(battleState.winner!, battleState.turn)} />
         )}
       </AnimatePresence>
     </div>

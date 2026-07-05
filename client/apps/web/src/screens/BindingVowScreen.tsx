@@ -158,7 +158,7 @@ export default function BindingVowScreen({ state, onSend, playerNames, playerIco
           letterSpacing: 2, fontFamily: "inherit",
         }}
       >
-        ← HOME
+        ← BACK
       </button>
       <div style={{
         position: "fixed", inset: 0, pointerEvents: "none",

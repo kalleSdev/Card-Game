@@ -72,7 +72,7 @@ function AmbientCanvas() {
   );
 }
 
-export default function HomeScreen({ onSelect, onDraftBattle, onGallery, onBack }: { onSelect: () => void; onDraftBattle: () => void; onGallery: () => void; onBack?: () => void }) {
+export default function HomeScreen({ onSelect, onDraftBattle, onGallery, onProfiles, onBack }: { onSelect: () => void; onDraftBattle: () => void; onGallery: () => void; onProfiles: () => void; onBack?: () => void }) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [pulse, setPulse] = useState(false);
 
@@ -109,7 +109,7 @@ export default function HomeScreen({ onSelect, onDraftBattle, onGallery, onBack 
             letterSpacing: 2, fontFamily: "inherit",
           }}
         >
-          ← HOME
+          ← BACK
         </button>
       )}
 
@@ -204,6 +204,14 @@ export default function HomeScreen({ onSelect, onDraftBattle, onGallery, onBack 
               color: "#4488ff",
               onClick: onGallery,
             },
+            {
+              id: "profiles",
+              icon: "👤",
+              title: "VIEW PROFILES",
+              sub: "Stats · Rankings · History",
+              color: "#22ccaa",
+              onClick: onProfiles,
+            },
           ] as const).map((btn) => {
             const isHov = hovered === btn.id;
             return (
@@ -217,7 +225,7 @@ export default function HomeScreen({ onSelect, onDraftBattle, onGallery, onBack 
                 transition={{ type: "spring", stiffness: 380, damping: 22 }}
                 style={{
                   width: 300, padding: "18px 24px", borderRadius: 14, cursor: "pointer",
-                  background: isHov ? `rgba(${btn.color === "#9933ff" ? "40,20,70" : btn.color === "#ff9922" ? "60,35,10" : "15,25,50"},0.9)` : "rgba(10,8,20,0.82)",
+                  background: isHov ? `rgba(${btn.color === "#9933ff" ? "40,20,70" : btn.color === "#ff9922" ? "60,35,10" : btn.color === "#22ccaa" ? "10,50,44" : "15,25,50"},0.9)` : "rgba(10,8,20,0.82)",
                   border: `2px solid ${isHov ? btn.color + "cc" : btn.color + "33"}`,
                   backdropFilter: "blur(10px)",
                   boxShadow: isHov ? `0 0 40px ${btn.color}33, 0 8px 32px rgba(0,0,0,0.7)` : "0 2px 16px rgba(0,0,0,0.4)",

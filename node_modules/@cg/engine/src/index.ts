@@ -174,6 +174,7 @@ const computeItemBonus = (
   if (itemId === "festering-life"  && targetDefId === "kurourushi")   bonus += 1000;
   if (itemId === "split-soul-katana" && targetDefId === "toji")       bonus += 1000;
   if (itemId === "miwa-sword"        && targetDefId === "miwa")        bonus += 500;
+  if (itemId === "Rikas-Ring"        && targetDefId === "yuta")         bonus += 2000;
   // Naoya+1000 flat bonus on all weapons
   if (targetDefId === "naoya") bonus += 1000;
 
@@ -202,7 +203,7 @@ const CARD_DB: GameState["cardDb"] = {
   "yuji": {
     id: "yuji",
     name: "Yuji Itadori",
-    rarity: "A",
+    rarity: "S",
     basePoints: 10000,
     affinity: "COMBAT",
     tags: ["sorcerer", "curse", "jujutsu-high", "kenjaku", "brother", "gojo-student"],
@@ -232,7 +233,7 @@ const CARD_DB: GameState["cardDb"] = {
     id: "todo",
     name: "Todo Aoi",
     rarity: "A",
-    basePoints: 9000,
+    basePoints: 9500,
     affinity: "SUPPORT",
     tags: ["kyoto", "brother", "sorcerer"],
     offRolePenalties: { leader: 0.8, combat: 0.85 },
@@ -304,8 +305,8 @@ const CARD_DB: GameState["cardDb"] = {
   "higuruma": {
     id: "higuruma",
     name: "Higuruma Hiromi",
-    rarity: "A",
-    basePoints: 9500,
+    rarity: "S",
+    basePoints: 10000,
     affinity: "LEADER",
     tags: ["sorcerer", "judgeman"],
     offRolePenalties: { combat: 0.9, support: 0.9 },
@@ -487,8 +488,8 @@ const CARD_DB: GameState["cardDb"] = {
   "jinichi": {
     id: "jinichi",
     name: "Jinichi Zenin",
-    rarity: "S",
-    basePoints: 10000,
+    rarity: "A",
+    basePoints: 9500,
     affinity: "SUPPORT",
     tags: ["sorcerer", "zenin-clan", "zenin-elder"],
     offRolePenalties: { leader: 0.75, combat: 0.85 },

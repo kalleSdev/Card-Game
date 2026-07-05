@@ -28,13 +28,13 @@ import { ROULETTE_ITEM_MAP } from "@cg/engine";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const RARITY_STATS: Record<string, { atk: number; hp: number; cost: number }> = {
-  C:   { atk: 10, hp: 20,  cost: 1 },
-  B:   { atk: 20, hp: 35,  cost: 2 },
-  A:   { atk: 35, hp: 55,  cost: 3 },
-  S:   { atk: 50, hp: 75,  cost: 4 },
-  SS:  { atk: 70, hp: 100, cost: 5 },
-  SSS: { atk: 90, hp: 130, cost: 6 },
-  X:   { atk: 120, hp: 150, cost: 7 },
+  C:   { atk: 10, hp: 20,  cost: 0 },
+  B:   { atk: 20, hp: 35,  cost: 1 },
+  A:   { atk: 35, hp: 55,  cost: 2 },
+  S:   { atk: 50, hp: 75,  cost: 3 },
+  SS:  { atk: 70, hp: 100, cost: 4 },
+  SSS: { atk: 90, hp: 130, cost: 5 },
+  X:   { atk: 120, hp: 150, cost: 6 },
 };
 
 const AFFINITY_MOD: Record<string, { atk: number; hp: number }> = {
@@ -138,6 +138,8 @@ export interface BattleCard {
   atk: number;
   currentHp: number;
   maxHp: number;
+  // Taunt — COMBAT affinity cards protect the leader
+  hasTaunt: boolean;
   // Turn-based flags
   canAttack: boolean;     // false on turn played (summoning sickness), true from next turn
   exhausted: boolean;     // true after attacking this turn, reset at turn start
@@ -237,6 +239,7 @@ export function makeBattleCard(defId: string, def: CardDef): BattleCard {
     atk: stats.atk,
     currentHp: stats.hp,
     maxHp: stats.hp,
+    hasTaunt: def.affinity === "COMBAT",  // COMBAT cards protect the leader
     canAttack: false,
     exhausted: false,
     stunTurns: 0,
@@ -327,20 +330,21 @@ function buildPlayer(
   const leader = makeBattleCard(draft.leaderId, leaderDef);
   leader.canAttack = true; // leader can always attack from turn 1
 
-  // Build deck from non-leader cards
+  // Build deck from all non-leader cards (2 combat + 3 support + 9 extra = 14)
   const deckCards: BattleCard[] = [
     ...draft.combatIds,
     ...draft.supportIds,
+    ...(draft.extraIds ?? []),
   ].map(id => {
     const def = cardDb[id];
     if (!def) throw new Error(`Card ${id} not found`);
     return makeBattleCard(id, def);
   });
 
-  // Shuffle and deal opening hand of 3
+  // Shuffle and deal opening hand of 4
   const shuffled = shuffle(deckCards);
-  const hand = shuffled.slice(0, 3);
-  const deck = shuffled.slice(3);
+  const hand = shuffled.slice(0, 4);
+  const deck = shuffled.slice(4);
 
   const weaponBonus = weaponAtkBonus(draft.weaponIds);
   // Apply weapon bonus to leader and all cards
@@ -382,20 +386,35 @@ function shuffle<T>(arr: T[]): T[] {
 // Initial state factory
 // ─────────────────────────────────────────────────────────────────────────────
 
+// mulliganHands: pre-computed hands after mulligan (instanceIds) — if provided,
+// the engine restores these cards to hand (moving them from deck if needed)
 export function createBattleState(
   p1Draft: PlayerDraftResult,
   p2Draft: PlayerDraftResult,
   cardDb: Record<string, CardDef>,
+  mulliganHands?: { P1: string[]; P2: string[] },
 ): BattleState {
   _instanceCounter = 0;
   const p1 = buildPlayer("P1", p1Draft, cardDb);
   const p2 = buildPlayer("P2", p2Draft, cardDb);
 
+  // Apply mulligan hands if provided — swap dealt cards for the player-chosen set
+  const applyMulligan = (player: BattlePlayer, keptIds: string[]): BattlePlayer => {
+    if (!keptIds.length) return player;
+    const allCards = [...player.hand, ...player.deck];
+    const kept = allCards.filter(c => keptIds.includes(c.instanceId));
+    const rest  = shuffle(allCards.filter(c => !keptIds.includes(c.instanceId)));
+    return { ...player, hand: kept, deck: rest };
+  };
+
+  const fp1 = mulliganHands ? applyMulligan(p1, mulliganHands.P1) : p1;
+  const fp2 = mulliganHands ? applyMulligan(p2, mulliganHands.P2) : p2;
+
   return {
     phase: "DRAW",
     turn: 1,
     activePlayer: "P1",
-    players: { P1: p1, P2: p2 },
+    players: { P1: fp1, P2: fp2 },
     winner: null,
     log: [],
     pendingAttackerId: null,
@@ -682,6 +701,9 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       const attacker = findOnBoard(state.players[pid], state.pendingAttackerId);
       if (!attacker) return illegal("Attacker not found");
       if (!attacker.canAttack || attacker.exhausted) return illegal("Attacker cannot attack");
+      // Taunt check — COMBAT cards protect the leader
+      const tauntGuards = boardCards(state.players[opp]).filter(c => c.hasTaunt);
+      if (tauntGuards.length > 0) return illegal("Enemy has COMBAT cards in the way — defeat them first!");
 
       const damage = attacker.atk;
       let p = { ...state.players[pid] };

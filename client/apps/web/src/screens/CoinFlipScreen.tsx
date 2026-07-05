@@ -264,7 +264,7 @@ export default function CoinFlipScreen({ onFlip, playerNames, playerIcons, onHom
             letterSpacing: 2, fontFamily: "inherit",
           }}
         >
-          ← HOME
+          ← BACK
         </button>
       )}
       <motion.div

@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { loadProfiles, createProfile, deleteProfile, updateProfile, getTitle, getTitleColor } from "../profiles";
+import { loadProfiles, createProfile, deleteProfile, updateProfile, getTitle, getTitleColor, totalWins } from "../profiles";
 import type { Profile } from "../profiles";
 import { P1_ICON_OPTIONS, P2_ICON_OPTIONS } from "../constants";
 import PlayerIcon from "../components/PlayerIcon";
@@ -11,530 +11,267 @@ import AmbientOverlay from "../components/AmbientOverlay";
 const PLAYER_COLOR = { P1: "#4a9eff", P2: "#ff6666" };
 const ALL_ICONS = [...P1_ICON_OPTIONS, ...P2_ICON_OPTIONS];
 
-// ── Live profile preview card ─────────────────────────────────────────────────
-function ProfilePreviewCard({ name, icon, color }: { name: string; icon: string; color: string }) {
-  const displayName = name.trim() || "—";
-  const wins = 0;
+// ── Controller icon SVG ───────────────────────────────────────────────────────
+function ControllerIcon({ color, active, size = 48 }: { color: string; active: boolean; size?: number }) {
+  return (
+    <svg width={size} height={size * 0.7} viewBox="0 0 48 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="4" y="8" width="40" height="22" rx="11" fill={active ? color : "transparent"} stroke={color} strokeWidth="2.5" opacity={active ? 1 : 0.7} />
+      {/* D-pad */}
+      <rect x="11" y="15" width="3" height="9" rx="1.5" fill={active ? "#000" : color} opacity={active ? 0.8 : 0.6} />
+      <rect x="8" y="18" width="9" height="3" rx="1.5" fill={active ? "#000" : color} opacity={active ? 0.8 : 0.6} />
+      {/* Buttons */}
+      <circle cx="35" cy="17" r="2" fill={active ? "#000" : color} opacity={active ? 0.8 : 0.5} />
+      <circle cx="39" cy="20" r="2" fill={active ? "#000" : color} opacity={active ? 0.8 : 0.5} />
+      <circle cx="35" cy="23" r="2" fill={active ? "#000" : color} opacity={active ? 0.8 : 0.5} />
+      <circle cx="31" cy="20" r="2" fill={active ? "#000" : color} opacity={active ? 0.8 : 0.5} />
+      {/* Start/Select */}
+      <rect x="21" y="18" width="6" height="2" rx="1" fill={active ? "#000" : color} opacity={active ? 0.8 : 0.4} />
+    </svg>
+  );
+}
+
+// ── Win-rate helper ───────────────────────────────────────────────────────────
+function wr(wins: number, matches: number) {
+  return matches > 0 ? Math.round((wins / matches) * 100) : 0;
+}
+
+// ── Create / Edit form modal ──────────────────────────────────────────────────
+function ProfileFormModal({
+  editing, color, onDone, onCancel,
+}: {
+  editing: Profile | null;
+  color: string;
+  onDone: (p: Profile) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(editing?.name ?? "");
+  const [icon, setIcon] = useState(editing?.icon ?? ALL_ICONS[0]);
+  const [focused, setFocused] = useState(false);
+  const canSave = name.trim().length > 0;
+  const isEdit = editing !== null;
+
+  const submit = () => {
+    if (!canSave) return;
+    if (isEdit) {
+      updateProfile(editing!.id, name, icon);
+      const updated = loadProfiles().find(p => p.id === editing!.id)!;
+      onDone(updated);
+    } else {
+      const p = createProfile(name, icon);
+      onDone(p);
+    }
+  };
+
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.92 }}
-      animate={{ opacity: 1, scale: 1 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       style={{
-        background: "rgba(8,8,20,0.95)",
-        border: `2px solid ${color}55`,
-        borderRadius: 16,
-        padding: "20px 22px",
-        width: 200,
-        boxShadow: `0 0 40px ${color}22, 0 8px 32px rgba(0,0,0,0.7)`,
-        position: "relative",
-        overflow: "hidden",
+        position: "fixed", inset: 0, zIndex: 100,
+        background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center",
+        backdropFilter: "blur(6px)",
       }}
+      onClick={onCancel}
     >
-      <div style={{
-        position: "absolute", top: 0, left: 0, right: 0, height: 3,
-        background: `linear-gradient(90deg, transparent, ${color}, transparent)`,
-      }} />
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-        <motion.div
-          animate={{ boxShadow: [`0 0 20px ${color}44`, `0 0 36px ${color}77`, `0 0 20px ${color}44`] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          style={{ borderRadius: 12, border: `2px solid ${color}66`, overflow: "hidden" }}
-        >
-          <PlayerIcon icon={icon} size={72} style={{ display: "block" }} />
-        </motion.div>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 15, fontWeight: 900, color: "#fff", letterSpacing: 1 }}>
-            {displayName.length > 14 ? displayName.slice(0, 13) + "…" : displayName}
-          </div>
-          <div style={{ fontSize: 9, color: getTitleColor(wins), letterSpacing: 3, marginTop: 3 }}>
-            {getTitle(wins)}
-          </div>
+      <motion.div
+        initial={{ scale: 0.88, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.88, y: 20 }}
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: "rgba(8,8,22,0.98)", border: `2px solid ${color}55`,
+          borderRadius: 20, padding: "32px", width: 480, maxWidth: "90vw",
+          boxShadow: `0 0 60px ${color}22, 0 24px 60px rgba(0,0,0,0.8)`,
+          position: "relative",
+        }}
+      >
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${color}, transparent)`, borderRadius: "20px 20px 0 0" }} />
+
+        <div style={{ fontSize: 11, color: color, letterSpacing: 5, fontWeight: 800, marginBottom: 24 }}>
+          {isEdit ? "EDIT PROFILE" : "NEW PROFILE"}
         </div>
-        <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
-          {[["W", 0, "#44ff88"], ["L", 0, "#ff4466"], ["M", 0, "#888"]].map(([label, val, clr]) => (
-            <div key={label as string} style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 14, fontWeight: 900, color: clr as string }}>{val}</div>
-              <div style={{ fontSize: 8, color: "#445", letterSpacing: 2 }}>{label}</div>
+
+        <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 9, color: "#445", letterSpacing: 3, marginBottom: 6 }}>NAME</div>
+            <input
+              autoFocus
+              value={name}
+              onChange={e => setName(e.target.value)}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              onKeyDown={e => e.key === "Enter" && submit()}
+              maxLength={20}
+              placeholder="Enter name…"
+              style={{
+                width: "100%", background: "rgba(255,255,255,0.04)",
+                border: `1px solid ${focused ? color + "99" : "#2a2a3a"}`,
+                borderRadius: 8, padding: "9px 13px",
+                color: "#fff", fontSize: 14, fontFamily: "inherit",
+                outline: "none", boxSizing: "border-box",
+                boxShadow: focused ? `0 0 14px ${color}33` : "none",
+                transition: "border-color 0.15s, box-shadow 0.15s",
+              }}
+            />
+
+            <div style={{ fontSize: 9, color: "#445", letterSpacing: 3, margin: "16px 0 8px" }}>AVATAR</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {ALL_ICONS.map(ic => (
+                <motion.div key={ic} onClick={() => setIcon(ic)}
+                  whileHover={{ scale: 1.12 }} whileTap={{ scale: 0.93 }}
+                  style={{
+                    borderRadius: 8, overflow: "hidden", cursor: "pointer",
+                    border: `2px solid ${ic === icon ? color : "transparent"}`,
+                    boxShadow: ic === icon ? `0 0 10px ${color}66` : "none",
+                  }}>
+                  <PlayerIcon icon={ic} size={34} style={{ display: "block" }} />
+                </motion.div>
+              ))}
             </div>
-          ))}
+          </div>
+
+          {/* Live preview */}
+          <div style={{
+            background: "rgba(6,6,18,0.9)", border: `1px solid ${color}33`,
+            borderRadius: 14, padding: "18px 16px", width: 140, flexShrink: 0, textAlign: "center",
+          }}>
+            <div style={{ borderRadius: 10, border: `2px solid ${color}55`, overflow: "hidden", display: "inline-block", marginBottom: 10 }}>
+              <PlayerIcon icon={icon} size={64} style={{ display: "block" }} />
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#fff", letterSpacing: 0.5 }}>
+              {(name.trim() || "—").slice(0, 14)}
+            </div>
+            <div style={{ fontSize: 8, color: getTitleColor(0), letterSpacing: 2, marginTop: 3 }}>
+              {getTitle(isEdit ? totalWins(editing!) : 0)}
+            </div>
+          </div>
         </div>
-      </div>
+
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
+          <button onClick={onCancel} style={{
+            padding: "9px 20px", background: "rgba(255,255,255,0.04)",
+            border: "1px solid #2a2a3a", borderRadius: 9,
+            color: "#667", fontSize: 11, cursor: "pointer", fontFamily: "inherit", letterSpacing: 1,
+          }}>Cancel</button>
+          <motion.button
+            whileHover={canSave ? { scale: 1.04 } : {}}
+            whileTap={canSave ? { scale: 0.96 } : {}}
+            onClick={submit}
+            style={{
+              padding: "9px 28px",
+              background: canSave ? color : "rgba(255,255,255,0.05)",
+              border: "none", borderRadius: 9,
+              color: canSave ? "#000" : "#334",
+              fontSize: 12, fontWeight: 900, letterSpacing: 3,
+              cursor: canSave ? "pointer" : "default", fontFamily: "inherit",
+            }}>
+            {isEdit ? "SAVE" : "CREATE"}
+          </motion.button>
+        </div>
+      </motion.div>
     </motion.div>
   );
 }
 
-// ── Saved profile card ────────────────────────────────────────────────────────
-function SavedProfileCard({
-  profile, color, selected, onSelect, onDelete, onEdit,
+// ── Profile card in the grid ──────────────────────────────────────────────────
+function ProfileCard({
+  profile, assignedTo, onAssign, onEdit, onDelete,
 }: {
-  profile: Profile; color: string; selected: boolean;
-  onSelect: () => void; onDelete: () => void; onEdit: () => void;
+  profile: Profile;
+  assignedTo: "P1" | "P2" | null;
+  onAssign: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const wr = profile.stats.matches > 0
-    ? Math.round((profile.stats.wins / profile.stats.matches) * 100)
-    : 0;
-  const blocked = confirmDelete;
+  const [confirmDel, setConfirmDel] = useState(false);
+  const wins = totalWins(profile);
+  const qWr = wr(profile.quickStats.wins, profile.quickStats.matches);
+  const dWr = wr(profile.draftStats.wins, profile.draftStats.matches);
+  const assignColor = assignedTo ? PLAYER_COLOR[assignedTo] : null;
 
   return (
     <motion.div
       layout
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.92 }}
-      whileHover={!blocked ? { y: -3 } : {}}
-      onClick={() => { if (!blocked) onSelect(); }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      whileHover={!confirmDel ? { y: -4, scale: 1.02 } : {}}
+      onClick={() => { if (!confirmDel) onAssign(); }}
       style={{
-        background: selected ? `rgba(${color === PLAYER_COLOR.P1 ? "30,70,140" : "120,30,30"},0.55)` : "rgba(12,12,24,0.8)",
-        border: `2px solid ${selected ? color : color + "22"}`,
-        borderRadius: 14,
-        padding: "14px 16px",
-        cursor: blocked ? "default" : "pointer",
-        position: "relative",
-        boxShadow: selected ? `0 0 28px ${color}44` : "none",
-        transition: "background 0.2s, border-color 0.2s",
+        background: assignedTo ? `rgba(${assignedTo === "P1" ? "15,40,80" : "70,15,15"},0.85)` : "rgba(12,12,28,0.85)",
+        border: `2px solid ${assignColor ? assignColor : "#2a2a4a"}`,
+        borderRadius: 16, padding: "16px", cursor: confirmDel ? "default" : "pointer",
+        position: "relative", overflow: "hidden",
+        boxShadow: assignColor ? `0 0 30px ${assignColor}33, 0 4px 20px rgba(0,0,0,0.6)` : "0 2px 12px rgba(0,0,0,0.4)",
+        transition: "background 0.2s, border-color 0.2s, box-shadow 0.2s",
+        userSelect: "none",
       }}
     >
-      {/* Selected tick */}
-      {selected && (
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          style={{
-            position: "absolute", top: 8, right: 8,
-            width: 18, height: 18, borderRadius: "50%",
-            background: color, display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 10, fontWeight: 900, color: "#000",
-          }}
-        >✓</motion.div>
-      )}
+      {/* Assignment badge */}
+      <AnimatePresence>
+        {assignedTo && (
+          <motion.div
+            initial={{ scale: 0, rotate: -20 }}
+            animate={{ scale: 1, rotate: 0 }}
+            exit={{ scale: 0 }}
+            style={{
+              position: "absolute", top: 8, right: 8,
+              background: PLAYER_COLOR[assignedTo], borderRadius: "50%",
+              width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 9, fontWeight: 900, color: "#000", letterSpacing: 0,
+            }}>
+            {assignedTo}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{
-          borderRadius: 10, border: `2px solid ${selected ? color : color + "44"}`,
-          overflow: "hidden", flexShrink: 0,
-        }}>
-          <PlayerIcon icon={profile.icon} size={48} style={{ display: "block" }} />
+      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <div style={{ borderRadius: 10, border: `2px solid ${assignColor ?? "#2a2a4a"}`, overflow: "hidden", flexShrink: 0, transition: "border-color 0.2s" }}>
+          <PlayerIcon icon={profile.icon} size={52} style={{ display: "block" }} />
         </div>
-
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: "#fff", letterSpacing: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div style={{ fontSize: 14, fontWeight: 900, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {profile.name}
           </div>
-          <div style={{ fontSize: 8, color: getTitleColor(profile.stats.wins), letterSpacing: 2, marginTop: 2 }}>
-            {getTitle(profile.stats.wins)}
+          <div style={{ fontSize: 8, color: getTitleColor(wins), letterSpacing: 2, marginTop: 2 }}>
+            {getTitle(wins)}
           </div>
-          <div style={{ display: "flex", gap: 10, marginTop: 5 }}>
-            <span style={{ fontSize: 10, color: "#44ff88" }}>{profile.stats.wins}W</span>
-            <span style={{ fontSize: 10, color: "#ff4466" }}>{profile.stats.losses}L</span>
-            <span style={{ fontSize: 10, color: "#888" }}>{wr}% WR</span>
+          <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 9, color: "#99ccff", letterSpacing: 0.5 }}>
+              Q: {profile.quickStats.wins}W {profile.quickStats.losses}L {qWr}%
+            </span>
+            <span style={{ fontSize: 9, color: "#ffcc77", letterSpacing: 0.5 }}>
+              D: {profile.draftStats.wins}W {profile.draftStats.losses}L {dWr}%
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Action controls */}
+      {/* Action row */}
       <AnimatePresence>
-        {confirmDelete ? (
+        {confirmDel ? (
           <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}
             onClick={e => e.stopPropagation()}
           >
             <span style={{ fontSize: 9, color: "#ff6666", flex: 1 }}>Delete this profile?</span>
-            <button
-              onClick={() => onDelete()}
-              style={{ padding: "3px 10px", background: "#ff2233", border: "none", borderRadius: 6, color: "#fff", fontSize: 9, fontWeight: 700, cursor: "pointer" }}
-            >Yes</button>
-            <button
-              onClick={() => setConfirmDelete(false)}
-              style={{ padding: "3px 10px", background: "rgba(255,255,255,0.08)", border: "1px solid #333", borderRadius: 6, color: "#888", fontSize: 9, cursor: "pointer" }}
-            >No</button>
+            <button onClick={onDelete} style={{ padding: "3px 10px", background: "#ff2233", border: "none", borderRadius: 6, color: "#fff", fontSize: 9, fontWeight: 700, cursor: "pointer" }}>Yes</button>
+            <button onClick={() => setConfirmDel(false)} style={{ padding: "3px 10px", background: "rgba(255,255,255,0.08)", border: "1px solid #333", borderRadius: 6, color: "#888", fontSize: 9, cursor: "pointer" }}>No</button>
           </motion.div>
         ) : (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0 }}
-            whileHover={{ opacity: 1 }}
-            style={{ position: "absolute", bottom: 7, right: 8, display: "flex", gap: 6 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 0 }} whileHover={{ opacity: 1 }}
+            style={{ position: "absolute", bottom: 8, right: 8, display: "flex", gap: 6 }}
             onClick={e => e.stopPropagation()}
           >
-            <button
-              onClick={() => onEdit()}
-              style={{ background: "none", border: "none", color: color + "cc", fontSize: 11, cursor: "pointer", padding: 2 }}
-              title="Edit profile"
-            >✎</button>
-            <button
-              onClick={() => setConfirmDelete(true)}
-              style={{ background: "none", border: "none", color: "#ff4466", fontSize: 11, cursor: "pointer", padding: 2 }}
-              title="Delete profile"
-            >✕</button>
+            <button onClick={onEdit} style={{ background: "none", border: "none", color: "#88aacc", fontSize: 12, cursor: "pointer", padding: 3 }} title="Edit">✎</button>
+            <button onClick={() => setConfirmDel(true)} style={{ background: "none", border: "none", color: "#ff6666", fontSize: 12, cursor: "pointer", padding: 3 }} title="Delete">✕</button>
           </motion.div>
         )}
       </AnimatePresence>
     </motion.div>
-  );
-}
-
-// ── Create profile form ───────────────────────────────────────────────────────
-function CreateForm({ color, onCreated, onCancel }: {
-  color: string; onCreated: (p: Profile) => void; onCancel: () => void;
-}) {
-  const [name, setName] = useState("");
-  const [icon, setIcon] = useState(ALL_ICONS[0]);
-  const [focused, setFocused] = useState(false);
-
-  const canCreate = name.trim().length > 0;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 8 }}
-      style={{
-        background: "rgba(6,6,16,0.97)",
-        border: `1px solid ${color}44`,
-        borderRadius: 16,
-        padding: "20px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 16,
-      }}
-    >
-      <div style={{ fontSize: 10, color: color, letterSpacing: 4, fontWeight: 700 }}>NEW PROFILE</div>
-
-      {/* Name + preview side by side */}
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-        <div style={{ flex: 1 }}>
-          {/* Name input */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 9, color: "#445", letterSpacing: 3, marginBottom: 6 }}>NAME</div>
-            <input
-              autoFocus
-              value={name}
-              onChange={e => setName(e.target.value)}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
-              maxLength={20}
-              placeholder="Enter name…"
-              style={{
-                width: "100%", background: "rgba(255,255,255,0.04)",
-                border: `1px solid ${focused ? color + "99" : "#2a2a3a"}`,
-                borderRadius: 8, padding: "8px 12px",
-                color: "#fff", fontSize: 13, fontFamily: "inherit",
-                outline: "none", boxSizing: "border-box",
-                boxShadow: focused ? `0 0 12px ${color}33` : "none",
-              }}
-            />
-          </div>
-
-          {/* Icon grid */}
-          <div style={{ fontSize: 9, color: "#445", letterSpacing: 3, marginBottom: 6 }}>AVATAR</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {ALL_ICONS.map(ic => (
-              <motion.div
-                key={ic}
-                onClick={() => setIcon(ic)}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
-                style={{
-                  borderRadius: 8, overflow: "hidden", cursor: "pointer",
-                  border: `2px solid ${ic === icon ? color : "transparent"}`,
-                  boxShadow: ic === icon ? `0 0 10px ${color}66` : "none",
-                }}
-              >
-                <PlayerIcon icon={ic} size={32} style={{ display: "block" }} />
-              </motion.div>
-            ))}
-          </div>
-        </div>
-
-        {/* Live preview */}
-        <ProfilePreviewCard name={name} icon={icon} color={color} />
-      </div>
-
-      {/* Actions */}
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <button
-          onClick={onCancel}
-          style={{
-            padding: "8px 18px", background: "rgba(255,255,255,0.04)",
-            border: "1px solid #2a2a3a", borderRadius: 8,
-            color: "#667", fontSize: 11, cursor: "pointer", fontFamily: "inherit",
-          }}
-        >Cancel</button>
-        <motion.button
-          whileHover={canCreate ? { scale: 1.04 } : {}}
-          whileTap={canCreate ? { scale: 0.97 } : {}}
-          onClick={() => {
-            if (!canCreate) return;
-            const p = createProfile(name, icon);
-            onCreated(p);
-          }}
-          style={{
-            padding: "8px 22px",
-            background: canCreate ? color : "rgba(255,255,255,0.05)",
-            border: "none", borderRadius: 8,
-            color: canCreate ? "#000" : "#334",
-            fontSize: 11, fontWeight: 800, cursor: canCreate ? "pointer" : "default",
-            fontFamily: "inherit", letterSpacing: 2,
-          }}
-        >CREATE</motion.button>
-      </div>
-    </motion.div>
-  );
-}
-
-// ── Edit profile form ─────────────────────────────────────────────────────────
-function EditForm({ profile, color, onSaved, onCancel }: {
-  profile: Profile; color: string; onSaved: () => void; onCancel: () => void;
-}) {
-  const [name, setName] = useState(profile.name);
-  const [icon, setIcon] = useState(profile.icon);
-  const [focused, setFocused] = useState(false);
-  const canSave = name.trim().length > 0;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 8 }}
-      style={{
-        background: "rgba(6,6,16,0.97)",
-        border: `1px solid ${color}44`,
-        borderRadius: 16,
-        padding: "20px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 16,
-      }}
-    >
-      <div style={{ fontSize: 10, color: color, letterSpacing: 4, fontWeight: 700 }}>EDIT PROFILE</div>
-
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 9, color: "#445", letterSpacing: 3, marginBottom: 6 }}>NAME</div>
-            <input
-              autoFocus
-              value={name}
-              onChange={e => setName(e.target.value)}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
-              maxLength={20}
-              style={{
-                width: "100%", background: "rgba(255,255,255,0.04)",
-                border: `1px solid ${focused ? color + "99" : "#2a2a3a"}`,
-                borderRadius: 8, padding: "8px 12px",
-                color: "#fff", fontSize: 13, fontFamily: "inherit",
-                outline: "none", boxSizing: "border-box",
-                boxShadow: focused ? `0 0 12px ${color}33` : "none",
-              }}
-            />
-          </div>
-
-          <div style={{ fontSize: 9, color: "#445", letterSpacing: 3, marginBottom: 6 }}>AVATAR</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {ALL_ICONS.map(ic => (
-              <motion.div
-                key={ic}
-                onClick={() => setIcon(ic)}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
-                style={{
-                  borderRadius: 8, overflow: "hidden", cursor: "pointer",
-                  border: `2px solid ${ic === icon ? color : "transparent"}`,
-                  boxShadow: ic === icon ? `0 0 10px ${color}66` : "none",
-                }}
-              >
-                <PlayerIcon icon={ic} size={32} style={{ display: "block" }} />
-              </motion.div>
-            ))}
-          </div>
-        </div>
-
-        {/* Live preview with current stats */}
-        <motion.div
-          style={{
-            background: "rgba(8,8,20,0.95)",
-            border: `2px solid ${color}55`,
-            borderRadius: 16, padding: "20px 22px", width: 200,
-            boxShadow: `0 0 40px ${color}22, 0 8px 32px rgba(0,0,0,0.7)`,
-            position: "relative", overflow: "hidden",
-          }}
-        >
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, transparent, ${color}, transparent)` }} />
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-            <motion.div
-              animate={{ boxShadow: [`0 0 20px ${color}44`, `0 0 36px ${color}77`, `0 0 20px ${color}44`] }}
-              transition={{ duration: 2, repeat: Infinity }}
-              style={{ borderRadius: 12, border: `2px solid ${color}66`, overflow: "hidden" }}
-            >
-              <PlayerIcon icon={icon} size={72} style={{ display: "block" }} />
-            </motion.div>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 15, fontWeight: 900, color: "#fff", letterSpacing: 1 }}>
-                {(name.trim() || "—").slice(0, 14)}
-              </div>
-              <div style={{ fontSize: 9, color: getTitleColor(profile.stats.wins), letterSpacing: 3, marginTop: 3 }}>
-                {getTitle(profile.stats.wins)}
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
-              {([["W", profile.stats.wins, "#44ff88"], ["L", profile.stats.losses, "#ff4466"], ["M", profile.stats.matches, "#888"]] as const).map(([label, val, clr]) => (
-                <div key={label} style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 14, fontWeight: 900, color: clr }}>{val}</div>
-                  <div style={{ fontSize: 8, color: "#445", letterSpacing: 2 }}>{label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-      </div>
-
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <button
-          onClick={onCancel}
-          style={{
-            padding: "8px 18px", background: "rgba(255,255,255,0.04)",
-            border: "1px solid #2a2a3a", borderRadius: 8,
-            color: "#667", fontSize: 11, cursor: "pointer", fontFamily: "inherit",
-          }}
-        >Cancel</button>
-        <motion.button
-          whileHover={canSave ? { scale: 1.04 } : {}}
-          whileTap={canSave ? { scale: 0.97 } : {}}
-          onClick={() => {
-            if (!canSave) return;
-            updateProfile(profile.id, name, icon);
-            onSaved();
-          }}
-          style={{
-            padding: "8px 22px",
-            background: canSave ? color : "rgba(255,255,255,0.05)",
-            border: "none", borderRadius: 8,
-            color: canSave ? "#000" : "#334",
-            fontSize: 11, fontWeight: 800, cursor: canSave ? "pointer" : "default",
-            fontFamily: "inherit", letterSpacing: 2,
-          }}
-        >SAVE</motion.button>
-      </div>
-    </motion.div>
-  );
-}
-
-// ── Player column ─────────────────────────────────────────────────────────────
-function PlayerColumn({
-  pid, color, profiles, selected, onSelect, onRefresh,
-}: {
-  pid: "P1" | "P2";
-  color: string;
-  profiles: Profile[];
-  selected: Profile | null;
-  onSelect: (p: Profile | null) => void;
-  onRefresh: () => void;
-}) {
-  const [creating, setCreating] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-
-  const handleDelete = (id: string) => {
-    deleteProfile(id);
-    if (selected?.id === id) onSelect(null);
-    onRefresh();
-  };
-
-  const editingProfile = editingId ? profiles.find(p => p.id === editingId) ?? null : null;
-
-  return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
-      {/* Header */}
-      <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 11, letterSpacing: 6, color: color, fontWeight: 800, marginBottom: 2 }}>
-          {pid === "P1" ? "PLAYER 1" : "PLAYER 2"}
-        </div>
-        {selected && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            style={{ fontSize: 9, color: color + "99", letterSpacing: 2 }}>
-            ✓ SELECTED
-          </motion.div>
-        )}
-      </div>
-
-      {/* Profile list */}
-      <div style={{
-        flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8,
-        maxHeight: 380, paddingRight: 4, scrollbarWidth: "thin",
-      }}>
-        <AnimatePresence mode="popLayout">
-          {profiles.map(p => (
-            <SavedProfileCard
-              key={p.id}
-              profile={p}
-              color={color}
-              selected={selected?.id === p.id}
-              onSelect={() => onSelect(selected?.id === p.id ? null : p)}
-              onDelete={() => handleDelete(p.id)}
-              onEdit={() => { setCreating(false); setEditingId(p.id); }}
-            />
-          ))}
-        </AnimatePresence>
-
-        {profiles.length === 0 && !creating && !editingId && (
-          <div style={{ textAlign: "center", padding: "28px 0", color: "#334", fontSize: 11 }}>
-            No profiles yet
-          </div>
-        )}
-      </div>
-
-      {/* Create / Edit form or new-profile button */}
-      <AnimatePresence mode="wait">
-        {editingProfile ? (
-          <EditForm
-            key={`edit-${editingProfile.id}`}
-            profile={editingProfile}
-            color={color}
-            onSaved={() => {
-              onRefresh();
-              // If this profile was selected, refresh the selection object so name/icon update
-              if (selected?.id === editingProfile.id) {
-                const updated = loadProfiles().find(p => p.id === editingProfile.id);
-                if (updated) onSelect(updated);
-              }
-              setEditingId(null);
-            }}
-            onCancel={() => setEditingId(null)}
-          />
-        ) : creating ? (
-          <CreateForm
-            key="form"
-            color={color}
-            onCreated={p => {
-              onRefresh();
-              onSelect(p);
-              setCreating(false);
-            }}
-            onCancel={() => setCreating(false)}
-          />
-        ) : (
-          <motion.button
-            key="btn"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            whileHover={{ y: -2, borderColor: color + "99" }}
-            whileTap={{ scale: 0.97 }}
-            onClick={() => setCreating(true)}
-            style={{
-              padding: "10px", background: "rgba(255,255,255,0.03)",
-              border: `1px dashed ${color}44`, borderRadius: 10,
-              color: color + "aa", fontSize: 11, cursor: "pointer",
-              fontFamily: "inherit", letterSpacing: 2,
-            }}
-          >+ NEW PROFILE</motion.button>
-        )}
-      </AnimatePresence>
-    </div>
   );
 }
 
@@ -548,27 +285,40 @@ export default function ProfileSelectScreen({
   const [profiles, setProfiles] = useState<Profile[]>(loadProfiles);
   const [p1, setP1] = useState<Profile | null>(null);
   const [p2, setP2] = useState<Profile | null>(null);
+  // Which slot is "active" — next click on a profile card assigns to this slot
+  const [activeSlot, setActiveSlot] = useState<"P1" | "P2" | null>(null);
+  const [formSlot, setFormSlot] = useState<"P1" | "P2" | null>(null);
+  const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
 
   const refresh = () => setProfiles(loadProfiles());
   const canStart = p1 !== null && p2 !== null && p1.id !== p2.id;
 
-  // Auto-clear selection if same profile picked for both
-  useEffect(() => {
-    if (p1 && p2 && p1.id === p2.id) setP2(null);
-  }, [p1, p2]);
+  const assignProfile = (profile: Profile) => {
+    if (!activeSlot) return;
+    if (activeSlot === "P1") {
+      if (p2?.id === profile.id) setP2(null);
+      setP1(profile);
+    } else {
+      if (p1?.id === profile.id) setP1(null);
+      setP2(profile);
+    }
+    setActiveSlot(null);
+  };
+
+  const getAssignment = (profile: Profile): "P1" | "P2" | null => {
+    if (p1?.id === profile.id) return "P1";
+    if (p2?.id === profile.id) return "P2";
+    return null;
+  };
+
+  const formColor = formSlot ? PLAYER_COLOR[formSlot] : "#9933ff";
 
   return (
     <div style={{
-      minHeight: "100vh",
-      background: "#04040a",
-      backgroundImage: BG.home,
-      backgroundSize: "cover",
-      backgroundPosition: "center",
+      minHeight: "100vh", background: "#04040a",
+      backgroundImage: BG.home, backgroundSize: "cover", backgroundPosition: "center",
       fontFamily: "'Segoe UI', system-ui, sans-serif",
-      display: "flex",
-      flexDirection: "column",
-      position: "relative",
-      overflow: "hidden",
+      display: "flex", flexDirection: "column", position: "relative", overflow: "hidden",
     }}>
       <div style={{ position: "absolute", inset: 0, background: "rgba(3,3,10,0.72)", zIndex: 0 }} />
       <AmbientCanvas />
@@ -577,56 +327,170 @@ export default function ProfileSelectScreen({
       <div style={{ position: "relative", zIndex: 3, display: "flex", flexDirection: "column", flex: 1, padding: "28px 40px" }}>
 
         {/* Back */}
-        <button
-          onClick={onBack}
-          style={{
-            alignSelf: "flex-start",
-            padding: "7px 16px", background: "rgba(255,255,255,0.04)",
-            border: "1px solid #2a2a3a", borderRadius: 8,
-            color: "#556", cursor: "pointer", fontSize: 11,
-            letterSpacing: 2, fontFamily: "inherit", marginBottom: 28,
-          }}
-        >← BACK</button>
+        <button onClick={onBack} style={{
+          alignSelf: "flex-start", padding: "7px 16px", background: "rgba(255,255,255,0.04)",
+          border: "1px solid #2a2a3a", borderRadius: 8, color: "#556",
+          cursor: "pointer", fontSize: 11, letterSpacing: 2, fontFamily: "inherit", marginBottom: 20,
+        }}>← BACK</button>
 
         {/* Title */}
-        <motion.div
-          initial={{ y: -16, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          style={{ textAlign: "center", marginBottom: 32 }}
-        >
-          <div style={{ fontSize: 11, letterSpacing: 8, color: "#9966bb", fontWeight: 700, marginBottom: 6 }}>
-            SELECT PROFILES
-          </div>
+        <motion.div initial={{ y: -12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{ fontSize: 11, letterSpacing: 8, color: "#9966bb", fontWeight: 700, marginBottom: 6 }}>SELECT PROFILES</div>
           <div style={{ height: 1, width: 120, margin: "0 auto", background: "linear-gradient(90deg, transparent, #9933ff88, transparent)" }} />
         </motion.div>
 
-        {/* Two columns */}
+        {/* Controller icons at top */}
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          style={{ display: "flex", gap: 32, flex: 1, alignItems: "flex-start" }}
+          transition={{ delay: 0.05 }}
+          style={{ display: "flex", justifyContent: "center", gap: 48, marginBottom: 28 }}
         >
-          <PlayerColumn pid="P1" color={PLAYER_COLOR.P1} profiles={profiles} selected={p1}
-            onSelect={setP1} onRefresh={refresh} />
+          {(["P1", "P2"] as const).map(pid => {
+            const color = PLAYER_COLOR[pid];
+            const profile = pid === "P1" ? p1 : p2;
+            const isActive = activeSlot === pid;
+            return (
+              <motion.div
+                key={pid}
+                onClick={() => setActiveSlot(isActive ? null : pid)}
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.94 }}
+                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, cursor: "pointer" }}
+              >
+                {/* Glow ring when active */}
+                <motion.div
+                  animate={isActive ? { boxShadow: [`0 0 0 2px ${color}99`, `0 0 0 6px ${color}44`, `0 0 0 2px ${color}99`] } : { boxShadow: "none" }}
+                  transition={{ duration: 1.1, repeat: Infinity }}
+                  style={{ borderRadius: 12, padding: 6, background: isActive ? `${color}22` : "transparent", transition: "background 0.2s" }}
+                >
+                  <ControllerIcon color={color} active={isActive} size={52} />
+                </motion.div>
 
-          {/* Divider */}
-          <div style={{ width: 1, alignSelf: "stretch", background: "linear-gradient(to bottom, transparent, #2a2a4a, transparent)" }} />
+                <div style={{ fontSize: 9, letterSpacing: 3, color: isActive ? color : "#445", fontWeight: 700, transition: "color 0.2s" }}>
+                  {pid === "P1" ? "PLAYER 1" : "PLAYER 2"}
+                </div>
 
-          <PlayerColumn pid="P2" color={PLAYER_COLOR.P2} profiles={profiles} selected={p2}
-            onSelect={setP2} onRefresh={refresh} />
+                {/* Assigned profile mini-badge */}
+                <AnimatePresence mode="wait">
+                  {profile ? (
+                    <motion.div
+                      key={profile.id}
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      style={{ display: "flex", alignItems: "center", gap: 6, background: `${color}22`, border: `1px solid ${color}55`, borderRadius: 20, padding: "3px 10px 3px 4px" }}
+                    >
+                      <div style={{ borderRadius: "50%", overflow: "hidden", border: `1px solid ${color}88` }}>
+                        <PlayerIcon icon={profile.icon} size={22} style={{ display: "block" }} />
+                      </div>
+                      <span style={{ fontSize: 10, color: "#ddd", fontWeight: 700 }}>{profile.name.slice(0, 12)}</span>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="empty"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      style={{ fontSize: 9, color: isActive ? color + "99" : "#2a2a4a", letterSpacing: 2 }}
+                    >
+                      {isActive ? "CLICK A PROFILE" : "—"}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            );
+          })}
         </motion.div>
 
-        {/* Start button */}
+        {/* Active slot instruction banner */}
+        <AnimatePresence>
+          {activeSlot && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              style={{
+                textAlign: "center", marginBottom: 16,
+                fontSize: 10, letterSpacing: 3, fontWeight: 700,
+                color: PLAYER_COLOR[activeSlot],
+              }}
+            >
+              ↓ CLICK A PROFILE BELOW TO ASSIGN TO {activeSlot === "P1" ? "PLAYER 1" : "PLAYER 2"} ↓
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Profile grid */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
-          style={{ textAlign: "center", marginTop: 24 }}
+          transition={{ delay: 0.1 }}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+            gap: 14,
+            flex: 1,
+            overflowY: "auto",
+            paddingRight: 4,
+            scrollbarWidth: "thin",
+            maxHeight: "calc(100vh - 460px)",
+            alignContent: "start",
+          }}
+        >
+          <AnimatePresence mode="popLayout">
+            {profiles.map(profile => (
+              <ProfileCard
+                key={profile.id}
+                profile={profile}
+                assignedTo={getAssignment(profile)}
+                onAssign={() => assignProfile(profile)}
+                onEdit={() => setEditingProfile(profile)}
+                onDelete={() => {
+                  deleteProfile(profile.id);
+                  if (p1?.id === profile.id) setP1(null);
+                  if (p2?.id === profile.id) setP2(null);
+                  refresh();
+                }}
+              />
+            ))}
+          </AnimatePresence>
+
+          {/* New profile button */}
+          {(["P1", "P2"] as const).map(pid => (
+            <motion.div
+              key={`new-${pid}`}
+              whileHover={{ y: -3, borderColor: PLAYER_COLOR[pid] + "77" }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setFormSlot(pid)}
+              style={{
+                border: `2px dashed ${PLAYER_COLOR[pid]}33`, borderRadius: 16,
+                padding: "20px", cursor: "pointer", textAlign: "center",
+                color: PLAYER_COLOR[pid] + "77", fontSize: 12, letterSpacing: 2,
+                transition: "border-color 0.2s",
+              }}
+            >
+              <div style={{ fontSize: 22, marginBottom: 6 }}>+</div>
+              <div style={{ fontSize: 9, letterSpacing: 3 }}>NEW PROFILE</div>
+            </motion.div>
+          )).slice(0, 1)}
+        </motion.div>
+
+        {/* Bottom: confirm button */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.15 }}
+          style={{ textAlign: "center", marginTop: 20, paddingTop: 16, borderTop: "1px solid #1a1a2e" }}
         >
           {p1 && p2 && p1.id === p2.id && (
             <div style={{ fontSize: 10, color: "#ff4466", letterSpacing: 2, marginBottom: 8 }}>
               Both players cannot use the same profile
+            </div>
+          )}
+          {!canStart && !activeSlot && (
+            <div style={{ fontSize: 9, color: "#334", letterSpacing: 3, marginBottom: 10 }}>
+              CLICK A CONTROLLER → SELECT A PROFILE FOR EACH PLAYER
             </div>
           )}
           <motion.button
@@ -635,27 +499,38 @@ export default function ProfileSelectScreen({
             onClick={() => { if (canStart) onStart(p1!, p2!); }}
             style={{
               padding: "14px 60px",
-              background: canStart
-                ? "linear-gradient(135deg, #6622cc, #9933ff)"
-                : "rgba(255,255,255,0.04)",
+              background: canStart ? "linear-gradient(135deg, #6622cc, #9933ff)" : "rgba(255,255,255,0.04)",
               border: `2px solid ${canStart ? "#9933ff" : "#2a2a3a"}`,
-              borderRadius: 12,
-              color: canStart ? "#fff" : "#334",
+              borderRadius: 12, color: canStart ? "#fff" : "#334",
               fontSize: 14, fontWeight: 900, letterSpacing: 6,
-              cursor: canStart ? "pointer" : "default",
-              fontFamily: "inherit",
+              cursor: canStart ? "pointer" : "default", fontFamily: "inherit",
               boxShadow: canStart ? "0 0 40px #6622cc66, 0 8px 24px rgba(0,0,0,0.5)" : "none",
             }}
           >
             START MATCH
           </motion.button>
-          {!canStart && (
-            <div style={{ fontSize: 9, color: "#334", letterSpacing: 3, marginTop: 8 }}>
-              BOTH PLAYERS MUST SELECT A PROFILE
-            </div>
-          )}
         </motion.div>
       </div>
+
+      {/* Profile form modal */}
+      <AnimatePresence>
+        {(formSlot || editingProfile) && (
+          <ProfileFormModal
+            editing={editingProfile}
+            color={formSlot ? PLAYER_COLOR[formSlot] : editingProfile ? (getAssignment(editingProfile) ? PLAYER_COLOR[getAssignment(editingProfile)!] : "#9933ff") : "#9933ff"}
+            onDone={p => {
+              refresh();
+              if (editingProfile) {
+                if (p1?.id === p.id) setP1(p);
+                if (p2?.id === p.id) setP2(p);
+              }
+              setFormSlot(null);
+              setEditingProfile(null);
+            }}
+            onCancel={() => { setFormSlot(null); setEditingProfile(null); }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

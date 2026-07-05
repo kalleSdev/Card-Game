@@ -311,7 +311,7 @@ export default function CardGallery({
               letterSpacing: 2, fontFamily: "inherit",
             }}
           >
-            ← HOME
+            ← BACK
           </button>
 
           <div style={{ flex: 1, textAlign: "center" }}>
