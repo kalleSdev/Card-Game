@@ -341,10 +341,10 @@ function buildPlayer(
     return makeBattleCard(id, def);
   });
 
-  // Shuffle and deal opening hand of 4
+  // Shuffle and deal opening hand of 5
   const shuffled = shuffle(deckCards);
-  const hand = shuffled.slice(0, 4);
-  const deck = shuffled.slice(4);
+  const hand = shuffled.slice(0, 5);
+  const deck = shuffled.slice(5);
 
   const weaponBonus = weaponAtkBonus(draft.weaponIds);
   // Apply weapon bonus to leader and all cards
@@ -701,9 +701,9 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       const attacker = findOnBoard(state.players[pid], state.pendingAttackerId);
       if (!attacker) return illegal("Attacker not found");
       if (!attacker.canAttack || attacker.exhausted) return illegal("Attacker cannot attack");
-      // Taunt check — COMBAT cards protect the leader
-      const tauntGuards = boardCards(state.players[opp]).filter(c => c.hasTaunt);
-      if (tauntGuards.length > 0) return illegal("Enemy has COMBAT cards in the way — defeat them first!");
+      // Any card on the board protects the leader — clear the board first
+      const tauntGuards = boardCards(state.players[opp]);
+      if (tauntGuards.length > 0) return illegal("Defeat all enemy cards before targeting the leader!");
 
       const damage = attacker.atk;
       let p = { ...state.players[pid] };

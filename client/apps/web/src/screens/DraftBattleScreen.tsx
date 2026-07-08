@@ -315,25 +315,32 @@ function EquipmentPhase({ pid, profile, color, weaponPool, leaderId, allPickedId
         </div>
       </div>
 
-      {/* Leader prominent at top */}
-      {cardDb[leaderId] && (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-          <div style={{ fontSize: 8, color: "#334", letterSpacing: 3 }}>YOUR LEADER</div>
-          <div style={{ transform: "scale(0.82)", transformOrigin: "center top" }}>
-            <CharacterCard defId={leaderId} def={cardDb[leaderId]} size="lg" />
-          </div>
-        </div>
-      )}
-      {/* Rest of deck below */}
-      <div style={{ display: "flex", gap: 3, flexWrap: "wrap", justifyContent: "center", maxWidth: 560 }}>
-        {allPickedIds.map(id => {
-          const def = cardDb[id];
-          return def ? (
-            <div key={id} style={{ transform: "scale(0.55)", transformOrigin: "center center" }}>
-              <CharacterCard defId={id} def={def} size="sm" />
+      {/* Deck preview: leader + two rows of 5 */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, width: "100%" }}>
+        {/* Leader row */}
+        {cardDb[leaderId] && (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+            <div style={{ fontSize: 8, color: "#334", letterSpacing: 3 }}>LEADER</div>
+            <div style={{ transform: "scale(0.78)", transformOrigin: "center top" }}>
+              <CharacterCard defId={leaderId} def={cardDb[leaderId]} size="lg" />
             </div>
-          ) : null;
-        })}
+          </div>
+        )}
+        {/* Two rows of up to 5 cards each */}
+        {[allPickedIds.slice(0, 5), allPickedIds.slice(5, 10)].map((row, ri) => (
+          row.length > 0 && (
+            <div key={ri} style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+              {row.map(id => {
+                const def = cardDb[id];
+                return def ? (
+                  <div key={id} style={{ transform: "scale(0.72)", transformOrigin: "center top" }}>
+                    <CharacterCard defId={id} def={def} size="sm" />
+                  </div>
+                ) : null;
+              })}
+            </div>
+          )
+        ))}
       </div>
 
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", justifyContent: "center", maxWidth: 580 }}>

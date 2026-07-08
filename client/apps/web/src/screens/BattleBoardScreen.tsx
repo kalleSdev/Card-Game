@@ -532,13 +532,13 @@ export default function BattleBoardScreen({
     const drawn: string[] = [];
     setBattleState(prev => {
       const p = { ...prev.players[pid] };
-      const swapCount = mulliganReturning.size;
-      const kept  = p.hand.filter(c => !mulliganReturning.has(c.instanceId));
-      const going = p.hand.filter(c =>  mulliganReturning.has(c.instanceId));
-      const deck  = shuffle([...p.deck, ...going]);
-      const newCards = deck.slice(0, swapCount);
+      const going  = p.hand.filter(c =>  mulliganReturning.has(c.instanceId));
+      const kept   = p.hand.filter(c => !mulliganReturning.has(c.instanceId));
+      // Draw from existing deck FIRST so returned cards cannot come back immediately
+      const newCards = p.deck.slice(0, going.length);
       newCards.forEach(c => drawn.push(c.instanceId));
-      const rest  = deck.slice(swapCount);
+      // Returned cards go to the back of the remaining deck
+      const rest = [...p.deck.slice(going.length), ...shuffle(going)];
       return { ...prev, players: { ...prev.players, [pid]: { ...p, hand: [...kept, ...newCards], deck: rest } } };
     });
     setNewCardIds(new Set(drawn));
@@ -691,18 +691,6 @@ export default function BattleBoardScreen({
                     </div>
                   )}
 
-                  {/* New card glow badge */}
-                  {isNew && (
-                    <motion.div
-                      animate={{ opacity: [0.6, 1, 0.6] }} transition={{ duration: 1.2, repeat: Infinity }}
-                      style={{
-                        position: "absolute", inset: 0, borderRadius: 12,
-                        border: "2px solid #44ff88",
-                        background: "rgba(40,255,100,0.12)",
-                        pointerEvents: "none",
-                      }}
-                    />
-                  )}
                 </motion.div>
               );
             })}
@@ -785,7 +773,7 @@ export default function BattleBoardScreen({
       background: "linear-gradient(180deg, #020209 0%, #04021a 50%, #020209 100%)",
       display: "flex", flexDirection: "column",
       fontFamily: "'Segoe UI', system-ui, sans-serif",
-      overflow: "hidden", position: "relative",
+      overflowX: "hidden", overflowY: "hidden", position: "relative",
     }}>
       {/* Subtle grid */}
       <div style={{
@@ -893,6 +881,35 @@ export default function BattleBoardScreen({
         <div style={{ position: "absolute", bottom: 4, left: 14, fontSize: 8, letterSpacing: 4, color: "#1a1a2a" }}>
           YOUR BOARD
         </div>
+
+        {/* Deck stack — right side */}
+        <div style={{
+          position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+        }}>
+          {/* Stacked card silhouettes */}
+          <div style={{ position: "relative", width: 34, height: 46 }}>
+            {[4, 3, 2, 1, 0].map(offset => (
+              <div key={offset} style={{
+                position: "absolute",
+                top: -offset * 1.5, left: offset * 0.5,
+                width: 34, height: 46, borderRadius: 5,
+                background: offset === 0 ? "rgba(20,20,50,0.9)" : "rgba(12,12,30,0.7)",
+                border: `1px solid ${offset === 0 ? "#2a2a5a" : "#1a1a3a"}`,
+                display: offset === 0 ? "flex" : "block",
+                alignItems: "center", justifyContent: "center",
+                fontSize: 14, color: "#334",
+              }}>
+                {offset === 0 ? "🃏" : null}
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, fontWeight: 900, color: "#445", letterSpacing: 1 }}>
+            {player.deck.length}
+          </div>
+          <div style={{ fontSize: 7, color: "#223", letterSpacing: 2 }}>DECK</div>
+        </div>
+
         <BoardRow
           board={player.board} cardDb={cardDb}
           pendingId={battleState.pendingAttackerId}
@@ -919,26 +936,31 @@ export default function BattleBoardScreen({
       </div>
 
       {/* ── HAND ─────────────────────────────────────────────────────────── */}
+      {/* Outer wrapper has no overflow so hovered cards can rise above the leader section */}
       <div style={{
-        display: "flex", gap: 12, justifyContent: "center",
-        padding: "12px 28px", overflowX: "auto",
         background: "rgba(0,0,0,0.55)", borderTop: "1px solid #111128",
-        minHeight: 138, flexShrink: 0, zIndex: 2, position: "relative",
-        alignItems: "flex-end",
+        minHeight: 138, flexShrink: 0, position: "relative", zIndex: 50,
+        paddingTop: 18, // gives upward-hover room
       }}>
-        {player.hand.map(card => (
-          <HandCardView
-            key={card.instanceId}
-            card={card} cardDb={cardDb}
-            energy={player.energy} costReduction={player.costReduction}
-            onPlay={() => handlePlayCard(card.instanceId)}
-          />
-        ))}
-        {player.hand.length === 0 && (
-          <div style={{ color: "#2a2a38", fontSize: 10, letterSpacing: 3, alignSelf: "center" }}>
-            NO CARDS IN HAND
-          </div>
-        )}
+        <div style={{
+          display: "flex", gap: 12, justifyContent: "center",
+          padding: "0 28px 12px", overflowX: "auto", overflowY: "visible",
+          alignItems: "flex-end",
+        }}>
+          {player.hand.map(card => (
+            <HandCardView
+              key={card.instanceId}
+              card={card} cardDb={cardDb}
+              energy={player.energy} costReduction={player.costReduction}
+              onPlay={() => handlePlayCard(card.instanceId)}
+            />
+          ))}
+          {player.hand.length === 0 && (
+            <div style={{ color: "#2a2a38", fontSize: 10, letterSpacing: 3, alignSelf: "center", paddingBottom: 12 }}>
+              NO CARDS IN HAND
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Overlays ─────────────────────────────────────────────────────── */}
