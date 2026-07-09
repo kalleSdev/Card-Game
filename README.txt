@@ -5,6 +5,27 @@ npm run dev
 
 
 NEXT TIME: 
+
+in the starting hand screen in the quick draft please make sure to implement everything we have done there as well, the new card design with the attack and hp and cost top right of the cards, the leaders hp and attack numbers, everything of that sort. 
+the synergy system works differently now, no need for them to be on board or for it to trigger in any way, just having a deck that fulfilled the synergys means you now have those spell cards in your pool to draw spells from. so you can ALWAYS use the 2 cost spell summon, 
+and it chooses a spell from your pool, if you have no synergies, or you already used it and ran out of spells to summon then you cant use it anymore. but for each synergy you have in your deck after drafting, those corresponding spells are added to your pool and you 
+click on the spell summoning button to get a random one from those in your pool. 
+
+currently once reaching the board to battle in the quick draft as soon as a card is clicked to place the entire page goes blank. fix this. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 refine card costs to place, make them all 1 cheaper for now. 
 refine placement of cards to hearthstone visuals where the leader is in the back and the cards go in front
 also make it like hearthstone where the leaders both face "down" of the screen regardless of whos turn it is. 

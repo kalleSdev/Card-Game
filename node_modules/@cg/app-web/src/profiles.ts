@@ -7,11 +7,24 @@ export interface ProfileStats {
 export interface MatchRecord {
   id: string;
   date: number;
-  mode: "quick" | "draft";
+  mode: "quick" | "draft" | "normal";
   opponentId: string;
   opponentName: string;
   opponentIcon: string;
   result: "win" | "loss";
+}
+
+export interface CollectedCard {
+  defId: string;
+  duplicateStars: number;  // each 5 = ascend one tier (S→SS→SSS→X)
+  killStars: number;       // red stars from killing enemy leader; each 5 = 1 kill-X mark
+}
+
+export interface SubDeck {
+  id: string;
+  name: string;
+  leaderId: string;
+  cardIds: string[];  // exactly 10 non-leader cards
 }
 
 export interface Profile {
@@ -21,7 +34,10 @@ export interface Profile {
   createdAt: number;
   quickStats: ProfileStats;
   draftStats: ProfileStats;
+  normalStats: ProfileStats;
   history: MatchRecord[];
+  collection: CollectedCard[];
+  subDecks: SubDeck[];
   /** @deprecated kept for migration only */
   stats?: ProfileStats;
 }
@@ -35,9 +51,12 @@ export function loadProfiles(): Profile[] {
     const raw: Profile[] = JSON.parse(localStorage.getItem(KEY) ?? "[]");
     return raw.map(p => ({
       ...p,
-      quickStats: p.quickStats ?? p.stats ?? emptyStats(),
-      draftStats: p.draftStats ?? emptyStats(),
-      history: p.history ?? [],
+      quickStats:  p.quickStats  ?? p.stats ?? emptyStats(),
+      draftStats:  p.draftStats  ?? emptyStats(),
+      normalStats: p.normalStats ?? emptyStats(),
+      history:     p.history     ?? [],
+      collection:  p.collection  ?? [],
+      subDecks:    p.subDecks    ?? [],
     }));
   } catch {
     return [];
@@ -54,9 +73,12 @@ export function createProfile(name: string, icon: string): Profile {
     name: name.trim() || "Unnamed",
     icon,
     createdAt: Date.now(),
-    quickStats: emptyStats(),
-    draftStats: emptyStats(),
+    quickStats:  emptyStats(),
+    draftStats:  emptyStats(),
+    normalStats: emptyStats(),
     history: [],
+    collection: [],
+    subDecks: [],
   };
   saveProfiles([...loadProfiles(), profile]);
   return profile;
@@ -75,14 +97,14 @@ export function updateProfile(id: string, name: string, icon: string): void {
 export function recordMatchResult(
   winnerProfileId: string,
   loserProfileId: string,
-  mode: "quick" | "draft",
+  mode: "quick" | "draft" | "normal",
   winnerName: string,
   winnerIcon: string,
   loserName: string,
   loserIcon: string,
 ): void {
   const all = loadProfiles();
-  const field = mode === "draft" ? "draftStats" : "quickStats";
+  const field = mode === "draft" ? "draftStats" : mode === "normal" ? "normalStats" : "quickStats";
   const matchId = crypto.randomUUID();
   const date = Date.now();
   for (const p of all) {
@@ -106,8 +128,77 @@ export function recordMatchResult(
   saveProfiles(all);
 }
 
+// ── Collection helpers ────────────────────────────────────────────────────────
+
+export function addCardsToCollection(profileId: string, defIds: string[]): void {
+  const all = loadProfiles();
+  for (const p of all) {
+    if (p.id !== profileId) continue;
+    for (const defId of defIds) {
+      const existing = p.collection.find(c => c.defId === defId);
+      if (existing) {
+        existing.duplicateStars++;
+      } else {
+        p.collection.push({ defId, duplicateStars: 0, killStars: 0 });
+      }
+    }
+  }
+  saveProfiles(all);
+}
+
+export function addKillStar(profileId: string, defId: string): void {
+  const all = loadProfiles();
+  for (const p of all) {
+    if (p.id !== profileId) continue;
+    const card = p.collection.find(c => c.defId === defId);
+    if (card) card.killStars++;
+  }
+  saveProfiles(all);
+}
+
+export function resetCard(profileId: string, defId: string): void {
+  const all = loadProfiles();
+  for (const p of all) {
+    if (p.id !== profileId) continue;
+    const card = p.collection.find(c => c.defId === defId);
+    if (card) { card.duplicateStars = 0; card.killStars = 0; }
+  }
+  saveProfiles(all);
+}
+
+export function saveSubDeck(profileId: string, deck: SubDeck): void {
+  const all = loadProfiles();
+  for (const p of all) {
+    if (p.id !== profileId) continue;
+    const idx = p.subDecks.findIndex(d => d.id === deck.id);
+    if (idx >= 0) p.subDecks[idx] = deck;
+    else p.subDecks.push(deck);
+  }
+  saveProfiles(all);
+}
+
+export function deleteSubDeck(profileId: string, deckId: string): void {
+  const all = loadProfiles();
+  for (const p of all) {
+    if (p.id !== profileId) continue;
+    p.subDecks = p.subDecks.filter(d => d.id !== deckId);
+  }
+  saveProfiles(all);
+}
+
+// ── Computed helpers ──────────────────────────────────────────────────────────
+
+/** Returns the visual rarity tier for a collected card based on ascension level */
+export function getAscensionRarity(card: CollectedCard): string {
+  const level = Math.floor(card.duplicateStars / 5);
+  if (level >= 3) return "X";
+  if (level === 2) return "SSS";
+  if (level === 1) return "SS";
+  return "S";
+}
+
 export function totalWins(p: Profile): number {
-  return (p.quickStats?.wins ?? 0) + (p.draftStats?.wins ?? 0);
+  return (p.quickStats?.wins ?? 0) + (p.draftStats?.wins ?? 0) + (p.normalStats?.wins ?? 0);
 }
 
 export function getTitle(wins: number): string {

@@ -3,11 +3,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { CardDef, PlayerId } from "@cg/contracts";
 import CharacterCard from "../components/CharacterCard";
 import PlayerIcon from "../components/PlayerIcon";
-import { ROULETTE_ITEM_MAP } from "@cg/engine";
 import { BG } from "../backgrounds";
 import AmbientCanvas from "../components/AmbientCanvas";
 import AmbientOverlay from "../components/AmbientOverlay";
 import type { Profile } from "../profiles";
+import { BATTLE_SYNERGY_RULES, DOMAIN_BATTLE_EFFECTS } from "../battleEngine";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface PlayerDraftResult {
@@ -34,6 +34,8 @@ const PICK_SPECS: PickSpec[] = [
   { kind: "RANDOM", label: "Free Pick" },
   { kind: "RANDOM", label: "Free Pick" },
   { kind: "RANDOM", label: "Free Pick" },
+  { kind: "RANDOM", label: "Free Pick" },
+  { kind: "RANDOM", label: "Free Pick" },
 ];
 
 const PLAYER_COLOR: Record<PlayerId, string> = { P1: "#4a9eff", P2: "#ff6666" };
@@ -51,7 +53,9 @@ function shuffle<T>(arr: T[]): T[] {
 
 function getLeaderOptions(cardDb: Record<string, CardDef>): string[] {
   return shuffle(
-    Object.entries(cardDb).filter(([, def]) => def.affinity === "LEADER").map(([id]) => id)
+    Object.entries(cardDb)
+      .filter(([, def]) => ["SS", "SSS", "X"].includes(def.rarity))
+      .map(([id]) => id)
   ).slice(0, 3);
 }
 
@@ -66,28 +70,115 @@ function getTypedOptions(cardDb: Record<string, CardDef>, affinity: "COMBAT" | "
 function getRandomOptions(cardDb: Record<string, CardDef>, exclude: string[]): string[] {
   return shuffle(
     Object.entries(cardDb)
-      .filter(([id, def]) => def.affinity !== "LEADER" && !exclude.includes(id))
+      // Include X rarity regardless of affinity (they're normally LEADER affinity, but appear in random picks)
+      .filter(([id, def]) => (def.affinity !== "LEADER" || def.rarity === "X") && !exclude.includes(id))
       .map(([id]) => id)
   ).slice(0, 3);
 }
 
-function getWeaponPool(exclude: string[]): string[] {
-  return shuffle(Object.keys(ROULETTE_ITEM_MAP).filter(id => !exclude.includes(id))).slice(0, 5);
+// ── Synergy progress panel ─────────────────────────────────────────────────────
+function SynergyTracker({ pickedIds, cardDb }: { pickedIds: string[]; cardDb: Record<string, CardDef> }) {
+  const defs = pickedIds.map(id => cardDb[id]).filter(Boolean);
+  const activeSynergies = BATTLE_SYNERGY_RULES.filter(rule => {
+    const count = defs.filter(def => rule.tags.every(t => (def?.tags ?? []).includes(t))).length;
+    return count >= rule.minCount;
+  });
+  const progressSynergies = BATTLE_SYNERGY_RULES.filter(rule => {
+    const count = defs.filter(def => rule.tags.every(t => (def?.tags ?? []).includes(t))).length;
+    return count > 0 && count < rule.minCount;
+  });
+  if (activeSynergies.length === 0 && progressSynergies.length === 0) return null;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 160 }}>
+      {activeSynergies.map(rule => (
+        <div key={rule.id} style={{
+          padding: "5px 8px", borderRadius: 6,
+          background: "rgba(100,255,150,0.07)", border: "1px solid #44ff8855",
+          fontSize: 8, color: "#44ff88", letterSpacing: 1,
+        }}>
+          <div style={{ fontWeight: 900 }}>✦ {rule.label}</div>
+          <div style={{ color: "#44ff8899", marginTop: 1 }}>→ {rule.spellName}</div>
+        </div>
+      ))}
+      {progressSynergies.map(rule => {
+        const count = defs.filter(def => rule.tags.every(t => (def?.tags ?? []).includes(t))).length;
+        return (
+          <div key={rule.id} style={{
+            padding: "5px 8px", borderRadius: 6,
+            background: "rgba(255,200,50,0.05)", border: "1px solid #ffcc0033",
+            fontSize: 8, color: "#ffcc0088", letterSpacing: 1,
+          }}>
+            <div style={{ fontWeight: 900 }}>{rule.label} ({count}/{rule.minCount})</div>
+            <div style={{ color: "#ffcc0055", marginTop: 1 }}>→ {rule.spellName}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Badges on pick cards indicating which synergies this card would help
+function getSynergyBadges(def: CardDef, pickedIds: string[], cardDb: Record<string, CardDef>): { label: string; activates: boolean }[] {
+  const pickedDefs = pickedIds.map(id => cardDb[id]).filter(Boolean);
+  return BATTLE_SYNERGY_RULES.flatMap(rule => {
+    const cardContributes = rule.tags.every(t => (def?.tags ?? []).includes(t));
+    if (!cardContributes) return [];
+    const currentCount = pickedDefs.filter(d => rule.tags.every(t => (d?.tags ?? []).includes(t))).length;
+    const wouldActivate = currentCount + 1 >= rule.minCount;
+    const alreadyActive = currentCount >= rule.minCount;
+    if (alreadyActive) return [];
+    return [{ label: rule.label, activates: wouldActivate }];
+  });
+}
+
+// ── Domain effect human-readable description ─────────────────────────────────
+function domainEffectDesc(defId: string): { name: string; desc: string } {
+  // Toji has no traditional domain — describe his passive instead
+  if (defId === "toji") return {
+    name: "Heavenly Restriction",
+    desc: "Passive: 1 ATK. Attacks TWICE per turn without taking counter damage. When domain meter fills, grants a 4-damage spell.",
+  };
+  const d = DOMAIN_BATTLE_EFFECTS[defId];
+  if (!d) return { name: "Cursed Technique", desc: "Buffs own board cards." };
+  const e = d.effect;
+  let desc = "";
+  switch (e.kind) {
+    case "STUN_ENEMY_BOARD":       desc = `Stuns all enemy cards for ${e.turns} turn${e.turns > 1 ? "s" : ""}.`; break;
+    case "DAMAGE_ALL_ENEMIES":     desc = `Deals ${e.amount} damage split across all enemies.`; break;
+    case "BUFF_OWN_BOARD":         desc = `Gives own board +${e.atkBonus} ATK / +${e.hpBonus} HP for ${e.turns} turn${e.turns > 1 ? "s" : ""}.`; break;
+    case "HEAL_LEADER":            desc = `Restores ${e.amount} HP to your leader.`; break;
+    case "DRAW_CARDS":             desc = `Draw ${e.count} extra card${e.count > 1 ? "s" : ""}.`; break;
+    case "REDUCE_COSTS":           desc = `All cards cost ${e.amount} less for ${e.turns} turn${e.turns > 1 ? "s" : ""}.`; break;
+    case "KILL_ALL_BOARD":         desc = "Destroys all non-leader cards on both sides."; break;
+    case "SPAWN_ENTITIES":         desc = `Spawns ${e.count}× ${e.atk}/${e.hp} Cursed Spirits on your board.`; break;
+    case "GRANT_RANDOM_SPELLS":    desc = `Grants ${e.count} random synergy spells.`; break;
+    case "PERMANENT_LEADER_ATK":   desc = `Leader gains +${e.atk} permanent ATK. Counter ${e.counterDmg} dmg whenever attacked.`; break;
+    case "CHOOSE_KILL_ENEMIES":    desc = `Choose ${e.count} enemy board cards to instantly destroy.`; break;
+    case "COPY_ENEMY_CARD":        desc = "Copy one enemy board card (−1 ATK, −1 HP) onto your board."; break;
+    case "HEAL_AND_KILL_ONE":      desc = `Heal your leader for ${e.healAmount} HP, then destroy one enemy card.`; break;
+    case "SHEEPIFY_BOARD":         desc = "All board cards become 1/1 sheep. Your leader attacks twice. Grants Turn Back spell."; break;
+    case "SNEAK_ATTACK_DOMAIN":    desc = `Deal ${e.amount} damage to any target — no counter damage.`; break;
+    case "GRANT_SPELL":            desc = `Grants spell: "${e.spellName}" — ${e.spellDesc}.`; break;
+    default:                       desc = "Activates a powerful cursed technique.";
+  }
+  return { name: d.name, desc };
 }
 
 // ── Small corner checkmark on selected card ───────────────────────────────────
-function SelectedBadge({ color }: { color: string }) {
+function SelectedBadge() {
   return (
     <motion.div
       initial={{ scale: 0, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       style={{
         position: "absolute", top: 7, right: 7, zIndex: 5,
-        width: 22, height: 22, borderRadius: "50%",
-        background: color,
+        width: 26, height: 26, borderRadius: "50%",
+        background: "rgba(255,255,255,0.15)",
+        backdropFilter: "blur(8px)",
+        border: "1.5px solid rgba(255,255,255,0.40)",
         display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 12, color: "#000", fontWeight: 900,
-        boxShadow: `0 0 10px ${color}cc, 0 2px 6px rgba(0,0,0,0.5)`,
+        fontSize: 13, color: "rgba(255,255,255,0.92)", fontWeight: 900,
+        boxShadow: "0 2px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.3)",
         pointerEvents: "none",
       }}
     >✓</motion.div>
@@ -128,6 +219,7 @@ function LeaderPickPhase({ pid, profile, color, options, cardDb, onPick }: {
           const def = cardDb[id];
           if (!def) return null;
           const isSelected = selected === id;
+          const domain = domainEffectDesc(id);
           return (
             <motion.div key={id} onClick={() => setSelected(id)}
               whileHover={{ y: -10, scale: 1.04 }} whileTap={{ scale: 0.97 }}
@@ -135,12 +227,24 @@ function LeaderPickPhase({ pid, profile, color, options, cardDb, onPick }: {
             >
               <div style={{ transform: "scale(1.25)", transformOrigin: "top center", position: "relative" }}>
                 <CharacterCard defId={id} def={def} size="lg" />
-                {isSelected && <SelectedBadge color={color} />}
+                {isSelected && <SelectedBadge />}
               </div>
-              <div style={{ textAlign: "center", width: 140, paddingTop: 8 }}>
+              <div style={{ textAlign: "center", width: 160, paddingTop: 8 }}>
                 <div style={{ fontSize: 12, fontWeight: 800, color: isSelected ? "#fff" : "#aaa" }}>{def.name}</div>
                 <div style={{ fontSize: 8, color: isSelected ? color : "#334", letterSpacing: 2, marginTop: 3 }}>
                   {isSelected ? "✓ SELECTED" : "LEADER"}
+                </div>
+                {/* Domain info panel */}
+                <div style={{
+                  marginTop: 8, padding: "12px 12px", borderRadius: 10,
+                  background: "rgba(102,0,170,0.2)", border: "1px solid #9933cc55",
+                  textAlign: "left", boxShadow: "0 2px 14px rgba(102,0,170,0.18)",
+                }}>
+                  <div style={{ fontSize: 8, color: "#cc44ff", letterSpacing: 2, fontWeight: 900, marginBottom: 5 }}>
+                    ✦ DOMAIN
+                  </div>
+                  <div style={{ fontSize: 12, color: "#fff", fontWeight: 800, marginBottom: 6, lineHeight: 1.2 }}>{domain.name}</div>
+                  <div style={{ fontSize: 10, color: "#ddd", lineHeight: 1.5 }}>{domain.desc}</div>
                 </div>
               </div>
             </motion.div>
@@ -166,10 +270,10 @@ function LeaderPickPhase({ pid, profile, color, options, cardDb, onPick }: {
 }
 
 // ── Card draft pick ───────────────────────────────────────────────────────────
-function CardDraftPhase({ pid, profile, color, pickIndex, options, cardDb, pickedSoFar, onPick }: {
+function CardDraftPhase({ pid, profile, color, pickIndex, options, cardDb, pickedSoFar, leaderId, onPick }: {
   pid: PlayerId; profile: Profile; color: string;
   pickIndex: number; options: string[]; cardDb: Record<string, CardDef>;
-  pickedSoFar: string[]; onPick: (id: string) => void;
+  pickedSoFar: string[]; leaderId: string; onPick: (id: string) => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const spec = PICK_SPECS[pickIndex];
@@ -178,12 +282,72 @@ function CardDraftPhase({ pid, profile, color, pickIndex, options, cardDb, picke
     ? (spec.affinity === "COMBAT" ? "#ff6644" : "#44aaff")
     : "#bb88ff";
 
+  const leaderDef = cardDb[leaderId];
+  const leaderDomain = leaderId ? domainEffectDesc(leaderId) : null;
+
   return (
     <motion.div
       key={pickIndex}
       initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }}
-      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 28 }}
+      style={{ position: "relative" }}
     >
+    {/* Left sidebar — leader info + deck preview, absolute so no layout shift */}
+    <motion.div
+      initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
+      style={{
+        position: "absolute", left: -200, top: 0,
+        display: "flex", flexDirection: "column", alignItems: "stretch", gap: 10,
+        padding: "16px 14px", borderRadius: 14,
+        background: "rgba(4,4,12,0.88)", border: `1px solid ${color}22`,
+        backdropFilter: "blur(10px)", width: 175,
+        boxShadow: `0 4px 32px rgba(0,0,0,0.5), 0 0 24px ${color}0a`,
+      }}
+    >
+      {/* Leader section */}
+      {leaderDef && leaderDomain ? (
+        <>
+          <div style={{ fontSize: 7, color: color, letterSpacing: 3, fontWeight: 900, textAlign: "center" }}>YOUR LEADER</div>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <div style={{ transform: "scale(0.82)", transformOrigin: "top center", marginBottom: -20 }}>
+              <CharacterCard defId={leaderId} def={leaderDef} size="sm" noHover />
+            </div>
+          </div>
+          <div style={{ fontSize: 11, fontWeight: 800, color: "#fff", textAlign: "center", letterSpacing: 0.5 }}>{leaderDef.name}</div>
+          <div style={{
+            width: "100%", padding: "10px 10px", borderRadius: 10,
+            background: "rgba(102,0,170,0.18)", border: "1px solid #9933cc44",
+          }}>
+            <div style={{ fontSize: 7, color: "#cc44ff", letterSpacing: 2, fontWeight: 900, marginBottom: 4 }}>✦ DOMAIN</div>
+            <div style={{ fontSize: 11, color: "#fff", fontWeight: 800, marginBottom: 5, lineHeight: 1.2 }}>{leaderDomain.name}</div>
+            <div style={{ fontSize: 9, color: "#ddd", lineHeight: 1.5, fontWeight: 500 }}>{leaderDomain.desc}</div>
+          </div>
+          <div style={{ height: 1, background: "rgba(255,255,255,0.05)", margin: "2px 0" }} />
+        </>
+      ) : (
+        <div style={{ fontSize: 9, color: "#334", letterSpacing: 2, textAlign: "center", padding: "8px 0" }}>NO LEADER YET</div>
+      )}
+
+      {/* Deck preview */}
+      <div style={{ fontSize: 7, color: "#334", letterSpacing: 3, textAlign: "center", fontWeight: 700 }}>
+        DECK ({pickedSoFar.length}/{PICK_SPECS.length})
+      </div>
+      {pickedSoFar.length > 0 ? (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "center" }}>
+          {pickedSoFar.map(cid => {
+            const d = cardDb[cid];
+            return d ? (
+              <div key={cid} style={{ transform: "scale(0.44)", transformOrigin: "top left", width: 42, height: 55, flexShrink: 0, overflow: "visible" }}>
+                <CharacterCard defId={cid} def={d} size="sm" noHover />
+              </div>
+            ) : null;
+          })}
+        </div>
+      ) : (
+        <div style={{ fontSize: 8, color: "#222", textAlign: "center", padding: "6px 0" }}>—</div>
+      )}
+    </motion.div>
+    {/* Main draft content */}
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 28 }}>
       {/* Header */}
       <div style={{ textAlign: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "center", marginBottom: 10 }}>
@@ -204,7 +368,7 @@ function CardDraftPhase({ pid, profile, color, pickIndex, options, cardDb, picke
         <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 3, color: "#fff", marginBottom: 4 }}>
           {isRandom ? "PICK ANY CARD" : `PICK YOUR ${(spec as { kind: "TYPED"; affinity: string }).affinity} CARD`}
         </div>
-        <div style={{ fontSize: 9, color: "#445", letterSpacing: 2 }}>Pick {pickIndex + 1} of 10</div>
+        <div style={{ fontSize: 9, color: "#445", letterSpacing: 2 }}>Pick {pickIndex + 1} of {PICK_SPECS.length}</div>
 
         {/* Progress bar */}
         <div style={{ display: "flex", gap: 5, justifyContent: "center", marginTop: 14 }}>
@@ -224,48 +388,60 @@ function CardDraftPhase({ pid, profile, color, pickIndex, options, cardDb, picke
         </div>
       </div>
 
-      {/* Cards — generous spacing */}
-      <div style={{ display: "flex", gap: 48, alignItems: "flex-start" }}>
-        {options.map((id) => {
-          const def = cardDb[id];
-          if (!def) return null;
-          const isSelected = selected === id;
-          return (
-            <motion.div key={id} onClick={() => setSelected(id)}
-              whileHover={{ y: -10, scale: 1.05 }} whileTap={{ scale: 0.97 }}
-              style={{ cursor: "pointer", position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}
-            >
-              <div style={{ transform: "scale(1.2)", transformOrigin: "top center", position: "relative" }}>
-                <CharacterCard defId={id} def={def} size="lg" />
-                {isSelected && <SelectedBadge color={color} />}
-              </div>
-              <div style={{ textAlign: "center", width: 140, paddingTop: 8 }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: isSelected ? "#fff" : "#aaa" }}>{def.name}</div>
-                <div style={{ fontSize: 8, color: isSelected ? color : "#334", letterSpacing: 2, marginTop: 3 }}>
-                  {isSelected ? "✓ SELECTED" : def.affinity}
+      {/* Cards + synergy tracker */}
+      <div style={{ display: "flex", gap: 28, alignItems: "flex-start" }}>
+        {/* Cards */}
+        <div style={{ display: "flex", gap: 48, alignItems: "flex-start" }}>
+          {options.map((id) => {
+            const def = cardDb[id];
+            if (!def) return null;
+            const isSelected = selected === id;
+            const badges = getSynergyBadges(def, pickedSoFar, cardDb);
+            return (
+              <motion.div key={id}
+                onClick={() => setSelected(id === selected ? null : id)}
+                onDoubleClick={() => { setSelected(id); onPick(id); }}
+                whileHover={{ y: -10, scale: 1.05 }} whileTap={{ scale: 0.97 }}
+                style={{ cursor: "pointer", position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}
+              >
+                <div style={{ transform: "scale(1.2)", transformOrigin: "top center", position: "relative" }}>
+                  <CharacterCard defId={id} def={def} size="lg" />
+                  {isSelected && <SelectedBadge />}
                 </div>
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
-
-      {/* Mini deck preview */}
-      {pickedSoFar.length > 0 && (
-        <div style={{ display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
-          <span style={{ fontSize: 8, color: "#334", letterSpacing: 2, marginRight: 6 }}>
-            DECK ({pickedSoFar.length}/10):
-          </span>
-          {pickedSoFar.map(cid => {
-            const def = cardDb[cid];
-            return def ? (
-              <div key={cid} style={{ transform: "scale(0.52)", transformOrigin: "left center" }}>
-                <CharacterCard defId={cid} def={def} size="sm" />
-              </div>
-            ) : null;
+                <div style={{ textAlign: "center", width: 140, paddingTop: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: isSelected ? "#fff" : "#aaa" }}>{def.name}</div>
+                  <div style={{ fontSize: 8, color: isSelected ? color : "#334", letterSpacing: 2, marginTop: 3 }}>
+                    {isSelected ? "✓ SELECTED" : def.affinity}
+                  </div>
+                  {/* Synergy badges */}
+                  {badges.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 5, alignItems: "center" }}>
+                      {badges.map(b => (
+                        <div key={b.label} style={{
+                          fontSize: 7, padding: "2px 6px", borderRadius: 4, letterSpacing: 1,
+                          background: b.activates ? "rgba(100,255,150,0.1)" : "rgba(255,200,50,0.07)",
+                          border: `1px solid ${b.activates ? "#44ff8866" : "#ffcc0033"}`,
+                          color: b.activates ? "#44ff88" : "#ffcc0088",
+                        }}>
+                          {b.activates ? "✦ " : "◆ "}{b.label}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            );
           })}
         </div>
-      )}
+        {/* Synergy tracker sidebar */}
+        {pickedSoFar.length > 0 && (
+          <div style={{ paddingTop: 8 }}>
+            <div style={{ fontSize: 7, color: "#334", letterSpacing: 3, marginBottom: 6 }}>SYNERGIES</div>
+            <SynergyTracker pickedIds={pickedSoFar} cardDb={cardDb} />
+          </div>
+        )}
+      </div>
+
 
       <motion.button
         whileHover={selected ? { scale: 1.05, y: -2 } : {}} whileTap={selected ? { scale: 0.97 } : {}}
@@ -280,125 +456,7 @@ function CardDraftPhase({ pid, profile, color, pickIndex, options, cardDb, picke
           boxShadow: selected ? `0 0 28px ${color}55` : "none",
         }}
       >PICK CARD</motion.button>
-    </motion.div>
-  );
-}
-
-// ── Equipment phase ───────────────────────────────────────────────────────────
-function EquipmentPhase({ pid, profile, color, weaponPool, leaderId, allPickedIds, cardDb, onPick }: {
-  pid: PlayerId; profile: Profile; color: string;
-  weaponPool: string[]; leaderId: string; allPickedIds: string[];
-  cardDb: Record<string, CardDef>;
-  onPick: (weaponIds: string[]) => void;
-}) {
-  const [selected, setSelected] = useState<string[]>([]);
-  const toggle = (id: string) =>
-    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : prev.length < 2 ? [...prev, id] : prev);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 28 }}
-    >
-      <div style={{ textAlign: "center" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "center", marginBottom: 8 }}>
-          <div style={{ borderRadius: 6, overflow: "hidden", border: `2px solid ${color}55` }}>
-            <PlayerIcon icon={profile.icon} size={28} style={{ display: "block" }} />
-          </div>
-          <span style={{ fontSize: 11, color: color, letterSpacing: 3, fontWeight: 700 }}>{profile.name}</span>
-        </div>
-        <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 3, color: "#fff", marginBottom: 4 }}>
-          EQUIP YOUR CURSED TOOLS
-        </div>
-        <div style={{ fontSize: 9, color: "#556", letterSpacing: 2 }}>
-          Choose 2 weapons · {selected.length}/2 selected
-        </div>
-      </div>
-
-      {/* Deck preview: leader + two rows of 5 */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, width: "100%" }}>
-        {/* Leader row */}
-        {cardDb[leaderId] && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-            <div style={{ fontSize: 8, color: "#334", letterSpacing: 3 }}>LEADER</div>
-            <div style={{ transform: "scale(0.78)", transformOrigin: "center top" }}>
-              <CharacterCard defId={leaderId} def={cardDb[leaderId]} size="lg" />
-            </div>
-          </div>
-        )}
-        {/* Two rows of up to 5 cards each */}
-        {[allPickedIds.slice(0, 5), allPickedIds.slice(5, 10)].map((row, ri) => (
-          row.length > 0 && (
-            <div key={ri} style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-              {row.map(id => {
-                const def = cardDb[id];
-                return def ? (
-                  <div key={id} style={{ transform: "scale(0.72)", transformOrigin: "center top" }}>
-                    <CharacterCard defId={id} def={def} size="sm" />
-                  </div>
-                ) : null;
-              })}
-            </div>
-          )
-        ))}
-      </div>
-
-      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", justifyContent: "center", maxWidth: 580 }}>
-        {weaponPool.map((id) => {
-          const weapon = ROULETTE_ITEM_MAP[id];
-          if (!weapon) return null;
-          const isSelected = selected.includes(id);
-          const isDisabled = !isSelected && selected.length >= 2;
-          return (
-            <motion.div key={id}
-              onClick={() => { if (!isDisabled) toggle(id); }}
-              whileHover={!isDisabled ? { y: -4, scale: 1.04 } : {}}
-              whileTap={!isDisabled ? { scale: 0.97 } : {}}
-              style={{
-                width: 155, padding: "16px", borderRadius: 12,
-                background: isSelected ? `rgba(${color === "#4a9eff" ? "20,50,100" : "100,30,30"},0.55)` : "rgba(10,10,22,0.88)",
-                border: `2px solid ${isSelected ? color : isDisabled ? "#1a1a2a" : color + "33"}`,
-                cursor: isDisabled ? "default" : "pointer", opacity: isDisabled ? 0.38 : 1,
-                boxShadow: isSelected ? `0 0 24px ${color}44` : "none",
-                textAlign: "center", position: "relative",
-              }}
-            >
-              {isSelected && (
-                <div style={{
-                  position: "absolute", top: 6, right: 6,
-                  width: 18, height: 18, borderRadius: "50%",
-                  background: color, fontSize: 10, fontWeight: 900, color: "#000",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>✓</div>
-              )}
-              <div style={{ fontSize: 26, marginBottom: 8 }}>⚔</div>
-              <div style={{ fontSize: 11, fontWeight: 800, color: isSelected ? "#fff" : "#ccc", marginBottom: 4 }}>
-                {weapon.name}
-              </div>
-              <div style={{ fontSize: 9, color: "#44ff88", fontWeight: 700 }}>
-                +{weapon.baseBonus.toLocaleString()} base
-              </div>
-              {weapon.conditionalDesc && (
-                <div style={{ fontSize: 8, color: "#556", marginTop: 3 }}>{weapon.conditionalDesc}</div>
-              )}
-            </motion.div>
-          );
-        })}
-      </div>
-
-      <motion.button
-        whileHover={selected.length === 2 ? { scale: 1.05, y: -2 } : {}} whileTap={selected.length === 2 ? { scale: 0.97 } : {}}
-        onClick={() => { if (selected.length === 2) onPick(selected); }}
-        style={{
-          padding: "13px 56px",
-          background: selected.length === 2 ? `linear-gradient(135deg, ${color}cc, ${color})` : "rgba(255,255,255,0.04)",
-          border: `2px solid ${selected.length === 2 ? color : "#2a2a3a"}`, borderRadius: 12,
-          color: selected.length === 2 ? "#000" : "#334",
-          fontSize: 13, fontWeight: 900, letterSpacing: 6,
-          cursor: selected.length === 2 ? "pointer" : "default", fontFamily: "inherit",
-          boxShadow: selected.length === 2 ? `0 0 32px ${color}55` : "none",
-        }}
-      >CONFIRM LOADOUT</motion.button>
+    </div>{/* end main draft content */}
     </motion.div>
   );
 }
@@ -525,7 +583,6 @@ export default function DraftBattleScreen({
     | { step: "HANDOFF_P1" }
     | { step: "LEADER_PICK"; pid: PlayerId }
     | { step: "CARD_DRAFT"; pid: PlayerId; pickIndex: number }
-    | { step: "EQUIPMENT"; pid: PlayerId }
     | { step: "HANDOFF_P2" }
     | { step: "DONE" };
 
@@ -534,7 +591,6 @@ export default function DraftBattleScreen({
   const [p2Draft, setP2Draft] = useState<Partial<PlayerDraftResult>>({});
   const [leaderOptions, setLeaderOptions] = useState<string[]>(() => getLeaderOptions(cardDb));
   const [cardOptions, setCardOptions]     = useState<string[]>([]);
-  const [weaponPool, setWeaponPool]       = useState<string[]>([]);
 
   const getDraft  = (pid: PlayerId) => pid === "P1" ? p1Draft : p2Draft;
   const setDraft  = (pid: PlayerId, update: Partial<PlayerDraftResult>) =>
@@ -570,8 +626,7 @@ export default function DraftBattleScreen({
 
   const phaseLabel = useMemo(() => {
     if (phase.step === "LEADER_PICK") return "LEADER PICK";
-    if (phase.step === "CARD_DRAFT")  return `PICK ${phase.pickIndex + 1}/10`;
-    if (phase.step === "EQUIPMENT")   return "EQUIPMENT";
+    if (phase.step === "CARD_DRAFT")  return `PICK ${phase.pickIndex + 1}/${PICK_SPECS.length}`;
     return null;
   }, [phase]);
 
@@ -596,7 +651,7 @@ export default function DraftBattleScreen({
 
       {phaseLabel && (
         <div style={{ position: "fixed", top: 18, right: 18, zIndex: 10, fontSize: 9, color: "#334", letterSpacing: 3 }}>
-          DRAFT BATTLE · {phaseLabel}
+          QUICK DRAFT · {phaseLabel}
         </div>
       )}
 
@@ -633,6 +688,7 @@ export default function DraftBattleScreen({
                 pid={pid} profile={getProfile(pid)} color={PLAYER_COLOR[pid]}
                 pickIndex={pickIndex} options={cardOptions}
                 cardDb={cardDb} pickedSoFar={pickedSoFar}
+                leaderId={getDraft(pid).leaderId ?? ""}
                 onPick={(id) => {
                   const update = applyPick(pid, id, pickIndex);
                   setDraft(pid, update);
@@ -643,29 +699,11 @@ export default function DraftBattleScreen({
                     setCardOptions(getNextOptions(merged, nextIndex));
                     setPhase({ step: "CARD_DRAFT", pid, pickIndex: nextIndex });
                   } else {
-                    setWeaponPool(getWeaponPool([]));
-                    setPhase({ step: "EQUIPMENT", pid });
+                    // Skip weapon selection — weapons not used in Quick Draft
+                    setDraft(pid, { weaponIds: [] });
+                    if (pid === "P1") setPhase({ step: "HANDOFF_P2" });
+                    else              setPhase({ step: "DONE" });
                   }
-                }}
-              />
-            );
-          })()}
-
-          {phase.step === "EQUIPMENT" && (() => {
-            const { pid } = phase;
-            const draft = getDraft(pid);
-            const all = getAllPicked(draft).filter(Boolean);
-            return (
-              <EquipmentPhase key="equipment"
-                pid={pid} profile={getProfile(pid)} color={PLAYER_COLOR[pid]}
-                weaponPool={weaponPool}
-                leaderId={draft.leaderId ?? ""}
-                allPickedIds={all.slice(1)}
-                cardDb={cardDb}
-                onPick={(weaponIds) => {
-                  setDraft(pid, { weaponIds });
-                  if (pid === "P1") setPhase({ step: "HANDOFF_P2" });
-                  else              setPhase({ step: "DONE" });
                 }}
               />
             );

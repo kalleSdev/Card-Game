@@ -2,6 +2,7 @@ import React, { useState, useRef } from "react";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import type { CardDef } from "@cg/contracts";
 import { rc, rg } from "../helpers";
+import { deriveStats } from "../battleEngine";
 import "../card-effects.css";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -269,11 +270,20 @@ interface CharacterCardProps {
   overlay?: string;
   /** Disable internal hover animation (use when parent handles hover/drag) */
   noHover?: boolean;
+  /** When provided, show this number in the rarity badge slot instead of the rarity letter */
+  costOverride?: number;
+  /** When provided, override the visual rarity (border color, glow, aura) without changing the card def */
+  rarityOverride?: string;
+  /** Number of duplicate stars (0-based). 5+ triggers enhanced hover aura. */
+  starLevel?: number;
+  /** Hide the bottom info strip (name/affinity/cost) so a parent overlay can replace it */
+  hideInfo?: boolean;
 }
 
 export default function CharacterCard({
   defId, def, size = "md", selected = false, dimmed = false,
-  equippedBonus, overlay, noHover = false,
+  equippedBonus, overlay, noHover = false, costOverride, rarityOverride, starLevel = 0,
+  hideInfo = false,
 }: CharacterCardProps) {
   const [imgFailed, setImgFailed] = useState(false);
   const [sheenPos, setSheenPos] = useState({ x: 50, y: 50 });
@@ -315,9 +325,10 @@ export default function CharacterCard({
   };
 
   const d = DIMS[size];
-  const color       = def ? rc(def.rarity) : "#333";
-  const glowShadow  = def ? rg(def.rarity) : "none";
-  const rarityEffect = def ? RARITY_EFFECT[def.rarity] : undefined;
+  const effectiveRarity = rarityOverride ?? def?.rarity;
+  const color       = effectiveRarity ? rc(effectiveRarity) : "#333";
+  const glowShadow  = effectiveRarity ? rg(effectiveRarity) : "none";
+  const rarityEffect = effectiveRarity ? RARITY_EFFECT[effectiveRarity] : undefined;
 
   const borderColor = selected ? "#ffd700" : `${color}99`;
   const baseShadow  = selected
@@ -371,9 +382,9 @@ export default function CharacterCard({
             }
       }
     >
-      {/* Particle aura — always rendered for aura rarities; burst on hover, trickle when not */}
-      {def && !dimmed && AURA_PROFILES[def.rarity] && (
-        <CardAuraCanvas width={d.w} height={d.h} color={color} rarity={def.rarity} hovered={isHovered} />
+      {/* Particle aura — aura rarities always; any card with 5+ stars also gets aura */}
+      {def && !dimmed && (AURA_PROFILES[effectiveRarity ?? ""] || starLevel >= 5) && (
+        <CardAuraCanvas width={d.w} height={d.h} color={color} rarity={effectiveRarity && AURA_PROFILES[effectiveRarity] ? effectiveRarity : "SS"} hovered={isHovered} />
       )}
 
       {/* Backlight glow — persistent colored light emanating from behind the card on SS+ */}
@@ -407,7 +418,7 @@ export default function CharacterCard({
       }}>
 
       {/* ── Art area ── */}
-      <div style={{ height: "72%", position: "relative", overflow: "hidden", flexShrink: 0 }}>
+      <div style={{ height: hideInfo ? "100%" : "72%", position: "relative", overflow: "hidden", flexShrink: 0 }}>
         {!imgFailed ? (
           <img
             src={cardImageSrc(defId)}
@@ -450,18 +461,20 @@ export default function CharacterCard({
           </div>
         )}
 
-        {/* Rarity badge — nearest layer, biggest parallax swing */}
+        {/* Rarity / cost badge */}
         <motion.div style={{
           position: "absolute", top: 5, left: 5,
-          fontSize: d.rarityFontSize, fontWeight: "bold", color,
+          fontSize: d.rarityFontSize, fontWeight: "bold",
+          color: costOverride !== undefined ? "#4aeecc" : color,
           background: "#000000aa", borderRadius: 4, padding: "2px 5px",
-          letterSpacing: 1, border: `1px solid ${color}55`,
+          letterSpacing: costOverride !== undefined ? 0 : 1,
+          border: `1px solid ${costOverride !== undefined ? "#4aeecc55" : color + "55"}`,
           backdropFilter: "blur(4px)",
           x: !noHover && !dimmed ? badgeX : 0,
           y: !noHover && !dimmed ? badgeY : 0,
           zIndex: 5,
         }}>
-          {def?.rarity ?? "?"}
+          {costOverride !== undefined ? costOverride : (def?.rarity ?? "?")}
         </motion.div>
 
         {/* Affinity icon — same depth as badge */}
@@ -489,7 +502,7 @@ export default function CharacterCard({
       {/* ── Info area — mid-depth layer ── */}
       <motion.div style={{
         flex: 1, padding: size === "xs" ? "2px 5px" : "4px 7px",
-        display: "flex", flexDirection: "column", justifyContent: "space-between",
+        display: hideInfo ? "none" : "flex", flexDirection: "column", justifyContent: "space-between",
         background: "linear-gradient(180deg, #0a0a18 0%, #070710 100%)",
         overflow: "hidden",
         x: !noHover && !dimmed ? infoX : 0,
@@ -506,8 +519,8 @@ export default function CharacterCard({
           <span style={{ fontSize: d.rarityFontSize, color: "#cccccc", letterSpacing: 1 }}>
             {def?.affinity ?? ""}
           </span>
-          <span style={{ fontSize: d.ptsFontSize, color, fontWeight: "bold" }}>
-            {def?.basePoints?.toLocaleString() ?? ""}
+          <span style={{ fontSize: d.ptsFontSize, color: "#4aeecc", fontWeight: "bold" }}>
+            {def ? `${deriveStats(def).cost} ⚡` : ""}
           </span>
         </div>
         {equippedBonus !== undefined && (
@@ -609,27 +622,38 @@ export default function CharacterCard({
         mixBlendMode: "screen",
       }} />
 
-      {/* ── Rainbow foil layer for SSS / X (hue shifts with cursor x) ── */}
-      {(def?.rarity === "SSS" || def?.rarity === "X") && (
-        <div style={{
-          position: "absolute", inset: 0, borderRadius: 10,
-          pointerEvents: "none", zIndex: 21,
-          opacity: isHovered ? 1 : 0,
-          transition: "opacity 0.18s",
-          background: `radial-gradient(circle at ${sheenPos.x}% ${sheenPos.y}%,
-            hsla(${sheenPos.x * 3.6},        90%, 72%, 0.22) 0%,
-            hsla(${sheenPos.x * 3.6 + 80},   90%, 72%, 0.14) 35%,
-            hsla(${sheenPos.x * 3.6 + 160},  90%, 72%, 0.08) 55%,
-            transparent 70%)`,
-          mixBlendMode: "color-dodge",
-        }} />
-      )}
+      {/* ── Rainbow foil layer — all rarities on hover, stronger for higher stars ── */}
+      {(() => {
+        const boosted = starLevel >= 5;
+        const isHighRarity = effectiveRarity === "SSS" || effectiveRarity === "X";
+        // base opacity: 0.12 for all cards, up to 0.30 for high rarity/stars
+        const baseOpacity = isHighRarity ? 0.22 : 0.12;
+        const boostOpacity = boosted ? 0.18 : 0;
+        const foilOpacity = baseOpacity + boostOpacity;
+        return (
+          <div style={{
+            position: "absolute", inset: boosted ? -2 : 0, borderRadius: boosted ? 12 : 10,
+            pointerEvents: "none", zIndex: 21,
+            opacity: isHovered ? 1 : (isHighRarity ? 0 : 0),
+            transition: "opacity 0.18s",
+            background: `radial-gradient(circle at ${sheenPos.x}% ${sheenPos.y}%,
+              hsla(${sheenPos.x * 3.6},        90%, 72%, ${foilOpacity}) 0%,
+              hsla(${sheenPos.x * 3.6 + 80},   90%, 72%, ${foilOpacity * 0.64}) 35%,
+              hsla(${sheenPos.x * 3.6 + 160},  90%, 72%, ${foilOpacity * 0.36}) 55%,
+              transparent 70%)`,
+            mixBlendMode: "color-dodge",
+            ...(boosted && isHovered ? {
+              boxShadow: `0 0 28px ${color}77, 0 0 56px ${color}33`,
+            } : {}),
+          }} />
+        );
+      })()}
 
       {/* ── Rarity aura ring — inset edge glow pulsing at rarity-specific speed ── */}
-      {def?.rarity && !dimmed && (
-        def.rarity === "SS"  ? <motion.div animate={{ opacity: [0.15, 0.60, 0.15] }} transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }} style={{ position: "absolute", inset: 0, borderRadius: 10, pointerEvents: "none", zIndex: 23, boxShadow: `inset 0 0 0 2px ${color}bb, inset 0 0 14px ${color}44` }} /> :
-        def.rarity === "SSS" ? <motion.div animate={{ opacity: [0.18, 0.72, 0.18] }} transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }} style={{ position: "absolute", inset: 0, borderRadius: 10, pointerEvents: "none", zIndex: 23, boxShadow: `inset 0 0 0 2px ${color}cc, inset 0 0 18px ${color}55` }} /> :
-        def.rarity === "X"   ? <motion.div animate={{ opacity: [0.22, 0.85, 0.22] }} transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }} style={{ position: "absolute", inset: 0, borderRadius: 10, pointerEvents: "none", zIndex: 23, boxShadow: `inset 0 0 0 2px ${color}dd, inset 0 0 22px ${color}66` }} /> :
+      {effectiveRarity && !dimmed && (
+        effectiveRarity === "SS"  ? <motion.div animate={{ opacity: [0.15, 0.60, 0.15] }} transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }} style={{ position: "absolute", inset: 0, borderRadius: 10, pointerEvents: "none", zIndex: 23, boxShadow: `inset 0 0 0 2px ${color}bb, inset 0 0 14px ${color}44` }} /> :
+        effectiveRarity === "SSS" ? <motion.div animate={{ opacity: [0.18, 0.72, 0.18] }} transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }} style={{ position: "absolute", inset: 0, borderRadius: 10, pointerEvents: "none", zIndex: 23, boxShadow: `inset 0 0 0 2px ${color}cc, inset 0 0 18px ${color}55` }} /> :
+        effectiveRarity === "X"   ? <motion.div animate={{ opacity: [0.22, 0.85, 0.22] }} transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }} style={{ position: "absolute", inset: 0, borderRadius: 10, pointerEvents: "none", zIndex: 23, boxShadow: `inset 0 0 0 2px ${color}dd, inset 0 0 22px ${color}66` }} /> :
         null
       )}
 

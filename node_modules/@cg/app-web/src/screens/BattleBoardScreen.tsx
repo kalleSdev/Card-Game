@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { PlayerId, CardDef } from "@cg/contracts";
-import type { BattleState, BattleCard, BattlePlayer, BattleIntent } from "../battleEngine";
-import { createBattleEngine, createBattleState } from "../battleEngine";
+import type { BattleState, BattleCard, BattlePlayer, BattleIntent, SpellCard, PendingDomainAction } from "../battleEngine";
+import { createBattleEngine, createBattleState, getSynergyLabel } from "../battleEngine";
 import type { PlayerDraftResult } from "./DraftBattleScreen";
 import CharacterCard from "../components/CharacterCard";
 import PlayerIcon from "../components/PlayerIcon";
@@ -40,10 +40,10 @@ interface Props {
 
 // ── BoardCardView ─────────────────────────────────────────────────────────────
 function BoardCardView({
-  card, cardDb, selected, targetable, onClick,
+  card, cardDb, selected, targetable, friendlyTarget, onClick,
 }: {
   card: BattleCard; cardDb: Record<string, CardDef>;
-  selected?: boolean; targetable?: boolean; onClick?: () => void;
+  selected?: boolean; targetable?: boolean; friendlyTarget?: boolean; onClick?: () => void;
 }) {
   const def = cardDb[card.defId];
   const hpPct   = Math.max(0, Math.min(100, (card.currentHp / card.maxHp) * 100));
@@ -54,7 +54,9 @@ function BoardCardView({
       onClick={onClick}
       animate={{
         scale: selected ? 1.08 : 1,
-        filter: targetable
+        filter: friendlyTarget
+          ? "brightness(1.2) drop-shadow(0 0 8px #4aeecc)"
+          : targetable
           ? "brightness(1.2) drop-shadow(0 0 8px #ff4444)"
           : card.exhausted
           ? "brightness(0.5) saturate(0.35)"
@@ -65,24 +67,30 @@ function BoardCardView({
       transition={{ type: "spring", stiffness: 400, damping: 22 }}
       style={{ position: "relative", cursor: onClick ? "pointer" : "default", userSelect: "none" }}
     >
-      <CharacterCard defId={card.defId} def={def} size="xs" noHover />
+      <CharacterCard defId={card.defId} def={def} size="xs" noHover hideInfo />
 
-      {/* Stat bar */}
+      {/* Bottom overlay: name + ATK/HP */}
       <div style={{
-        position: "absolute", bottom: 22, left: 0, right: 0,
-        display: "flex", justifyContent: "space-around", padding: "2px 4px",
-        background: "rgba(0,0,0,0.75)", backdropFilter: "blur(2px)",
+        position: "absolute", bottom: 0, left: 0, right: 0,
+        background: "linear-gradient(transparent, rgba(0,0,0,0.92) 30%)",
+        borderBottomLeftRadius: 10, borderBottomRightRadius: 10,
+        padding: "10px 4px 4px",
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
       }}>
-        <span style={{ fontSize: 10, fontWeight: 900, color: "#ff8855" }}>⚔{card.atk}</span>
-        <span style={{ fontSize: 10, fontWeight: 900, color: hpColor }}>♥{card.currentHp}</span>
-      </div>
-
-      {/* HP bar */}
-      <div style={{ position: "absolute", bottom: 2, left: 4, right: 4, height: 3, background: "#111", borderRadius: 2 }}>
-        <motion.div
-          animate={{ width: `${hpPct}%` }} transition={{ duration: 0.3 }}
-          style={{ height: "100%", background: hpColor, borderRadius: 2 }}
-        />
+        <div style={{ fontSize: 7, fontWeight: 800, color: "#e8e8e8", letterSpacing: 0.5, textAlign: "center", lineHeight: 1.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%", paddingLeft: 2, paddingRight: 2 }}>
+          {def?.name ?? card.defId}
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-around", width: "100%", padding: "1px 4px" }}>
+          <span style={{ fontSize: 10, fontWeight: 900, color: "#ff8855" }}>⚔{card.atk}</span>
+          <span style={{ fontSize: 10, fontWeight: 900, color: hpColor }}>♥{card.currentHp}</span>
+        </div>
+        {/* HP bar */}
+        <div style={{ width: "calc(100% - 8px)", height: 3, background: "#111", borderRadius: 2 }}>
+          <motion.div
+            animate={{ width: `${hpPct}%` }} transition={{ duration: 0.3 }}
+            style={{ height: "100%", background: hpColor, borderRadius: 2 }}
+          />
+        </div>
       </div>
 
       {/* Stun */}
@@ -103,13 +111,44 @@ function BoardCardView({
         />
       )}
 
-      {/* Target ring */}
-      {targetable && !selected && (
+      {/* Enemy target ring */}
+      {targetable && !selected && !friendlyTarget && (
         <motion.div
           animate={{ boxShadow: ["0 0 0 3px #ff4444, 0 0 12px #ff444477", "0 0 0 3px #ff6666, 0 0 20px #ff4444aa"] }}
           transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
           style={{ position: "absolute", inset: -2, borderRadius: 12, pointerEvents: "none" }}
         />
+      )}
+
+      {/* Friendly buff target ring */}
+      {friendlyTarget && !selected && (
+        <motion.div
+          animate={{ boxShadow: ["0 0 0 3px #4aeecc, 0 0 12px #4aeecc77", "0 0 0 3px #4aeecc, 0 0 20px #4aeeccaa"] }}
+          transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
+          style={{ position: "absolute", inset: -2, borderRadius: 12, pointerEvents: "none" }}
+        />
+      )}
+
+      {/* Idle glow for ready cards */}
+      {!card.exhausted && !selected && !targetable && !friendlyTarget && (
+        <motion.div
+          animate={{ opacity: [0.4, 0.8, 0.4] }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+          style={{
+            position: "absolute", inset: -1, borderRadius: 12, pointerEvents: "none", zIndex: -1,
+            boxShadow: "0 0 8px rgba(80,80,255,0.15)",
+          }}
+        />
+      )}
+
+      {/* Sheep overlay */}
+      {card.isSheep && (
+        <div style={{
+          position: "absolute", inset: 0, borderRadius: 10, zIndex: 5,
+          background: "rgba(200,200,200,0.15)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 20,
+        }}>🐑</div>
       )}
     </motion.div>
   );
@@ -136,7 +175,7 @@ function HandCardView({
       transition={{ type: "spring", stiffness: 400, damping: 22 }}
       style={{ position: "relative", cursor: canAfford ? "pointer" : "not-allowed", userSelect: "none", flexShrink: 0 }}
     >
-      <CharacterCard defId={card.defId} def={def} size="s" noHover dimmed={!canAfford} />
+      <CharacterCard defId={card.defId} def={def} size="s" noHover dimmed={!canAfford} hideInfo />
 
       {/* Cost badge */}
       <div style={{
@@ -149,24 +188,82 @@ function HandCardView({
         boxShadow: canAfford ? "0 0 12px #4aeecc99" : "none",
       }}>{cost}</div>
 
-      {/* Stat bar */}
+      {/* Bottom overlay: name + ATK/HP */}
       <div style={{
-        position: "absolute", bottom: 22, left: 0, right: 0,
-        display: "flex", justifyContent: "space-around", padding: "2px 4px",
-        background: "rgba(0,0,0,0.78)", backdropFilter: "blur(2px)",
+        position: "absolute", bottom: 0, left: 0, right: 0,
+        background: "linear-gradient(transparent, rgba(0,0,0,0.92) 30%)",
+        borderBottomLeftRadius: 10, borderBottomRightRadius: 10,
+        padding: "12px 4px 4px",
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
       }}>
-        <span style={{ fontSize: 10, fontWeight: 900, color: "#ff8855" }}>⚔{card.atk}</span>
-        <span style={{ fontSize: 10, fontWeight: 900, color: hpColor }}>♥{card.currentHp}</span>
+        <div style={{ fontSize: 8, fontWeight: 800, color: "#e8e8e8", letterSpacing: 0.3, textAlign: "center", lineHeight: 1.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%", paddingLeft: 3, paddingRight: 3 }}>
+          {def?.name ?? card.defId}
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-around", width: "100%", padding: "1px 4px" }}>
+          <span style={{ fontSize: 10, fontWeight: 900, color: "#ff8855" }}>⚔{card.atk}</span>
+          <span style={{ fontSize: 10, fontWeight: 900, color: hpColor }}>♥{card.currentHp}</span>
+        </div>
+        <div style={{ width: "calc(100% - 8px)", height: 3, background: "#111", borderRadius: 2 }}>
+          <motion.div animate={{ width: `${hpPct}%` }} transition={{ duration: 0.3 }}
+            style={{ height: "100%", background: hpColor, borderRadius: 2 }} />
+        </div>
       </div>
 
-      {/* HP bar */}
-      <div style={{ position: "absolute", bottom: 2, left: 4, right: 4, height: 3, background: "#111", borderRadius: 2 }}>
-        <motion.div
-          animate={{ width: `${hpPct}%` }} transition={{ duration: 0.3 }}
-          style={{ height: "100%", background: hpColor, borderRadius: 2 }}
-        />
-      </div>
+    </motion.div>
+  );
+}
 
+// ── SpellCardView — synergy-granted spell shown in spell panel ───────────────
+function SpellCardView({
+  spell, active, onClick,
+}: {
+  spell: SpellCard; active?: boolean; onClick?: () => void;
+}) {
+  const effKind = spell.effect.kind;
+  const needsTarget = effKind === "DAMAGE_TARGET" || effKind === "STUN_ONE" || effKind === "PURPLE";
+  const needsOwnTarget = effKind === "BUFF_ONE_HP" || effKind === "BUFF_ONE_ATK";
+  const color = effKind === "DAMAGE_TARGET" ? "#ff6644"
+    : effKind === "BUFF_BOARD_ATK" ? "#ffcc00"
+    : effKind === "BUFF_BOARD_HP"  ? "#44ff88"
+    : effKind === "BUFF_ONE_ATK"   ? "#ffaa44"
+    : effKind === "BUFF_ONE_HP"    ? "#44ffaa"
+    : effKind === "DRAW"           ? "#4488ff"
+    : effKind === "GAIN_ENERGY"    ? "#4aeecc"
+    : effKind === "PURPLE"         ? "#bb44ff"
+    : "#cc44ff";
+  const icon = effKind === "DAMAGE_TARGET" ? "💥" : effKind === "BUFF_BOARD_ATK" ? "⚔" : effKind === "BUFF_BOARD_HP" ? "💚" : effKind === "BUFF_ONE_ATK" ? "🗡" : effKind === "BUFF_ONE_HP" ? "💉" : effKind === "DRAW" ? "🃏" : effKind === "GAIN_ENERGY" ? "⚡" : effKind === "PURPLE" ? "🌌" : "❄";
+
+  return (
+    <motion.div
+      onClick={onClick}
+      whileHover={onClick ? { y: -12, scale: 1.06 } : undefined}
+      whileTap={onClick ? { scale: 0.95 } : undefined}
+      animate={active ? { boxShadow: [`0 0 0 2px ${color}, 0 0 18px ${color}88`, `0 0 0 2px ${color}, 0 0 32px ${color}cc`] } : {}}
+      transition={{ duration: 0.6, repeat: active ? Infinity : 0, repeatType: "reverse" }}
+      style={{
+        width: 90, borderRadius: 10, padding: "10px 8px",
+        background: `linear-gradient(180deg, ${color}18, rgba(4,4,12,0.95))`,
+        border: `1px solid ${color}55`,
+        cursor: onClick ? "pointer" : "default",
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 5,
+        userSelect: "none", flexShrink: 0,
+        boxShadow: `0 4px 16px rgba(0,0,0,0.6), 0 0 10px ${color}22`,
+        position: "relative",
+      }}
+    >
+      <div style={{ fontSize: 24 }}>{icon}</div>
+      <div style={{ fontSize: 9, fontWeight: 900, color, letterSpacing: 0.5, textAlign: "center", lineHeight: 1.3 }}>
+        {spell.name}
+      </div>
+      <div style={{ fontSize: 7, color: `${color}bb`, textAlign: "center", lineHeight: 1.4 }}>
+        {spell.description}
+      </div>
+      {needsTarget && onClick && (
+        <div style={{ fontSize: 7, color: "#ffcc00", letterSpacing: 1, fontWeight: 900, marginTop: 1 }}>▶ TARGET</div>
+      )}
+      {needsOwnTarget && onClick && (
+        <div style={{ fontSize: 7, color: "#88ffcc", letterSpacing: 1, fontWeight: 900, marginTop: 1 }}>▶ PICK CARD</div>
+      )}
     </motion.div>
   );
 }
@@ -343,41 +440,185 @@ function CenteredLeader({
   );
 }
 
+// ── LeaderRightPanel — player's leader shown as a right-column panel ──────────
+function LeaderRightPanel({
+  leader, cardDb, playerName, playerIcon,
+  selected, energy, maxEnergy, domainMeter,
+  onSelect, onDomainActivate,
+}: {
+  leader: BattleCard; cardDb: Record<string, CardDef>;
+  playerName: string; playerIcon: string;
+  selected?: boolean;
+  energy: number; maxEnergy: number;
+  domainMeter: number;
+  onSelect: () => void; onDomainActivate: () => void;
+}) {
+  const def = cardDb[leader.defId];
+  const hpPct   = Math.max(0, Math.min(100, (leader.currentHp / leader.maxHp) * 100));
+  const hpColor = hpPct > 50 ? "#44ff88" : hpPct > 25 ? "#ffcc00" : "#ff4444";
+  const meterFull = domainMeter >= 100;
+
+  return (
+    <div style={{
+      width: 190, flexShrink: 0,
+      background: "rgba(4,4,16,0.88)", borderLeft: "1px solid #111128",
+      display: "flex", flexDirection: "column", alignItems: "center",
+      padding: "10px 10px", gap: 8, justifyContent: "center",
+    }}>
+      {/* Player name + icon */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%" }}>
+        <div style={{ borderRadius: 5, overflow: "hidden", border: "1px solid #333", flexShrink: 0 }}>
+          <PlayerIcon icon={playerIcon} size={22} style={{ display: "block" }} />
+        </div>
+        <span style={{ fontSize: 9, color: "#778", letterSpacing: 1, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{playerName}</span>
+      </div>
+
+      {/* Leader card */}
+      <motion.div
+        onClick={onSelect}
+        whileHover={{ scale: 1.06, y: -4 }}
+        whileTap={{ scale: 0.96 }}
+        style={{ position: "relative", cursor: "pointer", userSelect: "none" }}
+      >
+        <CharacterCard defId={leader.defId} def={def} size="sm" noHover />
+        <div style={{
+          position: "absolute", top: 4, left: 4,
+          fontSize: 7, fontWeight: 900, letterSpacing: 1,
+          background: "rgba(255,200,0,0.88)", color: "#000",
+          padding: "1px 6px", borderRadius: 3,
+        }}>LEADER</div>
+        {/* HP bar */}
+        <div style={{ position: "absolute", bottom: 2, left: 4, right: 4, height: 4, background: "#111", borderRadius: 2 }}>
+          <motion.div animate={{ width: `${hpPct}%` }} transition={{ duration: 0.35 }}
+            style={{ height: "100%", background: hpColor, borderRadius: 2 }} />
+        </div>
+        {selected && (
+          <motion.div
+            animate={{ boxShadow: ["0 0 0 3px #ffcc00, 0 0 18px #ffcc0088", "0 0 0 3px #ffcc00, 0 0 30px #ffcc00cc"] }}
+            transition={{ duration: 0.7, repeat: Infinity, repeatType: "reverse" }}
+            style={{ position: "absolute", inset: -3, borderRadius: 14, pointerEvents: "none" }} />
+        )}
+        {leader.stunTurns > 0 && (
+          <div style={{ position: "absolute", top: 4, right: 4, background: "#4488ff", borderRadius: 3, fontSize: 7, fontWeight: 900, padding: "1px 4px", color: "#fff" }}>STUN</div>
+        )}
+      </motion.div>
+
+      {/* Stats row */}
+      <div style={{
+        display: "flex", gap: 8, background: "rgba(0,0,0,0.5)", borderRadius: 6, padding: "4px 10px",
+        border: `1px solid ${hpColor}33`, width: "100%", justifyContent: "center",
+      }}>
+        <span style={{ fontSize: 11, fontWeight: 900, color: "#ff8855" }}>⚔{leader.atk}</span>
+        <span style={{ fontSize: 11, color: "#334" }}>·</span>
+        <span style={{ fontSize: 11, fontWeight: 900, color: hpColor }}>♥{leader.currentHp}/{leader.maxHp}</span>
+      </div>
+
+      {/* Domain meter */}
+      <div style={{ width: "100%" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+          <span style={{ fontSize: 7, color: meterFull ? "#cc44ff" : "#2a2a3a", letterSpacing: 1 }}>DOMAIN</span>
+          <span style={{ fontSize: 7, color: meterFull ? "#cc44ff" : "#2a2a3a" }}>{domainMeter}%</span>
+        </div>
+        <div style={{ height: 7, background: "#090912", borderRadius: 4, overflow: "hidden", border: "1px solid #1a1a2e" }}>
+          <motion.div animate={{ width: `${domainMeter}%` }} transition={{ duration: 0.4 }}
+            style={{
+              height: "100%",
+              background: meterFull ? "linear-gradient(90deg, #cc44ff, #ff44cc)" : "linear-gradient(90deg, #3a1070, #5a1eaa)",
+              borderRadius: 4,
+              boxShadow: meterFull ? "0 0 8px #cc44ffaa" : "none",
+            }} />
+        </div>
+        {meterFull && (
+          <motion.button
+            onClick={onDomainActivate}
+            animate={{ boxShadow: ["0 0 10px #cc44ff77", "0 0 22px #cc44ffbb", "0 0 10px #cc44ff77"] }}
+            transition={{ duration: 1.2, repeat: Infinity }}
+            style={{
+              width: "100%", marginTop: 5,
+              background: "linear-gradient(135deg, #3a0066, #7700bb)",
+              border: "2px solid #cc44ff", borderRadius: 8,
+              color: "#fff", fontSize: 9, fontWeight: 900, letterSpacing: 2,
+              padding: "5px 0", cursor: "pointer", fontFamily: "inherit",
+            }}
+          >✦ DOMAIN</motion.button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Board row (5 slots) ───────────────────────────────────────────────────────
 function BoardRow({
-  board, cardDb, pendingId, targeting, myBoard,
+  board, cardDb, pendingId, targeting, myBoard, cardScale = 1,
   onSelectCard, onTargetCard,
 }: {
   board: (BattleCard | null)[];
   cardDb: Record<string, CardDef>;
   pendingId: string | null; targeting: boolean; myBoard: boolean;
+  buffTargeting?: boolean;
+  cardScale?: number;
   onSelectCard?: (id: string) => void; onTargetCard?: (id: string) => void;
 }) {
+  const slotW = Math.round(72 * cardScale);
+  const slotH = Math.round(103 * cardScale);
   return (
     <div style={{
-      display: "flex", gap: 10, justifyContent: "center", alignItems: "center",
-      flex: 1, minHeight: 108, padding: "0 8px",
+      display: "flex", gap: Math.round(10 * cardScale), justifyContent: "center", alignItems: "center",
+      flex: 1, minHeight: slotH + 10, padding: "0 8px",
     }}>
       {board.map((card, i) => (
-        <div key={i} style={{ width: 72 }}>
+        <div key={i} style={{ width: slotW, height: slotH, flexShrink: 0 }}>
           {card ? (
-            <BoardCardView
-              card={card} cardDb={cardDb}
-              selected={pendingId === card.instanceId}
-              targetable={targeting && !myBoard}
-              onClick={() => {
-                if (myBoard && onSelectCard) onSelectCard(card.instanceId);
-                else if (!myBoard && onTargetCard) onTargetCard(card.instanceId);
-              }}
-            />
+            <div style={{ transform: `scale(${cardScale})`, transformOrigin: "top left", width: 72, height: 103 }}>
+              <BoardCardView
+                card={card} cardDb={cardDb}
+                selected={pendingId === card.instanceId}
+                targetable={targeting && !myBoard}
+                friendlyTarget={buffTargeting === true && myBoard}
+                onClick={() => {
+                  if (myBoard && onSelectCard) onSelectCard(card.instanceId);
+                  else if (!myBoard && onTargetCard) onTargetCard(card.instanceId);
+                }}
+              />
+            </div>
           ) : (
             <div style={{
-              width: 72, height: 103,
+              width: slotW, height: slotH,
               border: `1px dashed ${myBoard ? "#1a2a1a" : "#1a1a2a"}`,
-              borderRadius: 10, background: "rgba(255,255,255,0.005)",
+              borderRadius: Math.round(10 * cardScale), background: "rgba(255,255,255,0.005)",
             }} />
           )}
         </div>
+      ))}
+    </div>
+  );
+}
+
+// ── BoardParticles ────────────────────────────────────────────────────────────
+function BoardParticles() {
+  return (
+    <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 0 }}>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <motion.div
+          key={i}
+          animate={{
+            x: [0, (i % 2 === 0 ? 1 : -1) * 20],
+            y: ["100%", "-10%"],
+            opacity: [0, 0.4, 0],
+          }}
+          transition={{
+            duration: 4 + i * 0.7,
+            repeat: Infinity,
+            delay: i * 0.8,
+            ease: "linear",
+          }}
+          style={{
+            position: "absolute",
+            left: `${10 + i * 15}%`,
+            width: 3, height: 3, borderRadius: "50%",
+            background: `hsl(${260 + i * 20},80%,70%)`,
+          }}
+        />
       ))}
     </div>
   );
@@ -526,6 +767,10 @@ export default function BattleBoardScreen({
   const [battleState, setBattleState] = useState<BattleState>(() => engine.getState());
   const [domainFlash, setDomainFlash] = useState<string | null>(null);
   const [gameOverShown, setGameOverShown] = useState(false);
+  const [pendingSpellId, setPendingSpellId] = useState<string | null>(null); // spell awaiting enemy target
+  const [buffOneTargeting, setBuffOneTargeting] = useState<string | null>(null); // spell id for BUFF_ONE (own-card target)
+  const [turnBackTargeting, setTurnBackTargeting] = useState(false);
+  const [drewCardId, setDrewCardId] = useState<string | null>(null); // card drawn this turn (for animation)
 
   const doReplace = (pid: PlayerId) => {
     if (mulliganReturning.size === 0) return;
@@ -558,6 +803,7 @@ export default function BattleBoardScreen({
     setBattleState(result.state);
     for (const ev of result.events) {
       if (ev.type === "DOMAIN_ACTIVATED") setDomainFlash(ev.name);
+      if (ev.type === "TURN_START" && ev.drew) { setDrewCardId(ev.drew); setTimeout(() => setDrewCardId(null), 700); }
       if (ev.type === "GAME_OVER") { setGameOverShown(true); return; }
     }
   }, [engine]);
@@ -593,10 +839,54 @@ export default function BattleBoardScreen({
     dispatch({ type: "ATTACK_CARD", pid, targetInstanceId: instanceId });
   };
 
+  const handleDomainTarget = (targetInstanceId: string) => {
+    const pid = battleState.activePlayer;
+    dispatch({ type: "DOMAIN_TARGET", pid, targetInstanceId });
+  };
+
   const handleTargetLeader = () => {
     const pid = battleState.activePlayer;
+    if (pendingSpellId) {
+      dispatch({ type: "CAST_SPELL", pid, spellId: pendingSpellId, targetInstanceId: battleState.players[pid === "P1" ? "P2" : "P1"].leader.instanceId });
+      setPendingSpellId(null);
+      return;
+    }
+    if (battleState.pendingDomainAction?.kind === "SNEAK_ATTACK_DOMAIN") {
+      handleDomainTarget(battleState.players[pid === "P1" ? "P2" : "P1"].leader.instanceId);
+      return;
+    }
     if (!battleState.pendingAttackerId) return;
     dispatch({ type: "ATTACK_LEADER", pid });
+  };
+
+  const handleSpellClick = (spell: SpellCard) => {
+    const pid = battleState.activePlayer;
+    const eff = spell.effect;
+    if (eff.kind === "TURN_BACK_SHEEP") {
+      setTurnBackTargeting(prev => !prev);
+      return;
+    }
+    if (eff.kind === "BUFF_ONE_HP" || eff.kind === "BUFF_ONE_ATK") {
+      // Needs own-board target
+      dispatch({ type: "CANCEL_ATTACK", pid });
+      setBuffOneTargeting(prev => prev === spell.id ? null : spell.id);
+      return;
+    }
+    if (eff.kind === "DAMAGE_TARGET" || eff.kind === "STUN_ONE" || eff.kind === "PURPLE") {
+      // Needs enemy target — enter spell targeting mode (deselect any attacker)
+      dispatch({ type: "CANCEL_ATTACK", pid });
+      setPendingSpellId(prev => prev === spell.id ? null : spell.id);
+    } else {
+      // No target needed — cast immediately
+      dispatch({ type: "CAST_SPELL", pid, spellId: spell.id });
+    }
+  };
+
+  const handleSpellTargetCard = (instanceId: string) => {
+    const pid = battleState.activePlayer;
+    if (!pendingSpellId) return;
+    dispatch({ type: "CAST_SPELL", pid, spellId: pendingSpellId, targetInstanceId: instanceId });
+    setPendingSpellId(null);
   };
 
   // ── Starting hand phase ─────────────────────────────────────────────────────
@@ -607,6 +897,8 @@ export default function BattleBoardScreen({
     const mIcon   = mPid === "P1" ? p1Icon : p2Icon;
     const mColor  = mPid === "P1" ? "#4a9eff" : "#ff6666";
     const isReplaced = mulliganSubPhase === "REPLACED";
+    // Who goes first? — activePlayer is the coin-flip winner (always first in DRAW phase at start)
+    const goesFirst = battleState.activePlayer === mPid;
 
     return (
       <div style={{
@@ -616,6 +908,30 @@ export default function BattleBoardScreen({
         position: "relative", overflow: "hidden",
       }}>
         <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 50% 30%, #0a0a1a, #04040a)", zIndex: 0 }} />
+        {/* First / Second indicator (left edge) */}
+        <motion.div
+          initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}
+          style={{
+            position: "absolute", left: 24, top: "50%", transform: "translateY(-50%)",
+            zIndex: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+          }}
+        >
+          <div style={{
+            padding: "8px 16px", borderRadius: 10,
+            background: goesFirst ? "rgba(74,238,204,0.1)" : "rgba(204,68,255,0.1)",
+            border: `1px solid ${goesFirst ? "#4aeecc66" : "#cc44ff66"}`,
+            textAlign: "center",
+          }}>
+            <div style={{ fontSize: 18, fontWeight: 900, color: goesFirst ? "#4aeecc" : "#cc44ff", letterSpacing: 2 }}>
+              {goesFirst ? "FIRST" : "SECOND"}
+            </div>
+            {!goesFirst && (
+              <div style={{ fontSize: 8, color: "#cc44ffaa", letterSpacing: 1, marginTop: 3 }}>
+                + extra spell
+              </div>
+            )}
+          </div>
+        </motion.div>
 
         <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 22 }}>
           {/* Player header */}
@@ -705,6 +1021,69 @@ export default function BattleBoardScreen({
                 : "Click cards to select them for replacement"}
           </div>
 
+          {/* Leader preview — mirrors how it looks in-game */}
+          <div style={{
+            width: "100%", display: "flex", flexDirection: "column", alignItems: "center",
+            gap: 8, padding: "16px 0 0",
+            borderTop: "1px solid #101024",
+          }}>
+            <div style={{ fontSize: 8, color: "#334", letterSpacing: 3 }}>YOUR LEADER</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
+              {/* Energy crystals */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, width: 110 }}>
+                <div style={{ fontSize: 9, color: "#4aeecc", fontWeight: 800, letterSpacing: 1 }}>
+                  ⚡ ENERGY 2/2
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "center" }}>
+                  {Array.from({ length: 2 }).map((_, i) => (
+                    <motion.div
+                      key={i}
+                      animate={{ boxShadow: ["0 0 4px #4aeecc66", "0 0 10px #4aeecc", "0 0 4px #4aeecc66"] }}
+                      transition={{ duration: 1.6, repeat: Infinity, delay: i * 0.07 }}
+                      style={{
+                        width: 14, height: 14, borderRadius: 3,
+                        background: "linear-gradient(135deg, #2af 0%, #4aeecc 100%)",
+                        border: "1px solid #4aeecc",
+                      }}
+                    />
+                  ))}
+                </div>
+                <div style={{ width: "100%" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                    <span style={{ fontSize: 7, color: "#2a2a3a", letterSpacing: 1 }}>DOMAIN</span>
+                    <span style={{ fontSize: 7, color: "#2a2a3a" }}>0%</span>
+                  </div>
+                  <div style={{ height: 7, background: "#090912", borderRadius: 4, border: "1px solid #1a1a2e" }} />
+                </div>
+              </div>
+              {/* Leader card */}
+              <div style={{ position: "relative" }}>
+                {cardDb[mPid === "P1" ? p1Draft.leaderId : p2Draft.leaderId] && (
+                  <CharacterCard
+                    defId={mPid === "P1" ? p1Draft.leaderId : p2Draft.leaderId}
+                    def={cardDb[mPid === "P1" ? p1Draft.leaderId : p2Draft.leaderId]}
+                    size="sm" noHover
+                  />
+                )}
+                <div style={{
+                  position: "absolute", top: 4, left: 4,
+                  fontSize: 7, fontWeight: 900, letterSpacing: 1,
+                  background: "rgba(255,200,0,0.88)", color: "#000",
+                  padding: "1px 6px", borderRadius: 3,
+                }}>LEADER</div>
+                <div style={{
+                  position: "absolute", bottom: 22, left: 0, right: 0,
+                  display: "flex", justifyContent: "space-around", padding: "2px 4px",
+                  background: "rgba(0,0,0,0.75)",
+                }}>
+                  <span style={{ fontSize: 10, fontWeight: 900, color: "#ff8855" }}>⚔2</span>
+                  <span style={{ fontSize: 10, fontWeight: 900, color: "#44ff88" }}>♥20/20</span>
+                </div>
+              </div>
+              <div style={{ width: 110 }} />
+            </div>
+          </div>
+
           {/* Buttons */}
           <div style={{ display: "flex", gap: 12 }}>
             {!isReplaced && (
@@ -762,7 +1141,26 @@ export default function BattleBoardScreen({
   const icon    = pid === "P1" ? p1Icon : p2Icon;
   const oppName = oppId === "P1" ? p1Name : p2Name;
   const oppIcon = oppId === "P1" ? p1Icon : p2Icon;
-  const targeting = battleState.pendingAttackerId !== null;
+  // enemyTargeting highlights opponent cards; own-card buff targeting does NOT
+  const enemyTargeting = battleState.pendingAttackerId !== null || pendingSpellId !== null || battleState.pendingDomainAction !== null;
+  const targeting = enemyTargeting || buffOneTargeting !== null;
+
+  const handleOwnCardClick = (instanceId: string) => {
+    if (turnBackTargeting) {
+      const spell = player.spells.find(s => s.effect.kind === "TURN_BACK_SHEEP");
+      if (spell) {
+        dispatch({ type: "CAST_SPELL", pid: battleState.activePlayer, spellId: spell.id, targetInstanceId: instanceId });
+        setTurnBackTargeting(false);
+      }
+      return;
+    }
+    if (buffOneTargeting) {
+      dispatch({ type: "CAST_SPELL", pid: battleState.activePlayer, spellId: buffOneTargeting, targetInstanceId: instanceId });
+      setBuffOneTargeting(null);
+      return;
+    }
+    handleSelectAttacker(instanceId);
+  };
 
   const winnerName = battleState.winner ? (battleState.winner === "P1" ? p1Name : p2Name) : "";
   const winnerIcon = battleState.winner ? (battleState.winner === "P1" ? p1Icon : p2Icon) : "";
@@ -799,17 +1197,29 @@ export default function BattleBoardScreen({
       {/* ── OPPONENT BOARD ────────────────────────────────────────────────── */}
       <div style={{
         flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-        borderBottom: "2px solid #0d0d22", position: "relative", zIndex: 1,
+        borderBottom: "2px solid #0d0d22", position: "relative", zIndex: 20,
         background: "rgba(0,0,0,0.1)",
-        minHeight: 120,
+        minHeight: 130,
       }}>
-        <div style={{ position: "absolute", top: 4, left: 14, fontSize: 8, letterSpacing: 4, color: "#1a1a2a" }}>
+        <motion.div
+          animate={{ opacity: [0.03, 0.07, 0.03] }}
+          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0, background: "radial-gradient(ellipse at 50% 50%, #6600aa22, transparent 70%)" }}
+        />
+        <BoardParticles />
+        <div style={{ position: "absolute", top: 4, left: 14, fontSize: 8, letterSpacing: 4, color: "#1a1a2a", zIndex: 1, display: "flex", gap: 8, alignItems: "center" }}>
           OPPONENT
+          {opp.cardPlayFrozen > 0 && (
+            <motion.div animate={{ opacity: [0.7, 1, 0.7] }} transition={{ duration: 0.8, repeat: Infinity }}
+              style={{ fontSize: 7, letterSpacing: 2, color: "#4488ff", background: "rgba(68,136,255,0.12)", border: "1px solid #4488ff44", borderRadius: 4, padding: "1px 5px" }}>
+              ❄ FROZEN {opp.cardPlayFrozen}T
+            </motion.div>
+          )}
         </div>
         <BoardRow
-          board={opp.board} cardDb={cardDb}
-          pendingId={null} targeting={targeting} myBoard={false}
-          onTargetCard={handleTargetCard}
+          board={opp.board} cardDb={cardDb} cardScale={1.3}
+          pendingId={null} targeting={enemyTargeting} myBoard={false}
+          onTargetCard={pendingSpellId ? handleSpellTargetCard : battleState.pendingDomainAction ? handleDomainTarget : handleTargetCard}
         />
       </div>
 
@@ -832,31 +1242,54 @@ export default function BattleBoardScreen({
           }}>{name}'s TURN</div>
         </div>
 
-        {player.activeSynergies.length > 0 && (
-          <div style={{ display: "flex", gap: 5 }}>
-            {player.activeSynergies.slice(0, 3).map(id => (
-              <div key={id} style={{
-                fontSize: 7, padding: "2px 6px", borderRadius: 4,
-                background: "rgba(255,200,50,0.07)", border: "1px solid #ffcc0033",
-                color: "#ffcc00aa", letterSpacing: 1,
-              }}>{id.replace(/_/g, " ").toUpperCase()}</div>
-            ))}
-          </div>
-        )}
+        <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+          {pendingSpellId && (
+            <div style={{
+              fontSize: 7, padding: "2px 8px", borderRadius: 4,
+              background: "rgba(204,68,255,0.12)", border: "1px solid #cc44ff66",
+              color: "#cc44ff", letterSpacing: 1, fontWeight: 900,
+            }}>✦ SELECT TARGET</div>
+          )}
+          {battleState.pendingDomainAction && (
+            <div style={{
+              fontSize: 9, padding: "3px 12px", borderRadius: 6,
+              background: "rgba(204,68,255,0.15)", border: "1px solid #cc44ff88",
+              color: "#cc44ff", letterSpacing: 1, fontWeight: 900,
+            }}>
+              {battleState.pendingDomainAction.kind === "CHOOSE_KILL_ENEMIES"
+                ? `✦ SELECT ${battleState.pendingDomainAction.remaining} ENEMY CARD${battleState.pendingDomainAction.remaining > 1 ? "S" : ""} TO ELIMINATE`
+                : battleState.pendingDomainAction.kind === "COPY_ENEMY_CARD"
+                ? "✦ SELECT AN ENEMY CARD TO COPY"
+                : battleState.pendingDomainAction.kind === "HEAL_AND_KILL_ONE"
+                ? "✦ SELECT AN ENEMY CARD TO DESTROY"
+                : "✦ SELECT ANY ENEMY TARGET"}
+            </div>
+          )}
+          {turnBackTargeting && (
+            <div style={{
+              fontSize: 9, padding: "3px 12px", borderRadius: 6,
+              background: "rgba(68,255,136,0.12)", border: "1px solid #44ff8866",
+              color: "#44ff88", letterSpacing: 1, fontWeight: 900,
+            }}>✦ SELECT A CARD TO RESTORE</div>
+          )}
+          {buffOneTargeting && (
+            <div style={{
+              fontSize: 9, padding: "3px 12px", borderRadius: 6,
+              background: "rgba(74,158,255,0.12)", border: "1px solid #4a9eff66",
+              color: "#4a9eff", letterSpacing: 1, fontWeight: 900,
+            }}>✦ SELECT YOUR CARD TO BUFF</div>
+          )}
+          {player.activeSynergies.map(id => (
+            <div key={id} style={{
+              fontSize: 7, padding: "2px 6px", borderRadius: 4,
+              background: "rgba(100,255,150,0.07)", border: "1px solid #44ff8833",
+              color: "#44ff88aa", letterSpacing: 1,
+            }}>✦ {getSynergyLabel(id)}</div>
+          ))}
+        </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {targeting && (
-            <motion.button
-              onClick={() => dispatch({ type: "CANCEL_ATTACK", pid })}
-              whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-              style={{
-                padding: "6px 14px",
-                background: "rgba(255,70,40,0.07)", border: "1px solid #ff644422",
-                borderRadius: 8, color: "#ff6444", fontSize: 9, fontWeight: 800,
-                letterSpacing: 2, cursor: "pointer", fontFamily: "inherit",
-              }}
-            >✕ CANCEL</motion.button>
-          )}
+          {/* No cancel button — click card again to deselect */}
           <motion.button
             onClick={handleEndTurn}
             whileHover={{ scale: 1.05, boxShadow: "0 0 16px #44ff8844" }}
@@ -872,94 +1305,202 @@ export default function BattleBoardScreen({
         </div>
       </div>
 
-      {/* ── PLAYER BOARD ─────────────────────────────────────────────────── */}
+      {/* ── MY BOARD + LEADER PANEL (row: board center, leader right) ───── */}
       <div style={{
-        flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-        borderTop: "0", position: "relative", zIndex: 1,
-        minHeight: 120,
+        flex: 1.5, display: "flex", flexDirection: "row",
+        position: "relative", zIndex: 20, minHeight: 200,
+        borderBottom: "1px solid #0d0d22",
       }}>
-        <div style={{ position: "absolute", bottom: 4, left: 14, fontSize: 8, letterSpacing: 4, color: "#1a1a2a" }}>
-          YOUR BOARD
+        <motion.div
+          animate={{ opacity: [0.03, 0.07, 0.03] }}
+          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 1.5 }}
+          style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0, background: "radial-gradient(ellipse at 50% 50%, #6600aa22, transparent 70%)" }}
+        />
+        <BoardParticles />
+        {/* Board area */}
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", zIndex: 1 }}>
+          <div style={{ position: "absolute", top: 4, left: 14, fontSize: 8, letterSpacing: 4, color: "#1a1a2a", zIndex: 1 }}>YOUR BOARD</div>
+          <BoardRow
+            board={player.board} cardDb={cardDb} cardScale={1.5}
+            pendingId={battleState.pendingAttackerId}
+            targeting={false} buffTargeting={buffOneTargeting !== null} myBoard
+            onSelectCard={handleOwnCardClick}
+          />
+        </div>
+        {/* Leader panel (right) */}
+        <LeaderRightPanel
+          leader={player.leader} cardDb={cardDb}
+          playerName={name} playerIcon={icon}
+          selected={battleState.pendingAttackerId === player.leader.instanceId}
+          energy={player.energy} maxEnergy={player.maxEnergy}
+          domainMeter={player.domainMeter}
+          onSelect={() => {
+            if (buffOneTargeting) {
+              dispatch({ type: "CAST_SPELL", pid, spellId: buffOneTargeting, targetInstanceId: player.leader.instanceId });
+              setBuffOneTargeting(null);
+              return;
+            }
+            handleSelectAttacker(player.leader.instanceId);
+          }}
+          onDomainActivate={() => dispatch({ type: "ACTIVATE_DOMAIN", pid })}
+        />
+      </div>
+
+      {/* ── HAND + SPELLS + DECK (bottom row) ───────────────────────────────── */}
+      <div style={{
+        flexShrink: 0, display: "flex", flexDirection: "row",
+        background: "rgba(0,0,0,0.35)", borderTop: "1px solid #0c0c1e",
+        position: "relative", zIndex: 30, minHeight: 130, overflow: "visible",
+      }}>
+        {/* Spells panel (left column) */}
+        <div style={{
+          flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
+          padding: "10px 12px", borderRight: "1px solid #1a1a30", gap: 8, minWidth: 110,
+        }}>
+          <div style={{ fontSize: 7, color: "#334", letterSpacing: 3, fontWeight: 700 }}>SPELLS</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+            {player.spells.map(spell => (
+              <SpellCardView
+                key={spell.id}
+                spell={spell}
+                active={pendingSpellId === spell.id || buffOneTargeting === spell.id}
+                onClick={() => handleSpellClick(spell)}
+              />
+            ))}
+            {player.spells.length === 0 && (
+              <div style={{ fontSize: 7, color: "#222", letterSpacing: 1, paddingTop: 4 }}>—</div>
+            )}
+          </div>
         </div>
 
-        {/* Deck stack — right side */}
+        {/* GET SPELL button column (right of spells) */}
         <div style={{
-          position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)",
-          display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+          flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
+          justifyContent: "center", padding: "10px 10px", borderRight: "1px solid #1a1a30", gap: 6, minWidth: 80,
         }}>
-          {/* Stacked card silhouettes */}
-          <div style={{ position: "relative", width: 34, height: 46 }}>
+          {(() => {
+            const canDraw = player.activeSynergies.length > 0;
+            const disabled = !canDraw || player.synergyDrawUsed || player.energy < 2;
+            return (
+              <motion.button
+                whileHover={!disabled ? { scale: 1.07, y: -3, boxShadow: "0 0 22px #cc44ff88" } : {}}
+                whileTap={!disabled ? { scale: 0.94 } : {}}
+                onClick={() => { if (!disabled) dispatch({ type: "DRAW_SYNERGY_SPELL", pid }); }}
+                disabled={disabled}
+                style={{
+                  width: 64, padding: "10px 6px", borderRadius: 12,
+                  cursor: disabled ? "not-allowed" : "pointer",
+                  background: disabled
+                    ? "rgba(255,255,255,0.02)"
+                    : "linear-gradient(160deg, rgba(180,60,255,0.18), rgba(100,20,180,0.14))",
+                  border: `2px solid ${disabled ? "#1a1a30" : "#cc44ff88"}`,
+                  color: disabled ? "#334" : "#cc44ff",
+                  fontSize: 8, fontWeight: 900, letterSpacing: 1, fontFamily: "inherit",
+                  opacity: disabled ? 0.3 : 1,
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                  boxShadow: !disabled ? "0 0 18px #cc44ff33" : "none",
+                  transition: "opacity 0.2s",
+                }}
+              >
+                <span style={{ fontSize: 16 }}>✦</span>
+                <span style={{ lineHeight: 1.2, textAlign: "center" }}>GET<br/>SPELL</span>
+                <span style={{
+                  fontSize: 10, fontWeight: 900,
+                  color: disabled ? "#334" : "#4aeecc",
+                  background: disabled ? "transparent" : "rgba(74,238,204,0.1)",
+                  border: disabled ? "none" : "1px solid #4aeecc44",
+                  borderRadius: 6, padding: "1px 5px",
+                }}>2⚡</span>
+                {player.synergyDrawUsed && (
+                  <span style={{ fontSize: 6, color: "#556", letterSpacing: 0.5 }}>USED</span>
+                )}
+                {!canDraw && (
+                  <span style={{ fontSize: 6, color: "#334", letterSpacing: 0.5, textAlign: "center" }}>NO SYN</span>
+                )}
+              </motion.button>
+            );
+          })()}
+        </div>
+
+        {/* Hand cards (center) */}
+        <div style={{
+          flex: 1, display: "flex", gap: 10, justifyContent: "center", alignItems: "flex-end",
+          padding: "14px 20px 10px", overflow: "visible", position: "relative", zIndex: 10,
+        }}>
+          {player.hand.map(card => {
+            const isDrawn = drewCardId === card.instanceId;
+            return (
+              <motion.div
+                key={card.instanceId}
+                initial={isDrawn ? { y: 60, opacity: 0 } : false}
+                animate={{ y: 0, opacity: 1 }}
+                transition={isDrawn ? { type: "spring", stiffness: 380, damping: 22 } : {}}
+                style={{ flexShrink: 0, position: "relative", zIndex: 10 }}
+              >
+                <HandCardView
+                  card={card} cardDb={cardDb}
+                  energy={player.energy} costReduction={player.costReduction}
+                  onPlay={() => handlePlayCard(card.instanceId)}
+                />
+              </motion.div>
+            );
+          })}
+          {player.hand.length === 0 && (
+            <div style={{ color: "#2a2a38", fontSize: 10, letterSpacing: 3, paddingBottom: 8, paddingTop: 8, alignSelf: "center" }}>
+              NO CARDS IN HAND
+            </div>
+          )}
+        </div>
+
+        {/* Energy bar column (between hand and deck) */}
+        <div style={{
+          flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
+          justifyContent: "center", padding: "10px 10px", borderLeft: "1px solid #1a1a30", gap: 6, minWidth: 60,
+        }}>
+          <div style={{ fontSize: 9, color: "#4aeecc", fontWeight: 800, letterSpacing: 1, textAlign: "center" }}>
+            ⚡ {player.energy}/{player.maxEnergy}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "center" }}>
+            {Array.from({ length: player.maxEnergy }).map((_, i) => (
+              <motion.div key={i}
+                animate={i < player.energy ? { boxShadow: ["0 0 4px #4aeecc66", "0 0 10px #4aeecc", "0 0 4px #4aeecc66"] } : {}}
+                transition={{ duration: 1.6, repeat: Infinity, delay: i * 0.07 }}
+                style={{
+                  width: 16, height: 10, borderRadius: 3,
+                  background: i < player.energy ? "linear-gradient(135deg, #2af 0%, #4aeecc 100%)" : "#0d0d18",
+                  border: `1px solid ${i < player.energy ? "#4aeecc" : "#1e1e2e"}`,
+                }} />
+            ))}
+          </div>
+          <div style={{ fontSize: 7, color: "#334", letterSpacing: 2 }}>ENERGY</div>
+        </div>
+
+        {/* Deck (right column) */}
+        <div style={{
+          flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
+          justifyContent: "center", padding: "10px 16px", borderLeft: "1px solid #1a1a30", gap: 5, minWidth: 80,
+        }}>
+          <div style={{ position: "relative", width: 52, height: 72 }}>
             {[4, 3, 2, 1, 0].map(offset => (
               <div key={offset} style={{
                 position: "absolute",
-                top: -offset * 1.5, left: offset * 0.5,
-                width: 34, height: 46, borderRadius: 5,
-                background: offset === 0 ? "rgba(20,20,50,0.9)" : "rgba(12,12,30,0.7)",
-                border: `1px solid ${offset === 0 ? "#2a2a5a" : "#1a1a3a"}`,
+                top: -offset * 2.2, left: offset * 0.8,
+                width: 52, height: 72, borderRadius: 7,
+                background: offset === 0 ? "rgba(20,20,60,0.96)" : "rgba(10,10,30,0.8)",
+                border: `1px solid ${offset === 0 ? "#3a3a7a" : "#1e1e3a"}`,
                 display: offset === 0 ? "flex" : "block",
                 alignItems: "center", justifyContent: "center",
-                fontSize: 14, color: "#334",
+                fontSize: 22, color: "#446",
+                boxShadow: offset === 0 ? "0 4px 18px rgba(0,0,0,0.7)" : "none",
               }}>
                 {offset === 0 ? "🃏" : null}
               </div>
             ))}
           </div>
-          <div style={{ fontSize: 11, fontWeight: 900, color: "#445", letterSpacing: 1 }}>
+          <div style={{ fontSize: 18, fontWeight: 900, color: "#667", letterSpacing: 1, marginTop: 2 }}>
             {player.deck.length}
           </div>
-          <div style={{ fontSize: 7, color: "#223", letterSpacing: 2 }}>DECK</div>
-        </div>
-
-        <BoardRow
-          board={player.board} cardDb={cardDb}
-          pendingId={battleState.pendingAttackerId}
-          targeting={false} myBoard
-          onSelectCard={handleSelectAttacker}
-        />
-      </div>
-
-      {/* ── MY LEADER (bottom, centered) ─────────────────────────────────── */}
-      <div style={{
-        borderTop: "1px solid #0c0c1e", background: "rgba(0,0,0,0.2)",
-        position: "relative", zIndex: 1, flexShrink: 0,
-      }}>
-        <CenteredLeader
-          leader={player.leader} cardDb={cardDb}
-          playerName={name} playerIcon={icon}
-          selected={battleState.pendingAttackerId === player.leader.instanceId}
-          energy={player.energy} maxEnergy={player.maxEnergy}
-          domainMeter={player.domainMeter} showDomainBtn
-          onSelect={() => handleSelectAttacker(player.leader.instanceId)}
-          onDomainActivate={() => dispatch({ type: "ACTIVATE_DOMAIN", pid })}
-          isTop={false}
-        />
-      </div>
-
-      {/* ── HAND ─────────────────────────────────────────────────────────── */}
-      {/* Outer wrapper has no overflow so hovered cards can rise above the leader section */}
-      <div style={{
-        background: "rgba(0,0,0,0.55)", borderTop: "1px solid #111128",
-        minHeight: 138, flexShrink: 0, position: "relative", zIndex: 50,
-        paddingTop: 18, // gives upward-hover room
-      }}>
-        <div style={{
-          display: "flex", gap: 12, justifyContent: "center",
-          padding: "0 28px 12px", overflowX: "auto", overflowY: "visible",
-          alignItems: "flex-end",
-        }}>
-          {player.hand.map(card => (
-            <HandCardView
-              key={card.instanceId}
-              card={card} cardDb={cardDb}
-              energy={player.energy} costReduction={player.costReduction}
-              onPlay={() => handlePlayCard(card.instanceId)}
-            />
-          ))}
-          {player.hand.length === 0 && (
-            <div style={{ color: "#2a2a38", fontSize: 10, letterSpacing: 3, alignSelf: "center", paddingBottom: 12 }}>
-              NO CARDS IN HAND
-            </div>
-          )}
+          <div style={{ fontSize: 8, color: "#334", letterSpacing: 3 }}>DECK</div>
         </div>
       </div>
 

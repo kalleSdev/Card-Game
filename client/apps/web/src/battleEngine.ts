@@ -28,59 +28,77 @@ import { ROULETTE_ITEM_MAP } from "@cg/engine";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const RARITY_STATS: Record<string, { atk: number; hp: number; cost: number }> = {
-  C:   { atk: 10, hp: 20,  cost: 0 },
-  B:   { atk: 20, hp: 35,  cost: 1 },
-  A:   { atk: 35, hp: 55,  cost: 2 },
-  S:   { atk: 50, hp: 75,  cost: 3 },
-  SS:  { atk: 70, hp: 100, cost: 4 },
-  SSS: { atk: 90, hp: 130, cost: 5 },
-  X:   { atk: 120, hp: 150, cost: 6 },
-};
-
-const AFFINITY_MOD: Record<string, { atk: number; hp: number }> = {
-  LEADER:  { atk: 1.2, hp: 1.8 },  // leaders are durable tanks
-  COMBAT:  { atk: 1.4, hp: 0.9 },  // combat cards hit hard but fragile
-  SUPPORT: { atk: 0.7, hp: 1.3 },  // support survives but doesn't deal much
+  C:   { atk: 1, hp: 2,  cost: 0 },
+  B:   { atk: 2, hp: 3,  cost: 1 },
+  A:   { atk: 3, hp: 4,  cost: 2 },
+  S:   { atk: 4, hp: 5,  cost: 3 },
+  SS:  { atk: 6, hp: 6,  cost: 4 },
+  SSS: { atk: 6, hp: 7,  cost: 5 },
+  X:   { atk: 7, hp: 7,  cost: 7 },
 };
 
 export function deriveStats(def: CardDef): { atk: number; hp: number; cost: number } {
+  // All cards use rarity stats — leader battle stats (2/30/free) are applied by buildPlayer
   const base = RARITY_STATS[def.rarity] ?? RARITY_STATS.B;
-  const mod  = AFFINITY_MOD[def.affinity] ?? { atk: 1, hp: 1 };
-  return {
-    atk:  Math.round(base.atk * mod.atk),
-    hp:   Math.round(base.hp  * mod.hp),
-    cost: base.cost,
-  };
+  return { atk: base.atk, hp: base.hp, cost: base.cost };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Synergy rules — tag combinations → { atk bonus, hp bonus }
-// Add new tuples to support more synergies without changing engine code
+// Spell cards — granted when a synergy activates; cast from hand area
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type SpellEffect =
+  | { kind: "DAMAGE_TARGET"; amount: number }              // deal damage to one enemy
+  | { kind: "BUFF_BOARD_ATK"; amount: number; turns: number } // buff all own cards' ATK
+  | { kind: "BUFF_BOARD_HP"; amount: number }              // heal/buff all own cards' HP
+  | { kind: "DRAW"; count: number }                        // draw cards from deck
+  | { kind: "STUN_ONE" }                                   // stun one enemy card for 1 turn
+  | { kind: "TURN_BACK_SHEEP" }                            // restore one sheepified card
+  | { kind: "GAIN_ENERGY"; amount: number }                // gain extra energy this turn
+  | { kind: "PURPLE" }                                     // kill own + enemy card at same slot
+  | { kind: "BUFF_ONE_HP"; amount: number }               // buff one own card's HP
+  | { kind: "BUFF_ONE_ATK"; amount: number };              // buff one own card's ATK
+
+export interface SpellCard {
+  id: string;
+  synergyId: string;
+  name: string;
+  description: string;
+  effect: SpellEffect;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Synergy rules — tag combos → spell grants (more organic than flat stat bonuses)
 // ─────────────────────────────────────────────────────────────────────────────
 
 type SynergyRule = {
   id: string;
-  tags: string[];        // all tags must appear on the board (across any cards)
-  minCount: number;      // how many cards carrying these tags are needed
-  atkBonus: number;      // flat ATK added to each card sharing the tags
-  hpBonus: number;       // flat HP added to each card sharing the tags
+  tags: string[];
+  minCount: number;
   label: string;
+  spellName: string;
+  spellDesc: string;
+  spell: SpellEffect;
 };
 
 export const BATTLE_SYNERGY_RULES: SynergyRule[] = [
-  { id: "strongest_2",      tags: ["strongest"],       minCount: 2, atkBonus: 15, hpBonus: 0,  label: "The Strongest ×2" },
-  { id: "strongest_3",      tags: ["strongest"],       minCount: 3, atkBonus: 30, hpBonus: 10, label: "The Strongest ×3" },
-  { id: "disaster_curse_2", tags: ["disaster-curse"],  minCount: 2, atkBonus: 8,  hpBonus: 5,  label: "Disaster Curse ×2" },
-  { id: "disaster_curse_3", tags: ["disaster-curse"],  minCount: 3, atkBonus: 18, hpBonus: 10, label: "Disaster Curse ×3" },
-  { id: "jujutsu_high_3",   tags: ["jujutsu-high"],    minCount: 3, atkBonus: 10, hpBonus: 15, label: "Jujutsu High ×3" },
-  { id: "zenin_clan_2",     tags: ["zenin-clan"],      minCount: 2, atkBonus: 12, hpBonus: 8,  label: "Zenin Clan ×2" },
-  { id: "brotherhood",      tags: ["brother"],         minCount: 2, atkBonus: 20, hpBonus: 0,  label: "Brotherhood" },
-  { id: "heavenly_2",       tags: ["heavenly-restriction"], minCount: 2, atkBonus: 5, hpBonus: 25, label: "Heavenly Restriction ×2" },
-  { id: "tokyo_trio_3",     tags: ["tokyo-senior"],    minCount: 3, atkBonus: 10, hpBonus: 10, label: "Tokyo Trio ×3" },
-  { id: "culling_game_3",   tags: ["culling-game"],    minCount: 3, atkBonus: 12, hpBonus: 12, label: "Culling Game ×3" },
-  { id: "six_eyes",         tags: ["six-eyes"],        minCount: 2, atkBonus: 25, hpBonus: 5,  label: "Six Eyes" },
-  { id: "gojo_students_2",  tags: ["gojo-student"],    minCount: 2, atkBonus: 8,  hpBonus: 8,  label: "Gojo's Students ×2" },
+  { id: "strongest",     tags: ["strongest"],            minCount: 2, label: "The Strongest",       spellName: "Peak Pressure",     spellDesc: "Deal 4 damage to any enemy",              spell: { kind: "DAMAGE_TARGET", amount: 4 } },
+  { id: "disaster",      tags: ["disaster-curse"],       minCount: 2, label: "Disaster Curses",     spellName: "Calamity Surge",    spellDesc: "All your cards gain +2 ATK for 2 turns",  spell: { kind: "BUFF_BOARD_ATK", amount: 2, turns: 2 } },
+  { id: "jujutsu_high",  tags: ["jujutsu-high"],         minCount: 3, label: "Jujutsu High",        spellName: "School Spirit",     spellDesc: "All your cards gain +3 HP",               spell: { kind: "BUFF_BOARD_HP", amount: 3 } },
+  { id: "zenin_clan",    tags: ["zenin-clan"],           minCount: 2, label: "Zenin Clan",          spellName: "Clan Inheritance",  spellDesc: "Draw 1 card",                             spell: { kind: "DRAW", count: 1 } },
+  { id: "brotherhood",   tags: ["brother"],              minCount: 2, label: "Brotherhood",         spellName: "Sworn Bond",        spellDesc: "All your cards gain +2 ATK for 1 turn",   spell: { kind: "BUFF_BOARD_ATK", amount: 2, turns: 1 } },
+  { id: "heavenly",      tags: ["heavenly-restriction"], minCount: 2, label: "Heavenly Restriction", spellName: "Pure Body",        spellDesc: "All your cards gain +4 HP",               spell: { kind: "BUFF_BOARD_HP", amount: 4 } },
+  { id: "culling_game",  tags: ["culling-game"],         minCount: 3, label: "Culling Game",        spellName: "Kill Score",        spellDesc: "Deal 3 damage to any enemy",              spell: { kind: "DAMAGE_TARGET", amount: 3 } },
+  { id: "six_eyes",      tags: ["six-eyes"],             minCount: 2, label: "Six Eyes",            spellName: "Infinity",          spellDesc: "Stun one enemy card for 1 turn",          spell: { kind: "STUN_ONE" } },
+  { id: "gojo_students", tags: ["gojo-student"],         minCount: 2, label: "Gojo's Students",     spellName: "Sensei's Lessons",  spellDesc: "Draw 2 cards",                            spell: { kind: "DRAW", count: 2 } },
+  { id: "tokyo_senior",  tags: ["tokyo-senior"],         minCount: 3, label: "Tokyo Trio",          spellName: "Senior Formation",  spellDesc: "Deal 3 damage to any enemy",              spell: { kind: "DAMAGE_TARGET", amount: 3 } },
+  { id: "stars",         tags: ["stars"],                minCount: 2, label: "Stars",                spellName: "Starfall",          spellDesc: "All your cards gain +4 HP",               spell: { kind: "BUFF_BOARD_HP", amount: 4 } },
+  { id: "gojo_geto_bond", tags: ["gojo-geto"],           minCount: 2, label: "Destined Rivals",      spellName: "Hollow Purple",     spellDesc: "Deal 6 damage to any enemy",              spell: { kind: "DAMAGE_TARGET", amount: 6 } },
 ];
+
+export function getSynergyLabel(id: string): string {
+  return BATTLE_SYNERGY_RULES.find(r => r.id === id)?.label ?? id;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Domain effects — keyed by leaderId, one entry per character
@@ -93,25 +111,37 @@ export type DomainEffect =
   | { kind: "BUFF_OWN_BOARD"; atkBonus: number; hpBonus: number; turns: number }
   | { kind: "HEAL_LEADER"; amount: number }              // restore leader HP
   | { kind: "DRAW_CARDS"; count: number }                // draw extra cards
-  | { kind: "REDUCE_COSTS"; amount: number; turns: number }; // all cards cheaper
+  | { kind: "REDUCE_COSTS"; amount: number; turns: number } // all cards cheaper
+  | { kind: "KILL_ALL_BOARD" }                           // Sukuna: remove all non-leader board cards
+  | { kind: "SPAWN_ENTITIES"; count: number; atk: number; hp: number } // Geto
+  | { kind: "GRANT_RANDOM_SPELLS"; count: number }       // Hakari
+  | { kind: "PERMANENT_LEADER_ATK"; atk: number; counterDmg: number } // Kashimo
+  | { kind: "CHOOSE_KILL_ENEMIES"; count: number }       // Dabura (interactive)
+  | { kind: "COPY_ENEMY_CARD" }                          // Yuta (interactive)
+  | { kind: "HEAL_AND_KILL_ONE"; healAmount: number }    // Mahoraga (interactive)
+  | { kind: "SHEEPIFY_BOARD" }                           // Takaba: all board cards become 1/1
+  | { kind: "SNEAK_ATTACK_DOMAIN"; amount: number }      // Maki (interactive, no counter)
+  | { kind: "GRANT_SPELL"; spellName: string; spellDesc: string; spell: SpellEffect }; // grants a spell to caster
 
 export const DOMAIN_BATTLE_EFFECTS: Record<string, { name: string; effect: DomainEffect }> = {
-  "gojo-base": { name: "Infinite Void",              effect: { kind: "STUN_ENEMY_BOARD",   turns: 2 } },
-  "sukuna":    { name: "Malevolent Shrine",           effect: { kind: "DAMAGE_ALL_ENEMIES", amount: 40 } },
+  "gojo-base": { name: "Infinite Void",              effect: { kind: "STUN_ENEMY_BOARD",   turns: 1 } },
+  "sukuna":    { name: "Malevolent Shrine",           effect: { kind: "KILL_ALL_BOARD" } },
   "mahito":    { name: "Self-Embodiment of Perfection", effect: { kind: "BUFF_OWN_BOARD",  atkBonus: 25, hpBonus: 0, turns: 2 } },
-  "yuta":      { name: "Rika Orimoto",               effect: { kind: "BUFF_OWN_BOARD",     atkBonus: 15, hpBonus: 20, turns: 2 } },
-  "geto":      { name: "Maximum: Uzumaki",            effect: { kind: "DAMAGE_ALL_ENEMIES", amount: 25 } },
+  "yuta":      { name: "Rika Orimoto",               effect: { kind: "COPY_ENEMY_CARD" } },
+  "geto":      { name: "Maximum: Uzumaki",            effect: { kind: "SPAWN_ENTITIES",    count: 3, atk: 3, hp: 3 } },
   "megumi":    { name: "Chimera Shadow Garden",       effect: { kind: "BUFF_OWN_BOARD",     atkBonus: 20, hpBonus: 15, turns: 3 } },
-  "hakari":    { name: "Idle Death Gamble",           effect: { kind: "DRAW_CARDS",         count: 3 } },
+  "hakari":    { name: "Idle Death Gamble",           effect: { kind: "GRANT_RANDOM_SPELLS", count: 3 } },
   "higuruma":  { name: "Deadly Sentencing",           effect: { kind: "STUN_ENEMY_BOARD",   turns: 1 } },
   "jogo":      { name: "Coffin of the Iron Mountain", effect: { kind: "DAMAGE_ALL_ENEMIES", amount: 30 } },
   "dagon":     { name: "Horizon of the Captivating Skandha", effect: { kind: "DAMAGE_ALL_ENEMIES", amount: 20 } },
-  "toji":      { name: "Heavenly Restriction Assault", effect: { kind: "BUFF_OWN_BOARD",   atkBonus: 35, hpBonus: 0, turns: 1 } },
-  "kashimo":   { name: "Mythological Beast Amber",   effect: { kind: "DAMAGE_ALL_ENEMIES", amount: 35 } },
-  "mahoraga":  { name: "Adaptation",                 effect: { kind: "BUFF_OWN_BOARD",     atkBonus: 40, hpBonus: 20, turns: 2 } },
+  "toji":      { name: "Heavenly Restriction Assault", effect: { kind: "GRANT_SPELL", spellName: "Toji Strike", spellDesc: "Deal 4 damage to any target", spell: { kind: "DAMAGE_TARGET", amount: 4 } } },
+  "kashimo":   { name: "Mythological Beast Amber",   effect: { kind: "PERMANENT_LEADER_ATK", atk: 5, counterDmg: 5 } },
+  "mahoraga":  { name: "Adaptation",                 effect: { kind: "HEAL_AND_KILL_ONE",  healAmount: 6 } },
   "uro":       { name: "Shattered Heaven",           effect: { kind: "REDUCE_COSTS",        amount: 2, turns: 2 } },
-  "dabura":    { name: "Demon Realm",                effect: { kind: "STUN_ENEMY_BOARD",    turns: 2 } },
+  "dabura":    { name: "Demon Realm",                effect: { kind: "CHOOSE_KILL_ENEMIES", count: 2 } },
   "naoya":     { name: "Projection Strike",          effect: { kind: "BUFF_OWN_BOARD",      atkBonus: 30, hpBonus: 0, turns: 1 } },
+  "maki":      { name: "Heavenly Restriction Assault", effect: { kind: "SNEAK_ATTACK_DOMAIN", amount: 5 } },
+  "takaba":    { name: "Comedian",                   effect: { kind: "SHEEPIFY_BOARD" } },
 };
 
 const DEFAULT_DOMAIN_EFFECT: { name: string; effect: DomainEffect } = {
@@ -148,6 +178,10 @@ export interface BattleCard {
   tempAtkBonus: number;
   tempHpBonus: number;
   tempBonusTurns: number;
+  // Sheepify state (Takaba domain)
+  preSheepAtk?: number;
+  preSheepHp?: number;
+  isSheep?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -167,14 +201,28 @@ export interface BattlePlayer {
   domainCooldown: number;       // turns until domain can be activated again
   domainUsed: boolean;          // once per match flag (optional limit — set false to allow multi-use)
   activeSynergies: string[];    // currently active synergy rule ids
+  spells: SpellCard[];          // available spell cards granted by synergies
   weaponIds: string[];          // equipped weapons (affect ATK calc)
   costReduction: number;        // from domain effects
   costReductionTurns: number;
+  kashimoPassive: boolean;      // true after Kashimo's domain → counter 5 dmg when attacked
+  kashimoAtk: number;           // 5 when domain active, else 0
+  tojiBerserk: boolean;         // true when Toji is leader → can always attack enemy leader
+  leaderBonusAttack: boolean;   // Takaba: next leader attack doesn't exhaust
+  getoEntitiesPending: number;  // Geto: how many more entities to spawn when space opens
+  cardPlayFrozen: number;       // Gojo domain: turns enemy can't play cards
+  synergyDrawUsed: boolean;     // once per turn: spend 2 energy to draw a synergy spell
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Battle state
 // ─────────────────────────────────────────────────────────────────────────────
+
+export type PendingDomainAction =
+  | { kind: "CHOOSE_KILL_ENEMIES"; pid: PlayerId; remaining: number }
+  | { kind: "COPY_ENEMY_CARD"; pid: PlayerId }
+  | { kind: "HEAL_AND_KILL_ONE"; pid: PlayerId; healAmount: number }
+  | { kind: "SNEAK_ATTACK_DOMAIN"; pid: PlayerId; amount: number };
 
 export type BattlePhase = "DRAW" | "MAIN" | "GAME_OVER";
 
@@ -187,6 +235,8 @@ export interface BattleState {
   log: BattleEvent[];
   // Pending attack: set when player selects an attacker, cleared after attack
   pendingAttackerId: string | null;
+  // Pending interactive domain action (requires DOMAIN_TARGET intents)
+  pendingDomainAction: PendingDomainAction | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -201,8 +251,10 @@ export type BattleEvent =
   | { type: "CARD_DIED"; pid: PlayerId; instanceId: string }
   | { type: "DOMAIN_ACTIVATED"; pid: PlayerId; name: string; effect: DomainEffect }
   | { type: "SYNERGY_UPDATE"; pid: PlayerId; active: string[] }
+  | { type: "SPELL_CAST"; pid: PlayerId; spellId: string; synergyId: string }
   | { type: "TURN_END"; pid: PlayerId }
   | { type: "GAME_OVER"; winner: PlayerId }
+  | { type: "DOMAIN_TARGET_DONE"; pid: PlayerId }
   | { type: "ILLEGAL"; reason: string };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -215,8 +267,11 @@ export type BattleIntent =
   | { type: "ATTACK_LEADER";   pid: PlayerId }
   | { type: "PLAY_CARD";       pid: PlayerId; instanceId: string; slot: number }
   | { type: "ACTIVATE_DOMAIN"; pid: PlayerId }
+  | { type: "CAST_SPELL";      pid: PlayerId; spellId: string; targetInstanceId?: string }
   | { type: "END_TURN";        pid: PlayerId }
-  | { type: "CANCEL_ATTACK";   pid: PlayerId };
+  | { type: "CANCEL_ATTACK";        pid: PlayerId }
+  | { type: "DOMAIN_TARGET";        pid: PlayerId; targetInstanceId: string }
+  | { type: "DRAW_SYNERGY_SPELL";   pid: PlayerId };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Factory — build BattleCard from CardDef
@@ -254,53 +309,37 @@ export function makeBattleCard(defId: string, def: CardDef): BattleCard {
 // Returns updated cards (with synergy bonuses applied) and active synergy ids
 // ─────────────────────────────────────────────────────────────────────────────
 
-function calcSynergies(
-  leader: BattleCard,
-  board: (BattleCard | null)[],
-): { activeIds: string[]; atkBonus: Record<string, number>; hpBonus: Record<string, number> } {
-  const allCards = [leader, ...board.filter(Boolean)] as BattleCard[];
+function calcActiveSynergies(leader: BattleCard, board: (BattleCard | null)[]): string[] {
+  // Leader tags do NOT count toward synergies — only board cards
+  void leader;
+  const allCards = board.filter(Boolean) as BattleCard[];
   const activeIds: string[] = [];
-  const atkBonus: Record<string, number> = {};
-  const hpBonus:  Record<string, number> = {};
-
   for (const rule of BATTLE_SYNERGY_RULES) {
-    const matching = allCards.filter(c =>
-      rule.tags.every(tag => c.tags.includes(tag))
-    );
-    if (matching.length >= rule.minCount) {
-      activeIds.push(rule.id);
-      for (const card of matching) {
-        atkBonus[card.instanceId] = (atkBonus[card.instanceId] ?? 0) + rule.atkBonus;
-        hpBonus[card.instanceId]  = (hpBonus[card.instanceId]  ?? 0) + rule.hpBonus;
-      }
-    }
+    const count = allCards.filter(c => rule.tags.every(tag => c.tags.includes(tag))).length;
+    if (count >= rule.minCount) activeIds.push(rule.id);
   }
-  return { activeIds, atkBonus, hpBonus };
+  return activeIds;
 }
 
 function applySynergies(player: BattlePlayer): BattlePlayer {
-  const { activeIds, atkBonus, hpBonus } = calcSynergies(player.leader, player.board);
-
-  const applyToCard = (card: BattleCard): BattleCard => {
-    const addAtk = atkBonus[card.instanceId] ?? 0;
-    const addHp  = hpBonus[card.instanceId]  ?? 0;
-    const newMaxHp = card.baseHp + addHp + card.tempHpBonus;
-    const newAtk   = card.baseAtk + addAtk + card.tempAtkBonus;
-    // Preserve current HP ratio if max changes
-    const hpRatio  = card.maxHp > 0 ? card.currentHp / card.maxHp : 1;
-    return {
-      ...card,
-      atk:       newAtk,
-      maxHp:     newMaxHp,
-      currentHp: Math.min(card.currentHp, newMaxHp),
-    };
-  };
-
+  const activeIds = calcActiveSynergies(player.leader, player.board);
+  // Grant spell cards for newly activated synergies only
+  const newlyActive = activeIds.filter(id => !player.activeSynergies.includes(id));
+  const newSpells: SpellCard[] = newlyActive.flatMap(id => {
+    const rule = BATTLE_SYNERGY_RULES.find(r => r.id === id);
+    if (!rule) return [];
+    return [{
+      id: `spell-${id}-${++_instanceCounter}`,
+      synergyId: id,
+      name: rule.spellName,
+      description: rule.spellDesc,
+      effect: rule.spell,
+    }];
+  });
   return {
     ...player,
-    leader: applyToCard(player.leader),
-    board:  player.board.map(c => c ? applyToCard(c) : null),
     activeSynergies: activeIds,
+    spells: [...player.spells, ...newSpells],
   };
 }
 
@@ -328,9 +367,14 @@ function buildPlayer(
   if (!leaderDef) throw new Error(`Leader ${draft.leaderId} not found in cardDb`);
 
   const leader = makeBattleCard(draft.leaderId, leaderDef);
-  leader.canAttack = true; // leader can always attack from turn 1
+  leader.canAttack = true;
+  // Leaders: 2 ATK / 30 HP / cost 0. Toji: 1 ATK (attacks twice without counter)
+  leader.atk = leaderDef.id === "toji" ? 1 : 2;
+  leader.baseAtk = leader.atk;
+  leader.currentHp = 30; leader.maxHp = 30; leader.baseHp = 30;
+  leader.cost = 0;
 
-  // Build deck from all non-leader cards (2 combat + 3 support + 9 extra = 14)
+  // Build deck — deriveStats now returns rarity-based stats for ALL cards (incl. LEADER affinity)
   const deckCards: BattleCard[] = [
     ...draft.combatIds,
     ...draft.supportIds,
@@ -352,22 +396,48 @@ function buildPlayer(
     ...c, baseAtk: c.baseAtk + weaponBonus, atk: c.atk + weaponBonus,
   });
 
+  // Default starting spells every player gets
+  const defaultSpells: SpellCard[] = [
+    {
+      id: `spell-default-hp-${pid}-${++_instanceCounter}`,
+      synergyId: "default",
+      name: "+3 HP",
+      description: "+3 HP",
+      effect: { kind: "BUFF_ONE_HP", amount: 3 },
+    },
+    {
+      id: `spell-default-atk-${pid}-${++_instanceCounter}`,
+      synergyId: "default",
+      name: "+3 ATK",
+      description: "+3 ATK",
+      effect: { kind: "BUFF_ONE_ATK", amount: 3 },
+    },
+  ];
+
   const player: BattlePlayer = {
     pid,
     leader: applyWeapon(leader),
     board: [null, null, null, null, null],
     hand:  hand.map(applyWeapon),
     deck:  deck.map(applyWeapon),
-    energy: 1,
-    maxEnergy: 1,
+    energy: 2,
+    maxEnergy: 2,
     domainMeter: 0,
     domainActive: false,
     domainCooldown: 0,
     domainUsed: false,
     activeSynergies: [],
+    spells: defaultSpells,
     weaponIds: draft.weaponIds,
     costReduction: 0,
     costReductionTurns: 0,
+    kashimoPassive: false,
+    kashimoAtk: 0,
+    tojiBerserk: leaderDef.id === "toji",
+    leaderBonusAttack: leaderDef.id === "toji", // Toji starts with a bonus attack each turn
+    getoEntitiesPending: 0,
+    cardPlayFrozen: 0,
+    synergyDrawUsed: false,
   };
 
   return applySynergies(player);
@@ -410,14 +480,33 @@ export function createBattleState(
   const fp1 = mulliganHands ? applyMulligan(p1, mulliganHands.P1) : p1;
   const fp2 = mulliganHands ? applyMulligan(p2, mulliganHands.P2) : p2;
 
+  // Coin flip: random first player
+  const firstPlayer: PlayerId = Math.random() < 0.5 ? "P1" : "P2";
+  const secondPlayer: PlayerId = firstPlayer === "P1" ? "P2" : "P1";
+
+  // Second player gets a bonus energy spell to compensate going second
+  const goSecondSpell: SpellCard = {
+    id: `spell-go-second-${++_instanceCounter}`,
+    synergyId: "go-second",
+    name: "Going Second",
+    description: "Gain +1 energy this turn",
+    effect: { kind: "GAIN_ENERGY", amount: 1 },
+  };
+  const applyGoSecond = (player: BattlePlayer): BattlePlayer => ({
+    ...player, spells: [...player.spells, goSecondSpell],
+  });
+  const final1 = firstPlayer === "P1" ? fp1 : applyGoSecond(fp1);
+  const final2 = firstPlayer === "P2" ? fp2 : applyGoSecond(fp2);
+
   return {
     phase: "DRAW",
     turn: 1,
-    activePlayer: "P1",
-    players: { P1: fp1, P2: fp2 },
+    activePlayer: firstPlayer,
+    players: { P1: final1, P2: final2 },
     winner: null,
     log: [],
     pendingAttackerId: null,
+    pendingDomainAction: null,
   };
 }
 
@@ -439,6 +528,38 @@ function boardCards(player: BattlePlayer): BattleCard[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Geto entity spawning helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+function spawnGetoEntities(player: BattlePlayer, atk: number, hp: number): BattlePlayer {
+  let p = { ...player };
+  while (p.getoEntitiesPending > 0) {
+    const slot = p.board.findIndex(s => s === null);
+    if (slot === -1) break; // board full — keep pending count
+    const entity: BattleCard = {
+      instanceId: `geto-entity-${++_instanceCounter}`,
+      defId: "geto-entity",
+      name: "Cursed Spirit",
+      rarity: "B",
+      affinity: "COMBAT",
+      tags: [],
+      baseAtk: atk, baseHp: hp,
+      cost: 0,
+      atk, currentHp: hp, maxHp: hp,
+      hasTaunt: true,
+      canAttack: true,
+      exhausted: false,
+      stunTurns: 0,
+      tempAtkBonus: 0, tempHpBonus: 0, tempBonusTurns: 0,
+    };
+    const newBoard = [...p.board] as BattlePlayer["board"];
+    newBoard[slot] = entity;
+    p = { ...p, board: newBoard, getoEntitiesPending: p.getoEntitiesPending - 1 };
+  }
+  return p;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Apply domain effect
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -457,7 +578,19 @@ function applyDomainEffect(
         ...o,
         leader: { ...o.leader, stunTurns: effect.turns },
         board:  o.board.map(c => c ? { ...c, stunTurns: effect.turns } : null),
+        cardPlayFrozen: effect.turns, // also prevent card placement
       };
+      // Gojo's domain additionally grants the "Purple" spell to the caster
+      if (p.leader.defId === "gojo-base") {
+        const purpleSpell: SpellCard = {
+          id: `spell-purple-${++_instanceCounter}`,
+          synergyId: "gojo-purple",
+          name: "Purple",
+          description: "Destroy 1 own card + 1 enemy card at the same board slot",
+          effect: { kind: "PURPLE" },
+        };
+        p = { ...p, spells: [...p.spells, purpleSpell] };
+      }
       break;
     }
     case "DAMAGE_ALL_ENEMIES": {
@@ -500,6 +633,110 @@ function applyDomainEffect(
     }
     case "REDUCE_COSTS": {
       p = { ...p, costReduction: effect.amount, costReductionTurns: effect.turns };
+      break;
+    }
+    case "KILL_ALL_BOARD": {
+      // Remove all non-leader board cards from both players
+      o = { ...o, board: o.board.map(() => null) };
+      p = { ...p, board: p.board.map(() => null) };
+      break;
+    }
+    case "SPAWN_ENTITIES": {
+      // Spawn up to count entities in empty board slots; track remainder in getoEntitiesPending
+      p = { ...p, getoEntitiesPending: p.getoEntitiesPending + effect.count };
+      p = spawnGetoEntities(p, effect.atk, effect.hp);
+      break;
+    }
+    case "GRANT_RANDOM_SPELLS": {
+      // Pick count random spells from BATTLE_SYNERGY_RULES and add to player.spells with cost 1
+      const shuffledRules = shuffle([...BATTLE_SYNERGY_RULES]);
+      const picked = shuffledRules.slice(0, effect.count);
+      const newSpells: SpellCard[] = picked.map(rule => ({
+        id: `spell-hakari-${++_instanceCounter}`,
+        synergyId: rule.id,
+        name: rule.spellName,
+        description: rule.spellDesc,
+        effect: rule.spell,
+      }));
+      p = { ...p, spells: [...p.spells, ...newSpells] };
+      break;
+    }
+    case "PERMANENT_LEADER_ATK": {
+      p = {
+        ...p,
+        leader: { ...p.leader, atk: effect.atk, baseAtk: effect.atk },
+        kashimoPassive: true,
+        kashimoAtk: effect.counterDmg,
+      };
+      break;
+    }
+    case "CHOOSE_KILL_ENEMIES": {
+      // Interactive — wait for DOMAIN_TARGET intents
+      return {
+        ...state,
+        players: { ...state.players, [pid]: p, [opp]: o },
+        pendingDomainAction: { kind: "CHOOSE_KILL_ENEMIES", pid, remaining: effect.count },
+      };
+    }
+    case "COPY_ENEMY_CARD": {
+      // Interactive — wait for DOMAIN_TARGET intent
+      return {
+        ...state,
+        players: { ...state.players, [pid]: p, [opp]: o },
+        pendingDomainAction: { kind: "COPY_ENEMY_CARD", pid },
+      };
+    }
+    case "HEAL_AND_KILL_ONE": {
+      // Heal immediately, then wait for kill target
+      p = { ...p, leader: { ...p.leader, currentHp: Math.min(p.leader.currentHp + effect.healAmount, p.leader.maxHp) } };
+      return {
+        ...state,
+        players: { ...state.players, [pid]: p, [opp]: o },
+        pendingDomainAction: { kind: "HEAL_AND_KILL_ONE", pid, healAmount: 0 },
+      };
+    }
+    case "SHEEPIFY_BOARD": {
+      // Sheepify all non-null board cards on both players
+      const sheepify = (c: BattleCard): BattleCard => ({
+        ...c,
+        preSheepAtk: c.atk,
+        preSheepHp: c.currentHp,
+        isSheep: true,
+        atk: 1,
+        baseAtk: 1,
+        currentHp: 1,
+        maxHp: 1,
+      });
+      o = { ...o, board: o.board.map(c => c ? sheepify(c) : null) };
+      p = { ...p, board: p.board.map(c => c ? sheepify(c) : null) };
+      // Takaba leader gets bonus attack and a Turn Back spell
+      const turnBackSpell: SpellCard = {
+        id: `spell-turnback-${++_instanceCounter}`,
+        synergyId: "takaba-sheepify",
+        name: "Turn Back",
+        description: "Restore one sheepified card to its original stats",
+        effect: { kind: "TURN_BACK_SHEEP" },
+      };
+      p = { ...p, leaderBonusAttack: true, spells: [...p.spells, turnBackSpell] };
+      break;
+    }
+    case "SNEAK_ATTACK_DOMAIN": {
+      // Interactive — wait for DOMAIN_TARGET intent
+      return {
+        ...state,
+        players: { ...state.players, [pid]: p, [opp]: o },
+        pendingDomainAction: { kind: "SNEAK_ATTACK_DOMAIN", pid, amount: effect.amount },
+      };
+    }
+    case "GRANT_SPELL": {
+      const grantedSpell: SpellCard = {
+        id: `spell-domain-grant-${++_instanceCounter}`,
+        synergyId: "domain",
+        name: effect.spellName,
+        description: effect.spellDesc,
+        effect: effect.spell,
+      };
+      p = { ...p, spells: [...p.spells, grantedSpell] };
       break;
     }
   }
@@ -556,6 +793,15 @@ function processTurnStart(state: BattleState): { state: BattleState; drew: strin
 
   // Domain cooldown
   if (p.domainCooldown > 0) p = { ...p, domainCooldown: p.domainCooldown - 1 };
+
+  // Card play freeze decay (Gojo domain)
+  if (p.cardPlayFrozen > 0) p = { ...p, cardPlayFrozen: p.cardPlayFrozen - 1 };
+
+  // Toji gets his bonus attack back each turn
+  if (p.tojiBerserk) p = { ...p, leaderBonusAttack: true };
+
+  // Reset synergy draw
+  p = { ...p, synergyDrawUsed: false };
 
   // Draw a card
   let drew: string | null = null;
@@ -644,23 +890,31 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       let p = { ...state.players[pid] };
       let o = { ...state.players[opp] };
 
-      // Apply damage to target
-      const updateTarget = (c: BattleCard): BattleCard => ({
-        ...c, currentHp: c.currentHp - damage,
-      });
-      // Apply counter to attacker
-      const updateAttacker = (c: BattleCard): BattleCard => ({
-        ...c, currentHp: c.currentHp - counterDamage, exhausted: true,
-      });
+      // Kashimo passive: if attacking a Kashimo-passive player, attacker takes extra damage
+      const kashimoExtra = o.kashimoPassive ? o.kashimoAtk : 0;
 
       // Is target the leader?
       const isLeaderTarget = target.instanceId === o.leader.instanceId;
       const isLeaderAttacker = attacker.instanceId === p.leader.instanceId;
 
+      // Apply damage to target
+      const updateTarget = (c: BattleCard): BattleCard => ({
+        ...c, currentHp: c.currentHp - damage,
+      });
+      // Apply counter + kashimo to attacker (Toji never takes counter damage)
+      const tojiNoCounter = isLeaderAttacker && p.tojiBerserk;
+      const actualCounter  = tojiNoCounter ? 0 : counterDamage;
+      const actualKashimo  = tojiNoCounter ? 0 : kashimoExtra;
+      const exhaustAttacker = (c: BattleCard): BattleCard => {
+        if (isLeaderAttacker && p.leaderBonusAttack) return { ...c, currentHp: c.currentHp - actualCounter - actualKashimo };
+        return { ...c, currentHp: c.currentHp - actualCounter - actualKashimo, exhausted: true };
+      };
+
       if (isLeaderAttacker) {
-        p = { ...p, leader: updateAttacker(p.leader) };
+        const wasBonus = p.leaderBonusAttack;
+        p = { ...p, leader: exhaustAttacker(p.leader), leaderBonusAttack: wasBonus ? false : p.leaderBonusAttack };
       } else {
-        p = { ...p, board: p.board.map(c => c?.instanceId === attacker.instanceId ? updateAttacker(c) : c) };
+        p = { ...p, board: p.board.map(c => c?.instanceId === attacker.instanceId ? exhaustAttacker(c) : c) };
       }
 
       if (isLeaderTarget) {
@@ -670,8 +924,8 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       }
 
       // Domain meter boost on damage dealt
-      p = { ...p, domainMeter: Math.min(100, p.domainMeter + 5) };
-      o = { ...o, domainMeter: Math.min(100, o.domainMeter + Math.ceil(damage / 20)) };
+      p = { ...p, domainMeter: Math.min(100, p.domainMeter + 7) };
+      o = { ...o, domainMeter: Math.min(100, o.domainMeter + Math.ceil(damage / 14)) };
 
       events.push({ type: "ATTACK_CARD", attackerPid: pid, attackerId: attacker.instanceId, targetId: target.instanceId, damage, counterDamage });
 
@@ -682,7 +936,10 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       });
       p = removeDeadBoard(p);
       o = removeDeadBoard(o);
-      if (attacker.currentHp - counterDamage <= 0) events.push({ type: "CARD_DIED", pid, instanceId: attacker.instanceId });
+      // Spawn any pending Geto entities after board space may have opened
+      p = spawnGetoEntities(p, 3, 3);
+      o = spawnGetoEntities(o, 3, 3);
+      if (attacker.currentHp - actualCounter - actualKashimo <= 0) events.push({ type: "CARD_DIED", pid, instanceId: attacker.instanceId });
       if (target.currentHp - damage <= 0)          events.push({ type: "CARD_DIED", pid: opp, instanceId: target.instanceId });
 
       // Re-sync synergies after board changes
@@ -701,25 +958,37 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       const attacker = findOnBoard(state.players[pid], state.pendingAttackerId);
       if (!attacker) return illegal("Attacker not found");
       if (!attacker.canAttack || attacker.exhausted) return illegal("Attacker cannot attack");
-      // Any card on the board protects the leader — clear the board first
+      // Any card on the board protects the leader — clear the board first (unless Toji berserk)
       const tauntGuards = boardCards(state.players[opp]);
-      if (tauntGuards.length > 0) return illegal("Defeat all enemy cards before targeting the leader!");
+      if (tauntGuards.length > 0 && !state.players[pid].tojiBerserk) return illegal("Defeat all enemy cards before targeting the leader!");
 
       const damage = attacker.atk;
       let p = { ...state.players[pid] };
       let o = { ...state.players[opp] };
 
-      // Exhaust attacker (no counterattack from leader direct hit — leader HP is separate pool)
+      // Kashimo passive counter damage to attacker when hitting Kashimo's leader
+      const kashimoExtra = o.kashimoPassive ? o.kashimoAtk : 0;
+
+      // Exhaust attacker (no counterattack from leader direct hit; Toji also ignores Kashimo passive)
       const isLeaderAttacking = attacker.instanceId === p.leader.instanceId;
+      const leaderNoCounter = isLeaderAttacking && p.tojiBerserk;
+      const leaderKashimoHit = leaderNoCounter ? 0 : kashimoExtra;
       if (isLeaderAttacking) {
-        p = { ...p, leader: { ...p.leader, exhausted: true } };
+        if (p.leaderBonusAttack) {
+          // Use bonus attack — don't exhaust, consume the bonus
+          p = { ...p, leader: { ...p.leader, currentHp: p.leader.currentHp - leaderKashimoHit }, leaderBonusAttack: false };
+        } else {
+          p = { ...p, leader: { ...p.leader, exhausted: true, currentHp: p.leader.currentHp - leaderKashimoHit } };
+        }
       } else {
-        p = { ...p, board: p.board.map(c => c?.instanceId === attacker.instanceId ? { ...c, exhausted: true } : c) };
+        p = { ...p, board: p.board.map(c => c?.instanceId === attacker.instanceId ? { ...c, exhausted: true, currentHp: c.currentHp - kashimoExtra } : c) };
+        // Remove attacker if Kashimo killed it
+        p = { ...p, board: p.board.map(c => c && c.currentHp <= 0 ? null : c) };
       }
 
       o = { ...o, leader: { ...o.leader, currentHp: o.leader.currentHp - damage } };
-      p = { ...p, domainMeter: Math.min(100, p.domainMeter + 8) };
-      o = { ...o, domainMeter: Math.min(100, o.domainMeter + Math.ceil(damage / 15)) };
+      p = { ...p, domainMeter: Math.min(100, p.domainMeter + 11) };
+      o = { ...o, domainMeter: Math.min(100, o.domainMeter + Math.ceil(damage / 11)) };
 
       events.push({ type: "ATTACK_LEADER", attackerPid: pid, attackerId: attacker.instanceId, damage, leaderHpLeft: o.leader.currentHp });
 
@@ -737,6 +1006,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
 
       let p = { ...state.players[pid] };
       if (p.board[intent.slot] !== null) return illegal("Slot occupied");
+      if (p.cardPlayFrozen > 0) return illegal("You cannot play cards while frozen by domain!");
 
       const cost = Math.max(0, card.cost - p.costReduction);
       if (p.energy < cost) return illegal("Not enough energy");
@@ -750,7 +1020,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
         hand:  p.hand.filter(c => c.instanceId !== card.instanceId),
         board: newBoard,
         energy: p.energy - cost,
-        domainMeter: Math.min(100, p.domainMeter + 5),
+        domainMeter: Math.min(100, p.domainMeter + 7),
       };
       p = applySynergies(p);
 
@@ -760,6 +1030,128 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       }
 
       return { state: { ...state, players: { ...state.players, [pid]: p } }, events };
+    }
+
+    // ── CAST_SPELL ────────────────────────────────────────────────────────
+    case "CAST_SPELL": {
+      const spell = state.players[pid].spells.find(s => s.id === intent.spellId);
+      if (!spell) return illegal("Spell not found");
+
+      let p = { ...state.players[pid], spells: state.players[pid].spells.filter(s => s.id !== intent.spellId) };
+      let o = { ...state.players[opp] };
+      const eff = spell.effect;
+
+      switch (eff.kind) {
+        case "DAMAGE_TARGET": {
+          if (!intent.targetInstanceId) return illegal("Target required for damage spell");
+          const tgt = findOnBoard(o, intent.targetInstanceId);
+          if (!tgt) return illegal("Target not found");
+          if (tgt.instanceId === o.leader.instanceId) {
+            o = { ...o, leader: { ...o.leader, currentHp: o.leader.currentHp - eff.amount } };
+          } else {
+            o = { ...o, board: o.board.map(c => c?.instanceId === tgt.instanceId ? { ...c, currentHp: c.currentHp - eff.amount } : c) };
+            o = { ...o, board: o.board.map(c => (c && c.currentHp <= 0) ? null : c) };
+          }
+          break;
+        }
+        case "BUFF_BOARD_ATK": {
+          const buffAtk = (c: BattleCard): BattleCard => ({
+            ...c, atk: c.atk + eff.amount, tempAtkBonus: c.tempAtkBonus + eff.amount,
+            tempBonusTurns: Math.max(c.tempBonusTurns, eff.turns),
+          });
+          p = { ...p, leader: buffAtk(p.leader), board: p.board.map(c => c ? buffAtk(c) : null) };
+          break;
+        }
+        case "BUFF_BOARD_HP": {
+          const buffHp = (c: BattleCard): BattleCard => ({
+            ...c, maxHp: c.maxHp + eff.amount, currentHp: c.currentHp + eff.amount,
+            tempHpBonus: c.tempHpBonus + eff.amount, tempBonusTurns: Math.max(c.tempBonusTurns, 2),
+          });
+          p = { ...p, leader: buffHp(p.leader), board: p.board.map(c => c ? buffHp(c) : null) };
+          break;
+        }
+        case "DRAW": {
+          let drew = 0;
+          while (drew < eff.count && p.deck.length > 0) {
+            const [card, ...rest] = p.deck;
+            p = { ...p, hand: [...p.hand, card], deck: rest };
+            drew++;
+          }
+          break;
+        }
+        case "STUN_ONE": {
+          if (!intent.targetInstanceId) return illegal("Target required for stun spell");
+          const tgt = findOnBoard(o, intent.targetInstanceId);
+          if (!tgt) return illegal("Target not found");
+          if (tgt.instanceId === o.leader.instanceId) {
+            o = { ...o, leader: { ...o.leader, stunTurns: 1 } };
+          } else {
+            o = { ...o, board: o.board.map(c => c?.instanceId === tgt.instanceId ? { ...c, stunTurns: 1 } : c) };
+          }
+          break;
+        }
+        case "TURN_BACK_SHEEP": {
+          if (!intent.targetInstanceId) return illegal("Select a card to restore");
+          const tgtCard = p.board.find(c => c?.instanceId === intent.targetInstanceId);
+          if (!tgtCard || !tgtCard.isSheep) return illegal("Card not found or not a sheep");
+          const restored: BattleCard = {
+            ...tgtCard,
+            atk: tgtCard.preSheepAtk ?? tgtCard.baseAtk,
+            baseAtk: tgtCard.preSheepAtk ?? tgtCard.baseAtk,
+            currentHp: tgtCard.preSheepHp ?? tgtCard.baseHp,
+            maxHp: tgtCard.preSheepHp ?? tgtCard.baseHp,
+            isSheep: false,
+            preSheepAtk: undefined,
+            preSheepHp: undefined,
+          };
+          p = { ...p, board: p.board.map(c => c?.instanceId === intent.targetInstanceId ? restored : c) };
+          break;
+        }
+        case "GAIN_ENERGY": {
+          p = { ...p, energy: p.energy + eff.amount };
+          break;
+        }
+        case "PURPLE": {
+          if (!intent.targetInstanceId) return illegal("Select an enemy board card for Purple");
+          const enemySlot = o.board.findIndex(c => c?.instanceId === intent.targetInstanceId);
+          if (enemySlot === -1) return illegal("Target not on enemy board");
+          // Kill enemy card at slot
+          o = { ...o, board: o.board.map((c, i) => i === enemySlot ? null : c) };
+          // Kill own card at same slot (if any)
+          p = { ...p, board: p.board.map((c, i) => i === enemySlot ? null : c) };
+          break;
+        }
+        case "BUFF_ONE_HP": {
+          if (!intent.targetInstanceId) return illegal("Select one of your cards to buff HP");
+          const isLeader = p.leader.instanceId === intent.targetInstanceId;
+          const boardCard = p.board.find(c => c?.instanceId === intent.targetInstanceId);
+          if (!isLeader && !boardCard) return illegal("Target not found on your side");
+          if (isLeader) {
+            p = { ...p, leader: { ...p.leader, currentHp: p.leader.currentHp + eff.amount, maxHp: p.leader.maxHp + eff.amount } };
+          } else {
+            p = { ...p, board: p.board.map(c => c?.instanceId === intent.targetInstanceId ? { ...c, currentHp: c.currentHp + eff.amount, maxHp: c.maxHp + eff.amount } : c) };
+          }
+          break;
+        }
+        case "BUFF_ONE_ATK": {
+          if (!intent.targetInstanceId) return illegal("Select one of your cards to buff ATK");
+          const isLeader2 = p.leader.instanceId === intent.targetInstanceId;
+          const boardCard2 = p.board.find(c => c?.instanceId === intent.targetInstanceId);
+          if (!isLeader2 && !boardCard2) return illegal("Target not found on your side");
+          if (isLeader2) {
+            p = { ...p, leader: { ...p.leader, atk: p.leader.atk + eff.amount } };
+          } else {
+            p = { ...p, board: p.board.map(c => c?.instanceId === intent.targetInstanceId ? { ...c, atk: c.atk + eff.amount } : c) };
+          }
+          break;
+        }
+      }
+
+      events.push({ type: "SPELL_CAST", pid, spellId: spell.id, synergyId: spell.synergyId });
+      let spellState: BattleState = { ...state, players: { ...state.players, [pid]: p, [opp]: o } };
+      spellState = checkWin(spellState);
+      if (spellState.winner) events.push({ type: "GAME_OVER", winner: spellState.winner });
+      return { state: spellState, events };
     }
 
     // ── ACTIVATE_DOMAIN ───────────────────────────────────────────────────
@@ -791,6 +1183,27 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       return { state: nextState, events };
     }
 
+    // ── DRAW_SYNERGY_SPELL ────────────────────────────────────────────────
+    case "DRAW_SYNERGY_SPELL": {
+      let p = { ...state.players[pid] };
+      if (p.synergyDrawUsed) return illegal("Synergy draw already used this turn");
+      if (p.energy < 2) return illegal("Not enough energy (need 2)");
+      if (p.activeSynergies.length === 0) return illegal("No active synergies");
+      const availableRules = BATTLE_SYNERGY_RULES.filter(r => p.activeSynergies.includes(r.id));
+      if (availableRules.length === 0) return illegal("No synergy spells available");
+      const rule = availableRules[Math.floor(Math.random() * availableRules.length)];
+      const drawnSpell: SpellCard = {
+        id: `spell-syn-draw-${++_instanceCounter}`,
+        synergyId: rule.id,
+        name: rule.spellName,
+        description: rule.spellDesc,
+        effect: rule.spell,
+      };
+      p = { ...p, energy: p.energy - 2, spells: [...p.spells, drawnSpell], synergyDrawUsed: true };
+      events.push({ type: "SPELL_CAST", pid, spellId: drawnSpell.id, synergyId: rule.id });
+      return { state: { ...state, players: { ...state.players, [pid]: p } }, events };
+    }
+
     // ── END_TURN ──────────────────────────────────────────────────────────
     case "END_TURN": {
       events.push({ type: "TURN_END", pid });
@@ -811,6 +1224,78 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       events.push({ type: "TURN_START", pid: nextPid, turn: nextTurn, drew });
 
       return { state: s2, events };
+    }
+
+    // ── DOMAIN_TARGET ─────────────────────────────────────────────────────
+    case "DOMAIN_TARGET": {
+      const pda = state.pendingDomainAction;
+      if (!pda || pda.pid !== pid) return illegal("No pending domain action");
+
+      switch (pda.kind) {
+        case "CHOOSE_KILL_ENEMIES": {
+          const tgt = findOnBoard(state.players[opp], intent.targetInstanceId);
+          if (!tgt) return illegal("Target not found");
+          if (tgt.instanceId === state.players[opp].leader.instanceId) return illegal("Cannot target leader with this effect");
+          let o2 = { ...state.players[opp] };
+          o2 = { ...o2, board: o2.board.map(c => c?.instanceId === tgt.instanceId ? null : c) };
+          const remaining = pda.remaining - 1;
+          const nextPda = remaining > 0 ? { ...pda, remaining } : null;
+          events.push({ type: "DOMAIN_TARGET_DONE", pid });
+          let ns: BattleState = { ...state, players: { ...state.players, [opp]: o2 }, pendingDomainAction: nextPda };
+          ns = checkWin(ns);
+          if (ns.winner) events.push({ type: "GAME_OVER", winner: ns.winner });
+          return { state: ns, events };
+        }
+        case "COPY_ENEMY_CARD": {
+          const tgt = findOnBoard(state.players[opp], intent.targetInstanceId);
+          if (!tgt) return illegal("Target not found");
+          if (tgt.instanceId === state.players[opp].leader.instanceId) return illegal("Cannot copy leader");
+          let p2 = { ...state.players[pid] };
+          const slot = p2.board.findIndex(s => s === null);
+          if (slot === -1) return illegal("Your board is full");
+          const copyAtk = Math.max(1, tgt.atk - 1);
+          const copyHp = Math.max(1, tgt.currentHp - 1);
+          const copy: BattleCard = {
+            ...tgt,
+            instanceId: `copy-${tgt.instanceId}-${++_instanceCounter}`,
+            atk: copyAtk, baseAtk: copyAtk,
+            currentHp: copyHp, maxHp: copyHp, baseHp: copyHp,
+            canAttack: false, exhausted: false,
+            tempAtkBonus: 0, tempHpBonus: 0, tempBonusTurns: 0,
+          };
+          const newBoard2 = [...p2.board] as BattlePlayer["board"];
+          newBoard2[slot] = copy;
+          p2 = { ...p2, board: newBoard2 };
+          events.push({ type: "DOMAIN_TARGET_DONE", pid });
+          return { state: { ...state, players: { ...state.players, [pid]: p2 }, pendingDomainAction: null }, events };
+        }
+        case "HEAL_AND_KILL_ONE": {
+          const tgt = findOnBoard(state.players[opp], intent.targetInstanceId);
+          if (!tgt) return illegal("Target not found");
+          if (tgt.instanceId === state.players[opp].leader.instanceId) return illegal("Cannot kill leader");
+          let o2 = { ...state.players[opp] };
+          o2 = { ...o2, board: o2.board.map(c => c?.instanceId === tgt.instanceId ? null : c) };
+          events.push({ type: "DOMAIN_TARGET_DONE", pid });
+          return { state: { ...state, players: { ...state.players, [opp]: o2 }, pendingDomainAction: null }, events };
+        }
+        case "SNEAK_ATTACK_DOMAIN": {
+          const tgt = findOnBoard(state.players[opp], intent.targetInstanceId);
+          if (!tgt) return illegal("Target not found");
+          let o2 = { ...state.players[opp] };
+          if (tgt.instanceId === o2.leader.instanceId) {
+            o2 = { ...o2, leader: { ...o2.leader, currentHp: o2.leader.currentHp - pda.amount } };
+          } else {
+            o2 = { ...o2, board: o2.board.map(c => c?.instanceId === tgt.instanceId ? { ...c, currentHp: c.currentHp - pda.amount } : c) };
+            o2 = { ...o2, board: o2.board.map(c => c && c.currentHp <= 0 ? null : c) };
+          }
+          events.push({ type: "DOMAIN_TARGET_DONE", pid });
+          let ns: BattleState = { ...state, players: { ...state.players, [opp]: o2 }, pendingDomainAction: null };
+          ns = checkWin(ns);
+          if (ns.winner) events.push({ type: "GAME_OVER", winner: ns.winner });
+          return { state: ns, events };
+        }
+      }
+      return illegal("Unknown pending domain action");
     }
 
     default:

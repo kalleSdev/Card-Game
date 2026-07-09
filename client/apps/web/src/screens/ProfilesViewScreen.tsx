@@ -10,6 +10,10 @@ import PlayerIcon from "../components/PlayerIcon";
 import { BG } from "../backgrounds";
 import AmbientCanvas from "../components/AmbientCanvas";
 import AmbientOverlay from "../components/AmbientOverlay";
+import CardCollectionScreen from "./CardCollectionScreen";
+
+// Thin wrapper so the collection screen can render inside this file's AnimatePresence
+const CardCollectionScreenInline = CardCollectionScreen;
 
 const ALL_ICONS = [...P1_ICON_OPTIONS, ...P2_ICON_OPTIONS];
 
@@ -184,13 +188,14 @@ function ProfileFormModal({
 
 // ── Profile detail card ───────────────────────────────────────────────────────
 function ProfileDetailCard({
-  profile, rank, onEdit, onDelete, onHistory,
+  profile, rank, onEdit, onDelete, onHistory, onDeck,
 }: {
   profile: Profile;
   rank: number;
   onEdit: () => void;
   onDelete: () => void;
   onHistory: () => void;
+  onDeck: () => void;
 }) {
   const wins = totalWins(profile);
   const rs = getRankStyle(wins);
@@ -266,7 +271,7 @@ function ProfileDetailCard({
 
           {/* Draft */}
           <div>
-            <div style={{ fontSize: 8, color: "#ff9922", letterSpacing: 3, marginBottom: 5, fontWeight: 700 }}>DRAFT BATTLE</div>
+            <div style={{ fontSize: 8, color: "#ff9922", letterSpacing: 3, marginBottom: 5, fontWeight: 700 }}>QUICK DRAFT</div>
             <div style={{ display: "flex", gap: 14, marginBottom: 4 }}>
               <span style={{ fontSize: 12, fontWeight: 800, color: "#44ff88" }}>{profile.draftStats.wins}W</span>
               <span style={{ fontSize: 12, fontWeight: 800, color: "#ff4466" }}>{profile.draftStats.losses}L</span>
@@ -293,6 +298,17 @@ function ProfileDetailCard({
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14, paddingTop: 12, borderTop: `1px solid ${rs.color}22` }}
           >
+            <motion.button
+              whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+              onClick={onDeck}
+              style={{
+                padding: "5px 10px", background: "rgba(255,215,0,0.06)",
+                border: "1px solid #ffd70033", borderRadius: 8,
+                color: "#ffd700", fontSize: 13, fontWeight: 700,
+                cursor: "pointer", fontFamily: "inherit", lineHeight: 1,
+              }}
+              title="Card Collection"
+            >🃏</motion.button>
             <motion.button
               whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
               onClick={onHistory}
@@ -456,12 +472,13 @@ function MatchHistoryModal({ profile, onClose }: { profile: Profile; onClose: ()
 }
 
 // ── Main screen ───────────────────────────────────────────────────────────────
-export default function ProfilesViewScreen({ onBack }: { onBack: () => void }) {
+export default function ProfilesViewScreen({ onBack, cardDb }: { onBack: () => void; cardDb: Record<string, import("@cg/contracts").CardDef> }) {
   const [profiles, setProfiles] = useState<Profile[]>(() =>
     loadProfiles().sort((a, b) => totalWins(b) - totalWins(a))
   );
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [historyProfile, setHistoryProfile] = useState<Profile | null>(null);
+  const [deckProfile, setDeckProfile] = useState<Profile | null>(null);
   const [creating, setCreating] = useState(false);
 
   const refresh = () =>
@@ -573,6 +590,7 @@ export default function ProfilesViewScreen({ onBack }: { onBack: () => void }) {
                   onEdit={() => setEditingProfile(p)}
                   onDelete={() => handleDelete(p.id)}
                   onHistory={() => setHistoryProfile(p)}
+                  onDeck={() => setDeckProfile(p)}
                 />
               ))}
             </div>
@@ -605,6 +623,23 @@ export default function ProfilesViewScreen({ onBack }: { onBack: () => void }) {
             }}
             onCancel={() => { setCreating(false); setEditingProfile(null); }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Card collection overlay */}
+      <AnimatePresence>
+        {deckProfile && (
+          <motion.div
+            key="deck"
+            initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 60 }}
+            style={{ position: "fixed", inset: 0, zIndex: 400 }}
+          >
+            <CardCollectionScreenInline
+              profile={deckProfile}
+              cardDb={cardDb}
+              onBack={() => setDeckProfile(null)}
+            />
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

@@ -197,7 +197,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "X",
     basePoints: 15000,
     affinity: "LEADER",
-    tags: ["sorcerer", "jujutsu-high", "gojo-clan", "six-eyes", "strongest"],
+    tags: ["sorcerer", "jujutsu-high", "gojo-clan", "six-eyes", "strongest", "gojo-geto"],
     offRolePenalties: { combat: 0.9, support: 0.7 },
   },
   "yuji": {
@@ -272,7 +272,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "SS",
     basePoints: 12000,
     affinity: "SUPPORT",
-    tags: ["sorcerer", "curse-spirit", "curse-leader-geto"],
+    tags: ["sorcerer", "curse-spirit", "curse-leader-geto", "disaster-curse", "gojo-geto"],
     offRolePenalties: { leader: 0.8, combat: 0.75 },
   },
   "sukuna": {
@@ -391,7 +391,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "SS",
     basePoints: 12000,
     affinity: "COMBAT",
-    tags: ["sorcerer", "gambler"],
+    tags: ["sorcerer", "gambler", "stars"],
     offRolePenalties: { leader: 0.9, support: 0.7 },
   },
   "kirara": {
@@ -400,7 +400,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "A",
     basePoints: 9000,
     affinity: "SUPPORT",
-    tags: ["sorcerer", "star-map"],
+    tags: ["sorcerer", "star-map", "stars"],
     offRolePenalties: { leader: 0.7, combat: 0.6 },
   },
   "mechamaru": {

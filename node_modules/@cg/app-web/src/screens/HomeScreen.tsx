@@ -72,7 +72,83 @@ function AmbientCanvas() {
   );
 }
 
-export default function HomeScreen({ onSelect, onDraftBattle, onGallery, onProfiles, onBack }: { onSelect: () => void; onDraftBattle: () => void; onGallery: () => void; onProfiles: () => void; onBack?: () => void }) {
+// ── Shared mode button component ──────────────────────────────────────────────
+function ModeBtn({ btn, isHov, onHover }: {
+  btn: { id: string; icon: string; title: string; sub: string; color: string; badge?: string; onClick: () => void };
+  isHov: boolean;
+  onHover: (id: string | null) => void;
+}) {
+  const bgMap: Record<string, string> = {
+    "#9933ff": "40,20,70", "#ff9922": "60,35,10", "#44ff88": "10,50,28",
+    "#22ccaa": "10,50,44", "#4488ff": "15,25,50",
+  };
+  const bgRgb = bgMap[btn.color] ?? "20,20,40";
+  return (
+    <motion.div
+      onClick={btn.onClick}
+      onHoverStart={() => onHover(btn.id)}
+      onHoverEnd={() => onHover(null)}
+      whileHover={{ y: -5, scale: 1.03 }}
+      whileTap={{ scale: 0.97 }}
+      transition={{ type: "spring", stiffness: 380, damping: 22 }}
+      style={{
+        width: 260, padding: "18px 24px", borderRadius: 14, cursor: "pointer",
+        background: isHov ? `rgba(${bgRgb},0.9)` : "rgba(10,8,20,0.82)",
+        border: `2px solid ${isHov ? btn.color + "cc" : btn.color + "33"}`,
+        backdropFilter: "blur(10px)",
+        boxShadow: isHov ? `0 0 40px ${btn.color}33, 0 8px 32px rgba(0,0,0,0.7)` : "0 2px 16px rgba(0,0,0,0.4)",
+        display: "flex", alignItems: "center", gap: 18,
+        position: "relative", overflow: "hidden", userSelect: "none",
+      }}
+    >
+      {isHov && (
+        <motion.div
+          animate={{ left: ["-40%", "140%"] }}
+          transition={{ duration: 1.1, repeat: Infinity, ease: "linear" }}
+          style={{
+            position: "absolute", top: 0, bottom: 0, width: "40%",
+            background: `linear-gradient(90deg, transparent, ${btn.color}18, ${btn.color}0a, transparent)`,
+            transform: "skewX(-12deg)", pointerEvents: "none",
+          }}
+        />
+      )}
+      <div style={{
+        position: "absolute", left: 0, top: "20%", bottom: "20%", width: 3,
+        background: isHov ? btn.color : btn.color + "44",
+        borderRadius: 2, boxShadow: isHov ? `0 0 12px ${btn.color}` : "none",
+        transition: "all 0.2s",
+      }} />
+      <motion.div
+        animate={isHov ? { textShadow: `0 0 20px ${btn.color}cc` } : { textShadow: "none" }}
+        style={{ fontSize: 36, flexShrink: 0, marginLeft: 8 }}
+      >{btn.icon}</motion.div>
+      <div style={{ flex: 1, textAlign: "left" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ fontSize: 15, fontWeight: 900, letterSpacing: 3, color: isHov ? "#fff" : "#ccc" }}>
+            {btn.title}
+          </div>
+          {btn.badge && (
+            <div style={{
+              fontSize: 8, fontWeight: 900, letterSpacing: 2,
+              background: btn.color, color: "#000",
+              padding: "2px 7px", borderRadius: 4,
+              boxShadow: `0 0 8px ${btn.color}88`,
+            }}>{btn.badge}</div>
+          )}
+        </div>
+        <div style={{ fontSize: 9, color: isHov ? btn.color + "cc" : "#445", letterSpacing: 1, marginTop: 3 }}>
+          {btn.sub}
+        </div>
+      </div>
+      <motion.div
+        animate={isHov ? { opacity: 1, x: 0 } : { opacity: 0.3, x: -4 }}
+        style={{ fontSize: 14, color: btn.color }}
+      >›</motion.div>
+    </motion.div>
+  );
+}
+
+export default function HomeScreen({ onSelect, onDraftBattle, onNormalMode, onGallery, onProfiles, onRanking, onBack }: { onSelect: () => void; onDraftBattle: () => void; onNormalMode: () => void; onGallery: () => void; onProfiles: () => void; onRanking: () => void; onBack?: () => void }) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [pulse, setPulse] = useState(false);
 
@@ -171,123 +247,57 @@ export default function HomeScreen({ onSelect, onDraftBattle, onGallery, onProfi
           />
         </motion.div>
 
-        {/* Mode buttons */}
+        {/* Mode buttons — 3-column layout */}
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.6, delay: 0.32, ease: "easeOut" }}
-          style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "center" }}
+          style={{ display: "flex", gap: 0, alignItems: "flex-start" }}
         >
-          {([
-            {
-              id: "quick",
-              icon: "⚡",
-              title: "QUICK MATCH",
-              sub: "Fast draft · Score battle",
-              color: "#9933ff",
-              onClick: onSelect,
-            },
-            {
-              id: "draft",
-              icon: "🃏",
-              title: "DRAFT BATTLE",
-              sub: "Build your deck · Hearthstone-style combat",
-              color: "#ff9922",
-              badge: "NEW",
-              onClick: onDraftBattle,
-            },
-            {
-              id: "gallery",
-              icon: "📖",
-              title: "CARD GALLERY",
-              sub: "Browse all 34 characters",
-              color: "#4488ff",
-              onClick: onGallery,
-            },
-            {
-              id: "profiles",
-              icon: "👤",
-              title: "VIEW PROFILES",
-              sub: "Stats · Rankings · History",
-              color: "#22ccaa",
-              onClick: onProfiles,
-            },
-          ] as const).map((btn) => {
-            const isHov = hovered === btn.id;
-            return (
-              <motion.div
-                key={btn.id}
-                onClick={btn.onClick}
-                onHoverStart={() => setHovered(btn.id)}
-                onHoverEnd={() => setHovered(null)}
-                whileHover={{ y: -5, scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                transition={{ type: "spring", stiffness: 380, damping: 22 }}
-                style={{
-                  width: 300, padding: "18px 24px", borderRadius: 14, cursor: "pointer",
-                  background: isHov ? `rgba(${btn.color === "#9933ff" ? "40,20,70" : btn.color === "#ff9922" ? "60,35,10" : btn.color === "#22ccaa" ? "10,50,44" : "15,25,50"},0.9)` : "rgba(10,8,20,0.82)",
-                  border: `2px solid ${isHov ? btn.color + "cc" : btn.color + "33"}`,
-                  backdropFilter: "blur(10px)",
-                  boxShadow: isHov ? `0 0 40px ${btn.color}33, 0 8px 32px rgba(0,0,0,0.7)` : "0 2px 16px rgba(0,0,0,0.4)",
-                  display: "flex", alignItems: "center", gap: 18,
-                  position: "relative", overflow: "hidden", userSelect: "none",
-                }}
-              >
-                {/* Scan shimmer */}
-                {isHov && (
-                  <motion.div
-                    animate={{ left: ["-40%", "140%"] }}
-                    transition={{ duration: 1.1, repeat: Infinity, ease: "linear" }}
-                    style={{
-                      position: "absolute", top: 0, bottom: 0, width: "40%",
-                      background: `linear-gradient(90deg, transparent, ${btn.color}18, ${btn.color}0a, transparent)`,
-                      transform: "skewX(-12deg)", pointerEvents: "none",
-                    }}
-                  />
-                )}
+          {/* LEFT column: Ranking + Profiles + Gallery */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {([
+              { id: "ranking",  icon: "🏆", title: "RANKING",    sub: "Global leaderboard · Top players", color: "#ffd700", onClick: onRanking  },
+              { id: "profiles", icon: "👤", title: "PROFILES",   sub: "Stats · Rankings · History",       color: "#22ccaa", onClick: onProfiles },
+              { id: "gallery",  icon: "📖", title: "GALLERY",    sub: "Browse all 34 characters",         color: "#4488ff", onClick: onGallery  },
+            ] as const).map(btn => {
+              const isHov = hovered === btn.id;
+              return <ModeBtn key={btn.id} btn={btn} isHov={isHov} onHover={setHovered} />;
+            })}
+          </div>
 
-                {/* Left accent bar */}
-                <div style={{
-                  position: "absolute", left: 0, top: "20%", bottom: "20%", width: 3,
-                  background: isHov ? btn.color : btn.color + "44",
-                  borderRadius: 2,
-                  boxShadow: isHov ? `0 0 12px ${btn.color}` : "none",
-                  transition: "all 0.2s",
-                }} />
+          {/* Divider between LEFT and MIDDLE */}
+          <div style={{
+            width: 1, alignSelf: "stretch", margin: "0 8px",
+            background: "linear-gradient(180deg, transparent, rgba(255,255,255,0.08), transparent)",
+          }} />
 
-                <motion.div
-                  animate={isHov ? { textShadow: `0 0 20px ${btn.color}cc` } : { textShadow: "none" }}
-                  style={{ fontSize: 36, flexShrink: 0, marginLeft: 8 }}
-                >
-                  {btn.icon}
-                </motion.div>
+          {/* MIDDLE column: Quick Match + Quick Draft */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {([
+              { id: "quick", icon: "⚡", title: "QUICK MATCH", sub: "Fast draft · Score battle",            color: "#9933ff", onClick: onSelect      },
+              { id: "draft", icon: "🃏", title: "QUICK DRAFT", sub: "Draft your deck · Battle it out",      color: "#ff9922", onClick: onDraftBattle },
+            ] as const).map(btn => {
+              const isHov = hovered === btn.id;
+              return <ModeBtn key={btn.id} btn={btn} isHov={isHov} onHover={setHovered} />;
+            })}
+          </div>
 
-                <div style={{ flex: 1, textAlign: "left" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: 3, color: isHov ? "#fff" : "#ccc" }}>
-                      {btn.title}
-                    </div>
-                    {"badge" in btn && btn.badge && (
-                      <div style={{
-                        fontSize: 8, fontWeight: 900, letterSpacing: 2,
-                        background: btn.color, color: "#000",
-                        padding: "2px 7px", borderRadius: 4,
-                        boxShadow: `0 0 8px ${btn.color}88`,
-                      }}>{btn.badge}</div>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 9, color: isHov ? btn.color + "cc" : "#445", letterSpacing: 1, marginTop: 3 }}>
-                    {btn.sub}
-                  </div>
-                </div>
+          {/* Divider between MIDDLE and RIGHT */}
+          <div style={{
+            width: 1, alignSelf: "stretch", margin: "0 8px",
+            background: "linear-gradient(180deg, transparent, rgba(255,255,255,0.08), transparent)",
+          }} />
 
-                <motion.div
-                  animate={isHov ? { opacity: 1, x: 0 } : { opacity: 0.3, x: -4 }}
-                  style={{ fontSize: 14, color: btn.color }}
-                >›</motion.div>
-              </motion.div>
-            );
-          })}
+          {/* RIGHT column: Normal Mode */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {([
+              { id: "normal", icon: "⚔️", title: "NORMAL MODE", sub: "Use your collected deck · Build your legacy", color: "#44ff88", badge: "NEW", onClick: onNormalMode },
+            ] as const).map(btn => {
+              const isHov = hovered === btn.id;
+              return <ModeBtn key={btn.id} btn={btn} isHov={isHov} onHover={setHovered} />;
+            })}
+          </div>
         </motion.div>
 
         {/* Footer hint */}

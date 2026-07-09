@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import type { GameState, Intent, PlayerId } from "@cg/contracts";
+import type { GameState, Intent, PlayerId, CardDef } from "@cg/contracts";
 import { createEngine, createInitialState } from "@cg/engine";
 import type { PlayerIcons, PlayerNames } from "./types";
-import { recordMatchResult } from "./profiles";
+import { recordMatchResult, addCardsToCollection, loadProfiles } from "./profiles";
 import type { Profile } from "./profiles";
 
 import SplashScreen from "./screens/SplashScreen";
@@ -15,6 +15,8 @@ import DraftBattleScreen from "./screens/DraftBattleScreen";
 import type { PlayerDraftResult } from "./screens/DraftBattleScreen";
 import BattleBoardScreen from "./screens/BattleBoardScreen";
 import PostGameScreen from "./screens/PostGameScreen";
+import CardRewardScreen from "./screens/CardRewardScreen";
+import NormalModeSetupScreen from "./screens/NormalModeSetupScreen";
 import BindingVowScreen from "./screens/BindingVowScreen";
 import CoinFlipScreen from "./screens/CoinFlipScreen";
 import DraftScreen from "./screens/DraftScreen";
@@ -23,10 +25,31 @@ import PlacementScreen from "./screens/PlacementScreen";
 import AugmentScreen from "./screens/AugmentScreen";
 import LockedInScreen from "./screens/LockedInScreen";
 import ResolutionScreen from "./screens/ResolutionScreen";
+import RankingScreen from "./screens/RankingScreen";
 
 type AppScreen =
   | "SPLASH" | "HOME" | "PROFILE_SELECT" | "PROFILES_VIEW"
-  | "DRAFT_BATTLE" | "SETUP" | "GAME" | "BATTLE_BOARD" | "POST_GAME" | "GALLERY";
+  | "DRAFT_BATTLE" | "NORMAL_MODE_SETUP" | "SETUP" | "GAME"
+  | "BATTLE_BOARD" | "POST_GAME" | "CARD_REWARD" | "GALLERY" | "RANKING";
+
+type BattleMode = "quick-draft" | "normal";
+
+function pickRewardCards(cardDb: Record<string, CardDef>, profile: Profile | null, isWinner: boolean): string[] {
+  const count = isWinner ? 5 : 3;
+  const ids = Object.keys(cardDb);
+
+  if (isWinner && profile) {
+    const unowned = ids.filter(id => !profile.collection.some(c => c.defId === id));
+    const owned   = ids.filter(id =>  profile.collection.some(c => c.defId === id));
+    const shuffledUnowned = [...unowned].sort(() => Math.random() - 0.5);
+    const shuffledOwned   = [...owned].sort(() => Math.random() - 0.5);
+    const guaranteed = shuffledUnowned.slice(0, 1);
+    const rest = [...shuffledUnowned.slice(1), ...shuffledOwned].sort(() => Math.random() - 0.5);
+    return [...guaranteed, ...rest].slice(0, count);
+  }
+
+  return [...ids].sort(() => Math.random() - 0.5).slice(0, count);
+}
 
 export default function App() {
   const [appScreen, setAppScreen] = useState<AppScreen>("SPLASH");
@@ -35,10 +58,15 @@ export default function App() {
   const [p1Profile, setP1Profile] = useState<Profile | null>(null);
   const [p2Profile, setP2Profile] = useState<Profile | null>(null);
   const [draftMode, setDraftMode] = useState(false);
+  const [battleMode, setBattleMode] = useState<BattleMode>("quick-draft");
   const [p1DraftResult, setP1DraftResult] = useState<PlayerDraftResult | null>(null);
   const [p2DraftResult, setP2DraftResult] = useState<PlayerDraftResult | null>(null);
   const [postGameWinner, setPostGameWinner] = useState<PlayerId | null>(null);
   const [postGameTurns, setPostGameTurns] = useState(0);
+  // Card reward flow: P1 spins first, then P2
+  const [cardRewardStep, setCardRewardStep] = useState<"P1" | "P2">("P1");
+  const [cardRewardOptions, setCardRewardOptions] = useState<string[]>([]);
+  const [cardRewardIsWinner, setCardRewardIsWinner] = useState<boolean>(false);
   const [key, setKey] = useState(0);
   const engine = useMemo(() => createEngine(createInitialState()), [key]);
   const [state, setState] = useState<GameState>(engine.getState());
@@ -56,9 +84,46 @@ export default function App() {
         recordMatchResult(wP.id, lP.id, "quick", wP.name, wP.icon, lP.name, lP.icon);
       }
     }
+    // Start card reward for P1
+    const quickWinner: PlayerId | "DRAW" = p1Profile && p2Profile && state.phase === "RESOLUTION"
+      ? (state.players.P1.scorePreview > state.players.P2.scorePreview ? "P1"
+        : state.players.P2.scorePreview > state.players.P1.scorePreview ? "P2"
+        : "DRAW")
+      : "DRAW";
+    const p1IsWinnerQuick = quickWinner === "P1";
+    setCardRewardIsWinner(p1IsWinnerQuick);
+    setCardRewardStep("P1");
+    setCardRewardOptions(pickRewardCards(state.cardDb, p1Profile, p1IsWinnerQuick));
+    setAppScreen("CARD_REWARD");
     setKey(k => k + 1);
     setSelectedCard(null);
-    setAppScreen("PROFILE_SELECT");
+  };
+
+  const startCardReward = (options: string[], isWinner: boolean) => {
+    setCardRewardIsWinner(isWinner);
+    setCardRewardStep("P1");
+    setCardRewardOptions(options);
+    setAppScreen("CARD_REWARD");
+  };
+
+  const handleCardRewardDone = (chosen: string[]) => {
+    const profileId = cardRewardStep === "P1" ? p1Profile?.id : p2Profile?.id;
+    if (profileId) addCardsToCollection(profileId, chosen);
+
+    if (cardRewardStep === "P1") {
+      // Move to P2
+      const p2IsWinner = postGameWinner === "P2";
+      setCardRewardIsWinner(p2IsWinner);
+      setCardRewardStep("P2");
+      setCardRewardOptions(pickRewardCards(state.cardDb, p2Profile, p2IsWinner));
+    } else {
+      // Both done — go to post game (for draft modes) or home
+      if (postGameWinner && p1DraftResult && p2DraftResult) {
+        setAppScreen("POST_GAME");
+      } else {
+        setAppScreen("HOME");
+      }
+    }
   };
 
   const send = (intent: Intent) => {
@@ -66,20 +131,32 @@ export default function App() {
     setState(res.state);
   };
 
+  // Reload profile after updates
+  const reloadProfile = (id: string) => loadProfiles().find(p => p.id === id) ?? null;
+
   if (appScreen === "SPLASH") return <SplashScreen onSelectJJK={() => setAppScreen("HOME")} />;
 
   if (appScreen === "HOME") return (
     <HomeScreen
       onSelect={() => { setDraftMode(false); setAppScreen("PROFILE_SELECT"); }}
-      onDraftBattle={() => { setDraftMode(true); setAppScreen("PROFILE_SELECT"); }}
+      onDraftBattle={() => { setBattleMode("quick-draft"); setDraftMode(true); setAppScreen("PROFILE_SELECT"); }}
+      onNormalMode={() => { setBattleMode("normal"); setDraftMode(true); setAppScreen("PROFILE_SELECT"); }}
       onGallery={() => setAppScreen("GALLERY")}
       onProfiles={() => setAppScreen("PROFILES_VIEW")}
+      onRanking={() => setAppScreen("RANKING")}
       onBack={() => setAppScreen("SPLASH")}
     />
   );
 
+  if (appScreen === "RANKING") return <RankingScreen profiles={loadProfiles()} onBack={() => setAppScreen("HOME")} />;
+
   if (appScreen === "GALLERY") return <CardGallery cardDb={state.cardDb} onBack={() => setAppScreen("HOME")} />;
-  if (appScreen === "PROFILES_VIEW") return <ProfilesViewScreen onBack={() => setAppScreen("HOME")} />;
+  if (appScreen === "PROFILES_VIEW") return (
+    <ProfilesViewScreen
+      cardDb={state.cardDb}
+      onBack={() => setAppScreen("HOME")}
+    />
+  );
 
   if (appScreen === "PROFILE_SELECT") {
     return (
@@ -90,7 +167,25 @@ export default function App() {
           setP2Profile(p2);
           setPlayerNames({ P1: p1.name, P2: p2.name });
           setPlayerIcons({ P1: p1.icon, P2: p2.icon });
-          setAppScreen(draftMode ? "DRAFT_BATTLE" : "SETUP");
+          if (!draftMode) setAppScreen("SETUP");
+          else if (battleMode === "normal") setAppScreen("NORMAL_MODE_SETUP");
+          else setAppScreen("DRAFT_BATTLE");
+        }}
+      />
+    );
+  }
+
+  if (appScreen === "NORMAL_MODE_SETUP" && p1Profile && p2Profile) {
+    return (
+      <NormalModeSetupScreen
+        p1Profile={reloadProfile(p1Profile.id) ?? p1Profile}
+        p2Profile={reloadProfile(p2Profile.id) ?? p2Profile}
+        cardDb={state.cardDb}
+        onBack={() => setAppScreen("PROFILE_SELECT")}
+        onStart={(p1Result, p2Result) => {
+          setP1DraftResult(p1Result);
+          setP2DraftResult(p2Result);
+          setAppScreen("BATTLE_BOARD");
         }}
       />
     );
@@ -124,11 +219,29 @@ export default function App() {
         p2Icon={p2Profile.icon}
         onGameOver={(winner, turnCount) => {
           const [wP, lP] = winner === "P1" ? [p1Profile, p2Profile] : [p2Profile, p1Profile];
-          recordMatchResult(wP.id, lP.id, "draft", wP.name, wP.icon, lP.name, lP.icon);
+          const mode = battleMode === "normal" ? "normal" : "draft";
+          recordMatchResult(wP.id, lP.id, mode, wP.name, wP.icon, lP.name, lP.icon);
           setPostGameWinner(winner);
           setPostGameTurns(turnCount);
-          setAppScreen("POST_GAME");
+          // Start card reward before post game — P1 goes first
+          const p1IsWinner = winner === "P1";
+          startCardReward(pickRewardCards(state.cardDb, p1Profile, p1IsWinner), p1IsWinner);
         }}
+      />
+    );
+  }
+
+  if (appScreen === "CARD_REWARD") {
+    const currentProfile = cardRewardStep === "P1" ? p1Profile : p2Profile;
+    if (!currentProfile) { setAppScreen("HOME"); return null; }
+    return (
+      <CardRewardScreen
+        key={cardRewardStep}
+        profile={reloadProfile(currentProfile.id) ?? currentProfile}
+        options={cardRewardOptions}
+        cardDb={state.cardDb}
+        isWinner={cardRewardIsWinner}
+        onDone={handleCardRewardDone}
       />
     );
   }
@@ -137,16 +250,18 @@ export default function App() {
     return (
       <PostGameScreen
         winner={postGameWinner}
-        p1Profile={p1Profile}
-        p2Profile={p2Profile}
+        p1Profile={reloadProfile(p1Profile.id) ?? p1Profile}
+        p2Profile={reloadProfile(p2Profile.id) ?? p2Profile}
         p1Draft={p1DraftResult}
         p2Draft={p2DraftResult}
         cardDb={state.cardDb}
         turnCount={postGameTurns}
         onPlayAgain={() => {
+          setPostGameWinner(null);
           setP1DraftResult(null);
           setP2DraftResult(null);
-          setAppScreen("DRAFT_BATTLE");
+          if (battleMode === "normal") setAppScreen("NORMAL_MODE_SETUP");
+          else setAppScreen("DRAFT_BATTLE");
         }}
         onMenu={() => setAppScreen("HOME")}
       />

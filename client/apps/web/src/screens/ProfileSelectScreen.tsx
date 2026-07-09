@@ -201,8 +201,8 @@ function ProfileCard({
       style={{
         background: assignedTo ? `rgba(${assignedTo === "P1" ? "15,40,80" : "70,15,15"},0.85)` : "rgba(12,12,28,0.85)",
         border: `2px solid ${assignColor ? assignColor : "#2a2a4a"}`,
-        borderRadius: 16, padding: "16px", cursor: confirmDel ? "default" : "pointer",
-        position: "relative", overflow: "hidden",
+        borderRadius: 16, padding: "18px", cursor: confirmDel ? "default" : "pointer",
+        position: "relative", overflow: "hidden", width: 290,
         boxShadow: assignColor ? `0 0 30px ${assignColor}33, 0 4px 20px rgba(0,0,0,0.6)` : "0 2px 12px rgba(0,0,0,0.4)",
         transition: "background 0.2s, border-color 0.2s, box-shadow 0.2s",
         userSelect: "none",
@@ -339,65 +339,86 @@ export default function ProfileSelectScreen({
           <div style={{ height: 1, width: 120, margin: "0 auto", background: "linear-gradient(90deg, transparent, #9933ff88, transparent)" }} />
         </motion.div>
 
-        {/* Controller icons at top */}
+        {/* Controller slots — text on side of controller, not below */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          style={{ display: "flex", justifyContent: "center", gap: 48, marginBottom: 28 }}
+          style={{ display: "flex", justifyContent: "center", gap: 24, marginBottom: 28 }}
         >
           {(["P1", "P2"] as const).map(pid => {
             const color = PLAYER_COLOR[pid];
             const profile = pid === "P1" ? p1 : p2;
             const isActive = activeSlot === pid;
+            const isP1 = pid === "P1";
             return (
               <motion.div
                 key={pid}
                 onClick={() => setActiveSlot(isActive ? null : pid)}
-                whileHover={{ scale: 1.08 }}
-                whileTap={{ scale: 0.94 }}
-                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, cursor: "pointer" }}
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.95 }}
+                style={{
+                  display: "flex",
+                  flexDirection: isP1 ? "row" : "row-reverse",
+                  alignItems: "center", gap: 14, cursor: "pointer",
+                  padding: "14px 20px", borderRadius: 18,
+                  background: isActive ? `${color}14` : "rgba(255,255,255,0.03)",
+                  border: `1.5px solid ${isActive ? color + "66" : "#1e1e30"}`,
+                  transition: "background 0.2s, border-color 0.2s",
+                  boxShadow: isActive ? `0 0 28px ${color}22` : "none",
+                  minWidth: 240,
+                }}
               >
-                {/* Glow ring when active */}
+                {/* Controller icon with glow ring */}
                 <motion.div
-                  animate={isActive ? { boxShadow: [`0 0 0 2px ${color}99`, `0 0 0 6px ${color}44`, `0 0 0 2px ${color}99`] } : { boxShadow: "none" }}
+                  animate={isActive ? { boxShadow: [`0 0 0 2px ${color}88`, `0 0 0 5px ${color}33`, `0 0 0 2px ${color}88`] } : { boxShadow: "none" }}
                   transition={{ duration: 1.1, repeat: Infinity }}
-                  style={{ borderRadius: 12, padding: 6, background: isActive ? `${color}22` : "transparent", transition: "background 0.2s" }}
+                  style={{ borderRadius: 12, padding: 8, background: isActive ? `${color}1a` : "transparent", flexShrink: 0, transition: "background 0.2s" }}
                 >
-                  <ControllerIcon color={color} active={isActive} size={52} />
+                  <ControllerIcon color={color} active={isActive} size={58} />
                 </motion.div>
 
-                <div style={{ fontSize: 9, letterSpacing: 3, color: isActive ? color : "#445", fontWeight: 700, transition: "color 0.2s" }}>
-                  {pid === "P1" ? "PLAYER 1" : "PLAYER 2"}
+                {/* Text + assigned badge — on the side */}
+                <div style={{
+                  display: "flex", flexDirection: "column",
+                  alignItems: isP1 ? "flex-start" : "flex-end",
+                  gap: 5, flex: 1, minWidth: 0,
+                }}>
+                  <div style={{ fontSize: 10, letterSpacing: 4, color: isActive ? color : "#556", fontWeight: 800, transition: "color 0.2s" }}>
+                    {pid === "P1" ? "PLAYER 1" : "PLAYER 2"}
+                  </div>
+                  <AnimatePresence mode="wait">
+                    {profile ? (
+                      <motion.div
+                        key={profile.id}
+                        initial={{ opacity: 0, x: isP1 ? -8 : 8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: isP1 ? -4 : 4 }}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 6,
+                          flexDirection: isP1 ? "row" : "row-reverse",
+                          background: `${color}18`, border: `1px solid ${color}44`,
+                          borderRadius: 20, padding: "4px 10px 4px 4px",
+                        }}
+                      >
+                        <div style={{ borderRadius: "50%", overflow: "hidden", border: `1.5px solid ${color}77`, flexShrink: 0 }}>
+                          <PlayerIcon icon={profile.icon} size={26} style={{ display: "block" }} />
+                        </div>
+                        <span style={{ fontSize: 11, color: "#eee", fontWeight: 700 }}>{profile.name.slice(0, 12)}</span>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="empty"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        style={{ fontSize: 9, color: isActive ? color + "aa" : "#2a2a4a", letterSpacing: 2 }}
+                      >
+                        {isActive ? "PICK A PROFILE ↓" : "NOT ASSIGNED"}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
-
-                {/* Assigned profile mini-badge */}
-                <AnimatePresence mode="wait">
-                  {profile ? (
-                    <motion.div
-                      key={profile.id}
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -4 }}
-                      style={{ display: "flex", alignItems: "center", gap: 6, background: `${color}22`, border: `1px solid ${color}55`, borderRadius: 20, padding: "3px 10px 3px 4px" }}
-                    >
-                      <div style={{ borderRadius: "50%", overflow: "hidden", border: `1px solid ${color}88` }}>
-                        <PlayerIcon icon={profile.icon} size={22} style={{ display: "block" }} />
-                      </div>
-                      <span style={{ fontSize: 10, color: "#ddd", fontWeight: 700 }}>{profile.name.slice(0, 12)}</span>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="empty"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      style={{ fontSize: 9, color: isActive ? color + "99" : "#2a2a4a", letterSpacing: 2 }}
-                    >
-                      {isActive ? "CLICK A PROFILE" : "—"}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               </motion.div>
             );
           })}
@@ -427,15 +448,16 @@ export default function ProfileSelectScreen({
           animate={{ opacity: 1 }}
           transition={{ delay: 0.1 }}
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-            gap: 14,
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 16,
+            justifyContent: "center",
             flex: 1,
             overflowY: "auto",
             paddingRight: 4,
             scrollbarWidth: "thin",
             maxHeight: "calc(100vh - 460px)",
-            alignContent: "start",
+            alignContent: "flex-start",
           }}
         >
           <AnimatePresence mode="popLayout">
@@ -457,23 +479,20 @@ export default function ProfileSelectScreen({
           </AnimatePresence>
 
           {/* New profile button */}
-          {(["P1", "P2"] as const).map(pid => (
-            <motion.div
-              key={`new-${pid}`}
-              whileHover={{ y: -3, borderColor: PLAYER_COLOR[pid] + "77" }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => setFormSlot(pid)}
-              style={{
-                border: `2px dashed ${PLAYER_COLOR[pid]}33`, borderRadius: 16,
-                padding: "20px", cursor: "pointer", textAlign: "center",
-                color: PLAYER_COLOR[pid] + "77", fontSize: 12, letterSpacing: 2,
-                transition: "border-color 0.2s",
-              }}
-            >
-              <div style={{ fontSize: 22, marginBottom: 6 }}>+</div>
-              <div style={{ fontSize: 9, letterSpacing: 3 }}>NEW PROFILE</div>
-            </motion.div>
-          )).slice(0, 1)}
+          <motion.div
+            whileHover={{ y: -3, borderColor: "#9933ff77" }}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => setFormSlot("P1")}
+            style={{
+              border: "2px dashed #9933ff33", borderRadius: 16,
+              padding: "20px", cursor: "pointer", textAlign: "center",
+              color: "#9933ff77", fontSize: 12, letterSpacing: 2,
+              transition: "border-color 0.2s", width: 290,
+            }}
+          >
+            <div style={{ fontSize: 22, marginBottom: 6 }}>+</div>
+            <div style={{ fontSize: 9, letterSpacing: 3 }}>NEW PROFILE</div>
+          </motion.div>
         </motion.div>
 
         {/* Bottom: confirm button */}

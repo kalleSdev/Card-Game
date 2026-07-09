@@ -37,7 +37,7 @@ function DeckGrid({ ids, cardDb, color }: { ids: string[]; cardDb: Record<string
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: (ri * 5 + ci) * 0.04 }}
-                  style={{ transform: "scale(0.68)", transformOrigin: "center top" }}
+                  style={{ transform: "scale(0.80)", transformOrigin: "center top" }}
                 >
                   <CharacterCard defId={id} def={def} size="sm" />
                 </motion.div>
@@ -68,15 +68,15 @@ function PlayerPanel({
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: 0.25, duration: 0.5 }}
       style={{
-        flex: 1, maxWidth: 400,
-        display: "flex", flexDirection: "column", alignItems: "center", gap: 14,
-        padding: "24px 20px 20px", borderRadius: 20,
+        flex: 1, maxWidth: 480,
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 12,
+        padding: "20px 24px 18px", borderRadius: 20,
         background: isWinner
-          ? `radial-gradient(ellipse at 50% 0%, ${color}1a, rgba(4,4,12,0.96))`
+          ? `radial-gradient(ellipse at 50% 0%, ${color}25, rgba(4,4,12,0.97))`
           : "rgba(4,4,12,0.9)",
-        border: `2px solid ${isWinner ? color + "66" : "#181828"}`,
-        boxShadow: isWinner ? `0 0 70px ${color}22, 0 8px 40px rgba(0,0,0,0.6)` : "0 4px 24px rgba(0,0,0,0.5)",
-        position: "relative", overflow: "hidden",
+        border: `2px solid ${isWinner ? color + "88" : "#181828"}`,
+        boxShadow: isWinner ? `0 0 90px ${color}33, 0 0 30px ${color}22, 0 8px 40px rgba(0,0,0,0.6)` : "0 4px 24px rgba(0,0,0,0.5)",
+        position: "relative", overflow: "visible",
       }}
     >
       {/* Animated winner shimmer */}
@@ -93,15 +93,25 @@ function PlayerPanel({
       )}
 
       {/* Result badge */}
-      <div style={{
-        padding: "4px 18px", borderRadius: 20,
-        background: isWinner ? color : "rgba(255,255,255,0.04)",
-        border: `1px solid ${isWinner ? color : "#252535"}`,
-        fontSize: 9, fontWeight: 900, letterSpacing: 4,
-        color: isWinner ? "#000" : "#334",
-      }}>
-        {isWinner ? "🏆 WINNER" : "DEFEATED"}
-      </div>
+      {isWinner ? (
+        <motion.div
+          animate={{ boxShadow: [`0 0 16px ${color}66`, `0 0 36px ${color}cc`, `0 0 16px ${color}66`] }}
+          transition={{ duration: 1.6, repeat: Infinity }}
+          style={{
+            padding: "6px 24px", borderRadius: 20,
+            background: color,
+            fontSize: 11, fontWeight: 900, letterSpacing: 5,
+            color: "#000",
+          }}
+        >🏆 WINNER</motion.div>
+      ) : (
+        <div style={{
+          padding: "4px 18px", borderRadius: 20,
+          background: "rgba(255,255,255,0.03)",
+          border: "1px solid #1a1a2a",
+          fontSize: 9, fontWeight: 700, letterSpacing: 4, color: "#2a2a3a",
+        }}>DEFEATED</div>
+      )}
 
       {/* Avatar + name */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
@@ -128,7 +138,7 @@ function PlayerPanel({
       {leaderDef && (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
           <div style={{ fontSize: 8, color: "#334", letterSpacing: 3 }}>LEADER</div>
-          <div style={{ transform: "scale(0.82)", transformOrigin: "center top" }}>
+          <div style={{ transform: "scale(0.70)", transformOrigin: "center top" }}>
             <CharacterCard defId={draft.leaderId} def={leaderDef} size="lg" />
           </div>
         </div>
@@ -181,7 +191,7 @@ export default function PostGameScreen({
       <div style={{
         position: "relative", zIndex: 3,
         display: "flex", flexDirection: "column", alignItems: "center",
-        padding: "36px 24px 28px", gap: 28, width: "100%", maxWidth: 880,
+        padding: "28px 24px 24px", gap: 20, width: "100%", maxWidth: 1060,
         overflowY: "auto",
       }}>
         {/* Title */}
@@ -189,18 +199,19 @@ export default function PostGameScreen({
           initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}
           style={{ textAlign: "center" }}
         >
-          <motion.div
-            animate={{ textShadow: [`0 0 40px ${winnerColor}66`, `0 0 80px ${winnerColor}aa`, `0 0 40px ${winnerColor}66`] }}
-            transition={{ duration: 1.8, repeat: Infinity }}
-            style={{ fontSize: 40, fontWeight: 900, letterSpacing: 6, color: winnerColor, marginBottom: 6 }}
-          >
-            BATTLE OVER
-          </motion.div>
-          <div style={{ fontSize: 13, color: "#fff", fontWeight: 700, letterSpacing: 2 }}>
-            {winnerProfile.name} claims victory
+          <div style={{ fontSize: 10, letterSpacing: 5, color: "#334", marginBottom: 6 }}>BATTLE OVER</div>
+          <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: 3, color: "#778", marginBottom: 4 }}>
+            Winner
           </div>
-          <div style={{ fontSize: 9, color: "#334", letterSpacing: 3, marginTop: 6 }}>
-            {turnCount} TURNS PLAYED · DRAFT BATTLE
+          <motion.div
+            animate={{ textShadow: [`0 0 30px ${winnerColor}88`, `0 0 60px ${winnerColor}cc`, `0 0 30px ${winnerColor}88`] }}
+            transition={{ duration: 1.8, repeat: Infinity }}
+            style={{ fontSize: 38, fontWeight: 900, letterSpacing: 3, color: winnerColor, marginBottom: 4 }}
+          >
+            {winnerProfile.name}
+          </motion.div>
+          <div style={{ fontSize: 9, color: "#334", letterSpacing: 3 }}>
+            {turnCount} TURNS · DRAFT BATTLE
           </div>
         </motion.div>
 
