@@ -200,8 +200,9 @@ export interface BattlePlayer {
   domainActive: boolean;        // true during domain effect's active turns
   domainCooldown: number;       // turns until domain can be activated again
   domainUsed: boolean;          // once per match flag (optional limit — set false to allow multi-use)
-  activeSynergies: string[];    // currently active synergy rule ids
-  spells: SpellCard[];          // available spell cards granted by synergies
+  activeSynergies: string[];    // synergy rule ids active based on draft deck composition
+  spells: SpellCard[];          // spell cards in hand (usable immediately)
+  spellPool: SpellCard[];       // pool of synergy spells available to draw (one per synergy, depletes)
   weaponIds: string[];          // equipped weapons (affect ATK calc)
   costReduction: number;        // from domain effects
   costReductionTurns: number;
@@ -309,38 +310,32 @@ export function makeBattleCard(defId: string, def: CardDef): BattleCard {
 // Returns updated cards (with synergy bonuses applied) and active synergy ids
 // ─────────────────────────────────────────────────────────────────────────────
 
-function calcActiveSynergies(leader: BattleCard, board: (BattleCard | null)[]): string[] {
-  // Leader tags do NOT count toward synergies — only board cards
-  void leader;
-  const allCards = board.filter(Boolean) as BattleCard[];
+// Calculate synergies from the full draft deck (not board state).
+// Leader tags never count — only the drafted non-leader cards.
+function calcDeckSynergies(deckCards: BattleCard[]): string[] {
   const activeIds: string[] = [];
   for (const rule of BATTLE_SYNERGY_RULES) {
-    const count = allCards.filter(c => rule.tags.every(tag => c.tags.includes(tag))).length;
+    const count = deckCards.filter(c =>
+      rule.tags.every(tag => (c.tags ?? []).includes(tag))
+    ).length;
     if (count >= rule.minCount) activeIds.push(rule.id);
   }
   return activeIds;
 }
 
-function applySynergies(player: BattlePlayer): BattlePlayer {
-  const activeIds = calcActiveSynergies(player.leader, player.board);
-  // Grant spell cards for newly activated synergies only
-  const newlyActive = activeIds.filter(id => !player.activeSynergies.includes(id));
-  const newSpells: SpellCard[] = newlyActive.flatMap(id => {
+// Build spell pool: one spell card per active synergy.
+function buildSpellPool(activeIds: string[]): SpellCard[] {
+  return activeIds.flatMap(id => {
     const rule = BATTLE_SYNERGY_RULES.find(r => r.id === id);
     if (!rule) return [];
     return [{
-      id: `spell-${id}-${++_instanceCounter}`,
+      id: `spell-pool-${id}-${++_instanceCounter}`,
       synergyId: id,
       name: rule.spellName,
       description: rule.spellDesc,
       effect: rule.spell,
     }];
   });
-  return {
-    ...player,
-    activeSynergies: activeIds,
-    spells: [...player.spells, ...newSpells],
-  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -414,33 +409,39 @@ function buildPlayer(
     },
   ];
 
+  // Calculate synergies from the full deck (hand + remaining), not board state
+  const allDeckCards = [...hand, ...deck].map(applyWeapon);
+  const activeSynergies = calcDeckSynergies(allDeckCards);
+  const spellPool = buildSpellPool(activeSynergies);
+
   const player: BattlePlayer = {
     pid,
     leader: applyWeapon(leader),
     board: [null, null, null, null, null],
-    hand:  hand.map(applyWeapon),
-    deck:  deck.map(applyWeapon),
+    hand:  allDeckCards.slice(0, hand.length),
+    deck:  allDeckCards.slice(hand.length),
     energy: 2,
     maxEnergy: 2,
     domainMeter: 0,
     domainActive: false,
     domainCooldown: 0,
     domainUsed: false,
-    activeSynergies: [],
+    activeSynergies,
     spells: defaultSpells,
+    spellPool,
     weaponIds: draft.weaponIds,
     costReduction: 0,
     costReductionTurns: 0,
     kashimoPassive: false,
     kashimoAtk: 0,
     tojiBerserk: leaderDef.id === "toji",
-    leaderBonusAttack: leaderDef.id === "toji", // Toji starts with a bonus attack each turn
+    leaderBonusAttack: leaderDef.id === "toji",
     getoEntitiesPending: 0,
     cardPlayFrozen: 0,
     synergyDrawUsed: false,
   };
 
-  return applySynergies(player);
+  return player;
 }
 
 function shuffle<T>(arr: T[]): T[] {
@@ -811,8 +812,6 @@ function processTurnStart(state: BattleState): { state: BattleState; drew: strin
     p = { ...p, hand: [...p.hand, card], deck: rest };
   }
 
-  p = applySynergies(p);
-
   return {
     state: { ...state, phase: "MAIN", players: { ...state.players, [pid]: p } },
     drew,
@@ -942,10 +941,6 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       if (attacker.currentHp - actualCounter - actualKashimo <= 0) events.push({ type: "CARD_DIED", pid, instanceId: attacker.instanceId });
       if (target.currentHp - damage <= 0)          events.push({ type: "CARD_DIED", pid: opp, instanceId: target.instanceId });
 
-      // Re-sync synergies after board changes
-      p = applySynergies(p);
-      o = applySynergies(o);
-
       let nextState: BattleState = { ...state, players: { ...state.players, [pid]: p, [opp]: o }, pendingAttackerId: null };
       nextState = checkWin(nextState);
       if (nextState.winner) events.push({ type: "GAME_OVER", winner: nextState.winner });
@@ -1022,12 +1017,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
         energy: p.energy - cost,
         domainMeter: Math.min(100, p.domainMeter + 7),
       };
-      p = applySynergies(p);
-
       events.push({ type: "CARD_PLAYED", pid, instanceId: card.instanceId, slot: intent.slot });
-      if (p.activeSynergies.length !== state.players[pid].activeSynergies.length) {
-        events.push({ type: "SYNERGY_UPDATE", pid, active: p.activeSynergies });
-      }
 
       return { state: { ...state, players: { ...state.players, [pid]: p } }, events };
     }
@@ -1188,19 +1178,13 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       let p = { ...state.players[pid] };
       if (p.synergyDrawUsed) return illegal("Synergy draw already used this turn");
       if (p.energy < 2) return illegal("Not enough energy (need 2)");
-      if (p.activeSynergies.length === 0) return illegal("No active synergies");
-      const availableRules = BATTLE_SYNERGY_RULES.filter(r => p.activeSynergies.includes(r.id));
-      if (availableRules.length === 0) return illegal("No synergy spells available");
-      const rule = availableRules[Math.floor(Math.random() * availableRules.length)];
-      const drawnSpell: SpellCard = {
-        id: `spell-syn-draw-${++_instanceCounter}`,
-        synergyId: rule.id,
-        name: rule.spellName,
-        description: rule.spellDesc,
-        effect: rule.spell,
-      };
-      p = { ...p, energy: p.energy - 2, spells: [...p.spells, drawnSpell], synergyDrawUsed: true };
-      events.push({ type: "SPELL_CAST", pid, spellId: drawnSpell.id, synergyId: rule.id });
+      if (p.spellPool.length === 0) return illegal("No spells left in pool");
+      // Pick random spell from pool and remove it
+      const poolIdx = Math.floor(Math.random() * p.spellPool.length);
+      const drawnSpell = p.spellPool[poolIdx];
+      const newPool = p.spellPool.filter((_, i) => i !== poolIdx);
+      p = { ...p, energy: p.energy - 2, spells: [...p.spells, drawnSpell], spellPool: newPool, synergyDrawUsed: true };
+      events.push({ type: "SPELL_CAST", pid, spellId: drawnSpell.id, synergyId: drawnSpell.synergyId });
       return { state: { ...state, players: { ...state.players, [pid]: p } }, events };
     }
 

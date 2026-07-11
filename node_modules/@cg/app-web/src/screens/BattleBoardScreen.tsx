@@ -1379,7 +1379,7 @@ export default function BattleBoardScreen({
           justifyContent: "center", padding: "10px 10px", borderRight: "1px solid #1a1a30", gap: 6, minWidth: 80,
         }}>
           {(() => {
-            const canDraw = player.activeSynergies.length > 0;
+            const canDraw = player.spellPool.length > 0;
             const disabled = !canDraw || player.synergyDrawUsed || player.energy < 2;
             return (
               <motion.button
@@ -1414,8 +1414,10 @@ export default function BattleBoardScreen({
                 {player.synergyDrawUsed && (
                   <span style={{ fontSize: 6, color: "#556", letterSpacing: 0.5 }}>USED</span>
                 )}
-                {!canDraw && (
-                  <span style={{ fontSize: 6, color: "#334", letterSpacing: 0.5, textAlign: "center" }}>NO SYN</span>
+                {!player.synergyDrawUsed && (
+                  <span style={{ fontSize: 6, color: canDraw ? "#666" : "#334", letterSpacing: 0.5 }}>
+                    {player.spellPool.length} LEFT
+                  </span>
                 )}
               </motion.button>
             );
