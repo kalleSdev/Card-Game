@@ -889,9 +889,6 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       let p = { ...state.players[pid] };
       let o = { ...state.players[opp] };
 
-      // Kashimo passive: if attacking a Kashimo-passive player, attacker takes extra damage
-      const kashimoExtra = o.kashimoPassive ? o.kashimoAtk : 0;
-
       // Is target the leader?
       const isLeaderTarget = target.instanceId === o.leader.instanceId;
       const isLeaderAttacker = attacker.instanceId === p.leader.instanceId;
@@ -900,13 +897,14 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       const updateTarget = (c: BattleCard): BattleCard => ({
         ...c, currentHp: c.currentHp - damage,
       });
-      // Apply counter + kashimo to attacker (Toji never takes counter damage)
+      // Apply counter to attacker (Toji never takes counter damage)
       const tojiNoCounter = isLeaderAttacker && p.tojiBerserk;
-      const actualCounter  = tojiNoCounter ? 0 : counterDamage;
-      const actualKashimo  = tojiNoCounter ? 0 : kashimoExtra;
+      const actualCounter = tojiNoCounter ? 0 : counterDamage;
+      // Kashimo self-damage: when Kashimo's leader attacks, leader takes kashimoAtk self-damage
+      const kashimoSelf = (isLeaderAttacker && p.kashimoPassive) ? p.kashimoAtk : 0;
       const exhaustAttacker = (c: BattleCard): BattleCard => {
-        if (isLeaderAttacker && p.leaderBonusAttack) return { ...c, currentHp: c.currentHp - actualCounter - actualKashimo };
-        return { ...c, currentHp: c.currentHp - actualCounter - actualKashimo, exhausted: true };
+        if (isLeaderAttacker && p.leaderBonusAttack) return { ...c, currentHp: c.currentHp - actualCounter - kashimoSelf };
+        return { ...c, currentHp: c.currentHp - actualCounter - kashimoSelf, exhausted: true };
       };
 
       if (isLeaderAttacker) {
@@ -938,7 +936,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       // Spawn any pending Geto entities after board space may have opened
       p = spawnGetoEntities(p, 3, 3);
       o = spawnGetoEntities(o, 3, 3);
-      if (attacker.currentHp - actualCounter - actualKashimo <= 0) events.push({ type: "CARD_DIED", pid, instanceId: attacker.instanceId });
+      if (attacker.currentHp - actualCounter - kashimoSelf <= 0) events.push({ type: "CARD_DIED", pid, instanceId: attacker.instanceId });
       if (target.currentHp - damage <= 0)          events.push({ type: "CARD_DIED", pid: opp, instanceId: target.instanceId });
 
       let nextState: BattleState = { ...state, players: { ...state.players, [pid]: p, [opp]: o }, pendingAttackerId: null };
@@ -961,24 +959,17 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       let p = { ...state.players[pid] };
       let o = { ...state.players[opp] };
 
-      // Kashimo passive counter damage to attacker when hitting Kashimo's leader
-      const kashimoExtra = o.kashimoPassive ? o.kashimoAtk : 0;
-
-      // Exhaust attacker (no counterattack from leader direct hit; Toji also ignores Kashimo passive)
+      // Kashimo self-damage: when Kashimo's leader attacks, leader takes kashimoAtk self-damage
       const isLeaderAttacking = attacker.instanceId === p.leader.instanceId;
-      const leaderNoCounter = isLeaderAttacking && p.tojiBerserk;
-      const leaderKashimoHit = leaderNoCounter ? 0 : kashimoExtra;
+      const kashimoSelfLeader = (isLeaderAttacking && p.kashimoPassive) ? p.kashimoAtk : 0;
       if (isLeaderAttacking) {
         if (p.leaderBonusAttack) {
-          // Use bonus attack — don't exhaust, consume the bonus
-          p = { ...p, leader: { ...p.leader, currentHp: p.leader.currentHp - leaderKashimoHit }, leaderBonusAttack: false };
+          p = { ...p, leader: { ...p.leader, currentHp: p.leader.currentHp - kashimoSelfLeader }, leaderBonusAttack: false };
         } else {
-          p = { ...p, leader: { ...p.leader, exhausted: true, currentHp: p.leader.currentHp - leaderKashimoHit } };
+          p = { ...p, leader: { ...p.leader, exhausted: true, currentHp: p.leader.currentHp - kashimoSelfLeader } };
         }
       } else {
-        p = { ...p, board: p.board.map(c => c?.instanceId === attacker.instanceId ? { ...c, exhausted: true, currentHp: c.currentHp - kashimoExtra } : c) };
-        // Remove attacker if Kashimo killed it
-        p = { ...p, board: p.board.map(c => c && c.currentHp <= 0 ? null : c) };
+        p = { ...p, board: p.board.map(c => c?.instanceId === attacker.instanceId ? { ...c, exhausted: true } : c) };
       }
 
       o = { ...o, leader: { ...o.leader, currentHp: o.leader.currentHp - damage } };
@@ -1177,13 +1168,13 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
     case "DRAW_SYNERGY_SPELL": {
       let p = { ...state.players[pid] };
       if (p.synergyDrawUsed) return illegal("Synergy draw already used this turn");
-      if (p.energy < 2) return illegal("Not enough energy (need 2)");
+      if (p.energy < 1) return illegal("Not enough energy (need 1)");
       if (p.spellPool.length === 0) return illegal("No spells left in pool");
       // Pick random spell from pool and remove it
       const poolIdx = Math.floor(Math.random() * p.spellPool.length);
       const drawnSpell = p.spellPool[poolIdx];
       const newPool = p.spellPool.filter((_, i) => i !== poolIdx);
-      p = { ...p, energy: p.energy - 2, spells: [...p.spells, drawnSpell], spellPool: newPool, synergyDrawUsed: true };
+      p = { ...p, energy: p.energy - 1, spells: [...p.spells, drawnSpell], spellPool: newPool, synergyDrawUsed: true };
       events.push({ type: "SPELL_CAST", pid, spellId: drawnSpell.id, synergyId: drawnSpell.synergyId });
       return { state: { ...state, players: { ...state.players, [pid]: p } }, events };
     }
@@ -1293,6 +1284,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
 
 export type BattleEngine = {
   getState(): BattleState;
+  setState(s: BattleState): void;
   apply(intent: BattleIntent): BattleResult;
 };
 
@@ -1300,6 +1292,7 @@ export function createBattleEngine(initial: BattleState): BattleEngine {
   let state = initial;
   return {
     getState: () => state,
+    setState: (s) => { state = s; },
     apply: (intent) => {
       const result = applyBattleIntent(state, intent);
       state = result.state;

@@ -1,5 +1,31 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, Component } from "react";
+import type { ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+
+// ── ErrorBoundary — catches render crashes and shows the error ────────────────
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ background: "#04040a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, padding: 32 }}>
+          <div style={{ color: "#ff4444", fontSize: 16, fontWeight: 900, letterSpacing: 2 }}>RENDER ERROR</div>
+          <div style={{ color: "#ff8888", fontSize: 12, fontFamily: "monospace", background: "#110000", padding: 16, borderRadius: 8, maxWidth: 800, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+            {this.state.error.message}
+          </div>
+          <div style={{ color: "#ff6666", fontSize: 10, fontFamily: "monospace", background: "#110000", padding: 16, borderRadius: 8, maxWidth: 800, whiteSpace: "pre-wrap", wordBreak: "break-all", overflow: "auto", maxHeight: 300 }}>
+            {this.state.error.stack}
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import type { PlayerId, CardDef } from "@cg/contracts";
 import type { BattleState, BattleCard, BattlePlayer, BattleIntent, SpellCard, PendingDomainAction } from "../battleEngine";
 import { createBattleEngine, createBattleState, getSynergyLabel } from "../battleEngine";
@@ -550,6 +576,7 @@ function LeaderRightPanel({
 // ── Board row (5 slots) ───────────────────────────────────────────────────────
 function BoardRow({
   board, cardDb, pendingId, targeting, myBoard, cardScale = 1,
+  buffTargeting = false,
   onSelectCard, onTargetCard,
 }: {
   board: (BattleCard | null)[];
@@ -814,6 +841,16 @@ export default function BattleBoardScreen({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Sync engine with post-mulligan React state when battle starts.
+  // doReplace() updates battleState directly (bypassing the engine), so we
+  // must push that state into the engine before the first real dispatch.
+  useEffect(() => {
+    if (mulliganStep === "BATTLE") {
+      engine.setState(battleState);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mulliganStep]);
 
   const handleEndTurn = () => {
     const pid = battleState.activePlayer;
@@ -1166,6 +1203,7 @@ export default function BattleBoardScreen({
   const winnerIcon = battleState.winner ? (battleState.winner === "P1" ? p1Icon : p2Icon) : "";
 
   return (
+    <ErrorBoundary>
     <div style={{
       minHeight: "100vh", maxHeight: "100vh",
       background: "linear-gradient(180deg, #020209 0%, #04021a 50%, #020209 100%)",
@@ -1380,7 +1418,7 @@ export default function BattleBoardScreen({
         }}>
           {(() => {
             const canDraw = player.spellPool.length > 0;
-            const disabled = !canDraw || player.synergyDrawUsed || player.energy < 2;
+            const disabled = !canDraw || player.synergyDrawUsed || player.energy < 1;
             return (
               <motion.button
                 whileHover={!disabled ? { scale: 1.07, y: -3, boxShadow: "0 0 22px #cc44ff88" } : {}}
@@ -1410,7 +1448,7 @@ export default function BattleBoardScreen({
                   background: disabled ? "transparent" : "rgba(74,238,204,0.1)",
                   border: disabled ? "none" : "1px solid #4aeecc44",
                   borderRadius: 6, padding: "1px 5px",
-                }}>2⚡</span>
+                }}>1⚡</span>
                 {player.synergyDrawUsed && (
                   <span style={{ fontSize: 6, color: "#556", letterSpacing: 0.5 }}>USED</span>
                 )}
@@ -1424,57 +1462,66 @@ export default function BattleBoardScreen({
           })()}
         </div>
 
-        {/* Hand cards (center) */}
-        <div style={{
-          flex: 1, display: "flex", gap: 10, justifyContent: "center", alignItems: "flex-end",
-          padding: "14px 20px 10px", overflow: "visible", position: "relative", zIndex: 10,
-        }}>
-          {player.hand.map(card => {
-            const isDrawn = drewCardId === card.instanceId;
-            return (
-              <motion.div
-                key={card.instanceId}
-                initial={isDrawn ? { y: 60, opacity: 0 } : false}
-                animate={{ y: 0, opacity: 1 }}
-                transition={isDrawn ? { type: "spring", stiffness: 380, damping: 22 } : {}}
-                style={{ flexShrink: 0, position: "relative", zIndex: 10 }}
-              >
-                <HandCardView
-                  card={card} cardDb={cardDb}
-                  energy={player.energy} costReduction={player.costReduction}
-                  onPlay={() => handlePlayCard(card.instanceId)}
+        {/* Hand cards + energy bar (stacked in a flex column) */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "visible", position: "relative", zIndex: 10 }}>
+          {/* Energy bar — horizontal, spans full width above cards */}
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "8px 20px 4px",
+            borderBottom: "1px solid #0e0e22",
+          }}>
+            <span style={{ fontSize: 10, color: "#4aeecc", fontWeight: 900, letterSpacing: 1, flexShrink: 0 }}>
+              ⚡ {player.energy}/{player.maxEnergy}
+            </span>
+            <div style={{ display: "flex", gap: 5, alignItems: "center", flex: 1 }}>
+              {Array.from({ length: player.maxEnergy }).map((_, i) => (
+                <motion.div key={i}
+                  animate={i < player.energy
+                    ? { boxShadow: ["0 0 6px #4aeecc88", "0 0 14px #4aeecc", "0 0 6px #4aeecc88"] }
+                    : {}}
+                  transition={{ duration: 1.6, repeat: Infinity, delay: i * 0.06 }}
+                  style={{
+                    flex: 1, height: 18, borderRadius: 5,
+                    background: i < player.energy
+                      ? "linear-gradient(135deg, #1adfff 0%, #4aeecc 100%)"
+                      : "#0d0d18",
+                    border: `1px solid ${i < player.energy ? "#4aeecc" : "#1e1e2e"}`,
+                    transition: "background 0.2s, border-color 0.2s",
+                  }}
                 />
-              </motion.div>
-            );
-          })}
-          {player.hand.length === 0 && (
-            <div style={{ color: "#2a2a38", fontSize: 10, letterSpacing: 3, paddingBottom: 8, paddingTop: 8, alignSelf: "center" }}>
-              NO CARDS IN HAND
+              ))}
             </div>
-          )}
-        </div>
+          </div>
 
-        {/* Energy bar column (between hand and deck) */}
-        <div style={{
-          flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
-          justifyContent: "center", padding: "10px 10px", borderLeft: "1px solid #1a1a30", gap: 6, minWidth: 60,
-        }}>
-          <div style={{ fontSize: 9, color: "#4aeecc", fontWeight: 800, letterSpacing: 1, textAlign: "center" }}>
-            ⚡ {player.energy}/{player.maxEnergy}
+          {/* Hand cards */}
+          <div style={{
+            flex: 1, display: "flex", gap: 10, justifyContent: "center", alignItems: "flex-end",
+            padding: "10px 20px 10px", overflow: "visible",
+          }}>
+            {player.hand.map(card => {
+              const isDrawn = drewCardId === card.instanceId;
+              return (
+                <motion.div
+                  key={card.instanceId}
+                  initial={isDrawn ? { y: 60, opacity: 0 } : false}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={isDrawn ? { type: "spring", stiffness: 380, damping: 22 } : {}}
+                  style={{ flexShrink: 0, position: "relative", zIndex: 10 }}
+                >
+                  <HandCardView
+                    card={card} cardDb={cardDb}
+                    energy={player.energy} costReduction={player.costReduction}
+                    onPlay={() => handlePlayCard(card.instanceId)}
+                  />
+                </motion.div>
+              );
+            })}
+            {player.hand.length === 0 && (
+              <div style={{ color: "#2a2a38", fontSize: 10, letterSpacing: 3, paddingBottom: 8, paddingTop: 8, alignSelf: "center" }}>
+                NO CARDS IN HAND
+              </div>
+            )}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "center" }}>
-            {Array.from({ length: player.maxEnergy }).map((_, i) => (
-              <motion.div key={i}
-                animate={i < player.energy ? { boxShadow: ["0 0 4px #4aeecc66", "0 0 10px #4aeecc", "0 0 4px #4aeecc66"] } : {}}
-                transition={{ duration: 1.6, repeat: Infinity, delay: i * 0.07 }}
-                style={{
-                  width: 16, height: 10, borderRadius: 3,
-                  background: i < player.energy ? "linear-gradient(135deg, #2af 0%, #4aeecc 100%)" : "#0d0d18",
-                  border: `1px solid ${i < player.energy ? "#4aeecc" : "#1e1e2e"}`,
-                }} />
-            ))}
-          </div>
-          <div style={{ fontSize: 7, color: "#334", letterSpacing: 2 }}>ENERGY</div>
         </div>
 
         {/* Deck (right column) */}
@@ -1518,5 +1565,6 @@ export default function BattleBoardScreen({
         )}
       </AnimatePresence>
     </div>
+    </ErrorBoundary>
   );
 }
