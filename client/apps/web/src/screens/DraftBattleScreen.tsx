@@ -55,7 +55,7 @@ function shuffle<T>(arr: T[]): T[] {
 function getLeaderOptions(cardDb: Record<string, CardDef>): string[] {
   return shuffle(
     Object.entries(cardDb)
-      .filter(([, def]) => ["SS", "SSS", "X"].includes(def.rarity))
+      .filter(([, def]) => ["SSS", "X"].includes(def.rarity))
       .map(([id]) => id)
   ).slice(0, 3);
 }
@@ -409,7 +409,9 @@ function CardDraftPhase({ pid, profile, color, pickIndex, options, cardDb, picke
             const isSelected = selected === id;
             const badges = getSynergyBadges(def, pickedSoFar, cardDb);
             const rawStats = deriveStats(def);
-            const stats = def.affinity === "LEADER" ? { atk: 2, hp: 30, cost: rawStats.cost } : rawStats;
+            // Leader affinity cards only show 2/30 during the leader pick phase (before leaderId is set).
+            // Once a leader is chosen, these cards appear as normal free picks with their real rarity stats.
+            const stats = (def.affinity === "LEADER" && !leaderId) ? { atk: 2, hp: 30, cost: rawStats.cost } : rawStats;
             return (
               <motion.div key={id}
                 onClick={() => setSelected(id === selected ? null : id)}
@@ -473,12 +475,7 @@ function PlayerHandoff({ nextPlayer, profile, color, onReady }: {
       initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
       style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 24, textAlign: "center" }}
     >
-      <div style={{
-        width: 80, height: 80, borderRadius: "50%",
-        background: `radial-gradient(circle, ${color}33, transparent)`,
-        border: `3px solid ${color}66`,
-        overflow: "hidden",
-      }}>
+      <div style={{ borderRadius: 14, overflow: "hidden", border: `2px solid ${color}55` }}>
         <PlayerIcon icon={profile.icon} size={80} style={{ display: "block" }} />
       </div>
       <div>

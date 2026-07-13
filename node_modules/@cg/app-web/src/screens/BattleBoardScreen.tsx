@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState, Component } from "react";
+import { useCallback, useEffect, useState, useRef, Component } from "react";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
 // ── ErrorBoundary — catches render crashes and shows the error ────────────────
@@ -28,7 +29,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 }
 import type { PlayerId, CardDef } from "@cg/contracts";
 import type { BattleState, BattleCard, BattlePlayer, BattleIntent, SpellCard, PendingDomainAction } from "../battleEngine";
-import { createBattleEngine, createBattleState, getSynergyLabel } from "../battleEngine";
+import { createBattleEngine, createBattleState, DOMAIN_BATTLE_EFFECTS, BATTLE_SYNERGY_RULES } from "../battleEngine";
+import type { DomainEffect } from "../battleEngine";
 import type { PlayerDraftResult } from "./DraftBattleScreen";
 import CharacterCard from "../components/CharacterCard";
 import PlayerIcon from "../components/PlayerIcon";
@@ -40,6 +42,124 @@ function shuffle<T>(arr: T[]): T[] {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+}
+
+// ── Shared tooltip bubble via portal ─────────────────────────────────────────
+function HoverTooltip({ x, y, children }: { x: number; y: number; children: ReactNode }) {
+  return createPortal(
+    <div style={{
+      position: "fixed",
+      left: Math.min(Math.max(8, x + 16), window.innerWidth - 360),
+      top: Math.min(Math.max(10, y - 10), window.innerHeight - 320),
+      zIndex: 9999, pointerEvents: "none", width: 340,
+      background: "rgba(6,3,18,0.98)",
+      border: "1px solid #7744ccaa", borderRadius: 14,
+      padding: "16px 20px",
+      boxShadow: "0 12px 48px rgba(0,0,0,0.9), 0 0 32px #7744cc33",
+    }}>
+      {children}
+    </div>,
+    document.body
+  );
+}
+
+function buildDomainDesc(defId: string, d: { name: string; effect: DomainEffect; grantSpell?: { name: string; desc: string }; secondEffect?: DomainEffect }) {
+  const e = d.effect;
+  const grantSuffix = defId === "gojo-base"
+    ? " Grants Hollow Purple (4 dmg). Filling twice grants 2 Hollow Purples."
+    : d.grantSpell ? ` Also grants "${d.grantSpell.name}" — ${d.grantSpell.desc}.` : "";
+  let desc = "Activates a powerful cursed technique.";
+  if (e.kind === "STUN_ENEMY_BOARD")       desc = `Fully immobilizes all enemies for ${e.turns} turn${e.turns > 1 ? "s" : ""} — no actions allowed.`;
+  else if (e.kind === "DAMAGE_ALL_ENEMIES") desc = `Deals ${e.amount} damage split across all enemies.`;
+  else if (e.kind === "BUFF_OWN_BOARD")     desc = `Gives own board +${e.atkBonus} ATK / +${e.hpBonus} HP for ${e.turns} turn${e.turns > 1 ? "s" : ""}.`;
+  else if (e.kind === "SPAWN_ENTITIES")     desc = `Spawns ${e.count}× ${e.atk}/${e.hp} Cursed Spirits on your board.`;
+  else if (e.kind === "GRANT_RANDOM_SPELLS") desc = `Grants ${e.count} random synergy spells.`;
+  else if (e.kind === "REDUCE_COSTS")       desc = `All cards cost ${e.amount} less for ${e.turns} turn${e.turns > 1 ? "s" : ""}.`;
+  else if (e.kind === "GRANT_SPELL")        desc = `Grants spell: "${e.spellName}" — ${e.spellDesc}.`;
+  else if (e.kind === "BUFF_LEADER_PERMANENT") desc = e.atk > 0 && e.hp > 0 ? `Leader gains +${e.atk} ATK / +${e.hp} HP permanently.` : e.atk > 0 ? `Leader gains +${e.atk} ATK permanently.` : `Leader gains +${e.hp} HP permanently.`;
+  else if (e.kind === "SHEEPIFY_ENEMY_CARDS") desc = `Choose ${e.count} enemy board cards to turn into 1/1 sheep.`;
+  else if (e.kind === "SUKUNA_BOARD_MODE")  desc = "Wipes all board cards. Sukuna enters as a 4/17 playing card — always targetable. His death ends the match.";
+  else if (e.kind === "MAHORAGA_BOARD_MODE") desc = "Mahoraga enters as a 1/25 board card. Gains +1 ATK each time he's hit. His death ends the match.";
+  else if (e.kind === "SUMMON_RIKA_AND_COPY") desc = "Summons Rika (5/5 Cursed Spirit). Grants Cursed Copy — place a 3/3 copy of any board card.";
+  else if (e.kind === "KILL_ALL_BOARD")     desc = "Destroys all non-leader cards on both sides.";
+  let secondDesc: string | undefined;
+  if (d.secondEffect) {
+    const s = d.secondEffect;
+    if (s.kind === "GRANT_SPELL") secondDesc = `2nd fill: grants "${s.spellName}" — ${s.spellDesc}.`;
+    else if (s.kind === "BUFF_LEADER_PERMANENT") secondDesc = `2nd fill: leader gains +${s.atk} ATK / +${s.hp} HP permanently.`;
+    else if (s.kind === "SUMMON_RIKA_AND_COPY") secondDesc = "2nd fill: summon Rika (5/5) again.";
+    else if (s.kind === "SPAWN_ENTITIES") secondDesc = `2nd fill: spawns ${s.count}× ${s.atk}/${s.hp} entity.`;
+    else if (s.kind === "GRANT_RANDOM_SPELLS") secondDesc = `2nd fill: grants ${s.count} more random spells.`;
+    else if (s.kind === "SHEEPIFY_ENEMY_CARDS") secondDesc = `2nd fill: choose ${s.count} more enemy cards to sheepify.`;
+  }
+  return { desc: desc + grantSuffix, secondDesc };
+}
+
+// ── DomainBadge — hoverable 🌀 DOMAIN tag ────────────────────────────────────
+function DomainBadge({ defId }: { defId: string }) {
+  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+  const d = DOMAIN_BATTLE_EFFECTS[defId];
+  if (!d) return null;
+  const { desc, secondDesc } = buildDomainDesc(defId, d);
+  return (
+    <>
+      <div
+        onMouseMove={ev => setTooltipPos({ x: ev.clientX, y: ev.clientY })}
+        onMouseLeave={() => setTooltipPos(null)}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 3,
+          fontSize: 9, fontWeight: 900, letterSpacing: 0.5,
+          color: "#dd55ff", background: "rgba(80,0,130,0.8)",
+          border: "1px solid #cc44ff88", borderRadius: 5,
+          padding: "2px 7px", cursor: "default", whiteSpace: "nowrap",
+        }}
+      >🌀 DOMAIN</div>
+      {tooltipPos && (
+        <HoverTooltip x={tooltipPos.x} y={tooltipPos.y}>
+          <div style={{ fontSize: 11, fontWeight: 900, color: "#cc44ff", letterSpacing: 2, marginBottom: 8 }}>🌀 DOMAIN EXPANSION</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 10, lineHeight: 1.2 }}>{d.name}</div>
+          <div style={{ fontSize: 13, color: "#ccc", lineHeight: 1.6 }}>{desc}</div>
+          {secondDesc && (
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #7744cc44", fontSize: 12, color: "#bb88ff", lineHeight: 1.6 }}>
+              {secondDesc}
+            </div>
+          )}
+        </HoverTooltip>
+      )}
+    </>
+  );
+}
+
+
+// ── SynergyTag — hoverable synergy pill showing spell description ─────────────
+function SynergyTag({ id }: { id: string }) {
+  const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
+  const rule = BATTLE_SYNERGY_RULES.find(r => r.id === id);
+  if (!rule) return null;
+  return (
+    <>
+      <div
+        onMouseMove={ev => setHover({ x: ev.clientX, y: ev.clientY })}
+        onMouseLeave={() => setHover(null)}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 3,
+          fontSize: 9, fontWeight: 900, letterSpacing: 0.5,
+          color: "#44ff88", background: "rgba(0,60,30,0.75)",
+          border: "1px solid #44ff8855", borderRadius: 5,
+          padding: "2px 7px", cursor: "default", whiteSpace: "nowrap",
+        }}
+      >✦ {rule.label}</div>
+      {hover && (
+        <HoverTooltip x={hover.x} y={hover.y}>
+          <div style={{ fontSize: 11, fontWeight: 900, color: "#44ff88", letterSpacing: 2, marginBottom: 8 }}>✦ SYNERGY ACTIVE</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 10 }}>{rule.label}</div>
+          <div style={{ fontSize: 12, color: "#aaa", marginBottom: 10 }}>Spell unlocked:</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#88ffbb", marginBottom: 6 }}>{rule.spellName}</div>
+          <div style={{ fontSize: 13, color: "#ccc", lineHeight: 1.6 }}>{rule.spellDesc}</div>
+        </HoverTooltip>
+      )}
+    </>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -69,7 +189,7 @@ function BoardCardView({
   card, cardDb, selected, targetable, friendlyTarget, onClick,
 }: {
   card: BattleCard; cardDb: Record<string, CardDef>;
-  selected?: boolean; targetable?: boolean; friendlyTarget?: boolean; onClick?: () => void;
+  selected?: boolean; targetable?: boolean; friendlyTarget?: boolean; onClick?: (ev?: React.MouseEvent) => void;
 }) {
   const def = cardDb[card.defId];
   const hpPct   = Math.max(0, Math.min(100, (card.currentHp / card.maxHp) * 100));
@@ -77,15 +197,13 @@ function BoardCardView({
 
   return (
     <motion.div
-      onClick={onClick}
+      onClick={(ev) => onClick?.(ev)}
       animate={{
-        scale: selected ? 1.08 : 1,
+        scale: 1,
         filter: friendlyTarget
           ? "brightness(1.2) drop-shadow(0 0 8px #4aeecc)"
           : targetable
           ? "brightness(1.2) drop-shadow(0 0 8px #ff4444)"
-          : (card.exhausted || !card.canAttack || card.stunTurns > 0)
-          ? "brightness(0.55) saturate(0.3) grayscale(0.4)"
           : "brightness(1)",
       }}
       whileHover={onClick ? { y: -8, scale: selected ? 1.1 : 1.07 } : undefined}
@@ -93,31 +211,10 @@ function BoardCardView({
       transition={{ type: "spring", stiffness: 400, damping: 22 }}
       style={{ position: "relative", cursor: onClick ? "pointer" : "default", userSelect: "none" }}
     >
-      <CharacterCard defId={card.defId} def={def} size="xs" noHover hideInfo smallBadges />
-
-      {/* Bottom overlay: name + ATK/HP */}
-      <div style={{
-        position: "absolute", bottom: 0, left: 0, right: 0,
-        background: "linear-gradient(transparent, rgba(0,0,0,0.92) 30%)",
-        borderBottomLeftRadius: 10, borderBottomRightRadius: 10,
-        padding: "10px 4px 4px",
-        display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-      }}>
-        <div style={{ fontSize: 7, fontWeight: 800, color: "#e8e8e8", letterSpacing: 0.5, textAlign: "center", lineHeight: 1.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%", paddingLeft: 2, paddingRight: 2 }}>
-          {def?.name ?? card.defId}
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-around", width: "100%", padding: "1px 4px" }}>
-          <span style={{ fontSize: 13, fontWeight: 900, color: "#ff8855" }}>⚔{card.atk}</span>
-          <span style={{ fontSize: 13, fontWeight: 900, color: hpColor }}>♥{card.currentHp}</span>
-        </div>
-        {/* HP bar */}
-        <div style={{ width: "calc(100% - 8px)", height: 3, background: "#111", borderRadius: 2 }}>
-          <motion.div
-            animate={{ width: `${hpPct}%` }} transition={{ duration: 0.3 }}
-            style={{ height: "100%", background: hpColor, borderRadius: 2 }}
-          />
-        </div>
-      </div>
+      <CharacterCard defId={card.defId} def={def} size="xs" noHover hideInfo smallBadges
+        dimmed={!friendlyTarget && !targetable && (card.exhausted || !card.canAttack || card.stunTurns > 0)}
+        statsOverlay={{ name: def?.name, atk: card.atk, hp: card.currentHp, maxHp: card.maxHp }}
+      />
 
       {/* Stun */}
       {card.stunTurns > 0 && (
@@ -135,15 +232,6 @@ function BoardCardView({
           background: "rgba(255, 165, 0, 0.9)", borderRadius: 3,
           fontSize: 9, padding: "1px 3px",
         }}>👑</div>
-      )}
-
-      {/* Selection ring */}
-      {selected && (
-        <motion.div
-          animate={{ boxShadow: ["0 0 0 3px #ffcc00, 0 0 14px #ffcc0077", "0 0 0 3px #ffcc00, 0 0 26px #ffcc00bb"] }}
-          transition={{ duration: 0.7, repeat: Infinity, repeatType: "reverse" }}
-          style={{ position: "absolute", inset: -2, borderRadius: 12, pointerEvents: "none" }}
-        />
       )}
 
       {/* Enemy target ring */}
@@ -210,39 +298,10 @@ function HandCardView({
       transition={{ type: "spring", stiffness: 400, damping: 22 }}
       style={{ position: "relative", cursor: canAfford ? "pointer" : "not-allowed", userSelect: "none", flexShrink: 0 }}
     >
-      <CharacterCard defId={card.defId} def={def} size="s" noHover dimmed={!canAfford} hideInfo />
-
-      {/* Cost badge */}
-      <div style={{
-        position: "absolute", top: -10, right: -10,
-        width: 26, height: 26, borderRadius: "50%",
-        background: canAfford ? "#4aeecc" : "#222",
-        border: `2px solid ${canAfford ? "#2af" : "#333"}`,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 12, fontWeight: 900, color: canAfford ? "#001a16" : "#555",
-        boxShadow: canAfford ? "0 0 12px #4aeecc99" : "none",
-      }}>{cost}</div>
-
-      {/* Bottom overlay: name + ATK/HP */}
-      <div style={{
-        position: "absolute", bottom: 0, left: 0, right: 0,
-        background: "linear-gradient(transparent, rgba(0,0,0,0.92) 30%)",
-        borderBottomLeftRadius: 10, borderBottomRightRadius: 10,
-        padding: "12px 4px 4px",
-        display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-      }}>
-        <div style={{ fontSize: 8, fontWeight: 800, color: "#e8e8e8", letterSpacing: 0.3, textAlign: "center", lineHeight: 1.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%", paddingLeft: 3, paddingRight: 3 }}>
-          {def?.name ?? card.defId}
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-around", width: "100%", padding: "1px 4px" }}>
-          <span style={{ fontSize: 13, fontWeight: 900, color: "#ff8855" }}>⚔{card.atk}</span>
-          <span style={{ fontSize: 13, fontWeight: 900, color: hpColor }}>♥{card.currentHp}</span>
-        </div>
-        <div style={{ width: "calc(100% - 8px)", height: 3, background: "#111", borderRadius: 2 }}>
-          <motion.div animate={{ width: `${hpPct}%` }} transition={{ duration: 0.3 }}
-            style={{ height: "100%", background: hpColor, borderRadius: 2 }} />
-        </div>
-      </div>
+      <CharacterCard defId={card.defId} def={def} size="sm" dimmed={!canAfford} hideInfo
+        costOverride={cost}
+        statsOverlay={{ name: def?.name, atk: card.atk, hp: card.currentHp, maxHp: card.maxHp }}
+      />
 
     </motion.div>
   );
@@ -255,7 +314,7 @@ function SpellCardView({
   spell: SpellCard; active?: boolean; onClick?: () => void;
 }) {
   const effKind = spell.effect.kind;
-  const needsTarget = effKind === "DAMAGE_TARGET" || effKind === "STUN_ONE" || effKind === "PURPLE";
+  const needsTarget = effKind === "DAMAGE_TARGET" || effKind === "STUN_ONE" || effKind === "PURPLE" || effKind === "SHEEPIFY_ONE";
   const needsOwnTarget = effKind === "BUFF_ONE_HP" || effKind === "BUFF_ONE_ATK";
   const color = effKind === "DAMAGE_TARGET" ? "#ff6644"
     : effKind === "BUFF_BOARD_ATK" ? "#ffcc00"
@@ -265,11 +324,12 @@ function SpellCardView({
     : effKind === "DRAW"           ? "#4488ff"
     : effKind === "GAIN_ENERGY"    ? "#4aeecc"
     : effKind === "PURPLE"         ? "#bb44ff"
+    : effKind === "SHEEPIFY_ONE"   ? "#88ff88"
     : effKind === "DESTROY_ONE"    ? "#ff44aa"
     : effKind === "COPY_BOARD_CARD"     ? "#44ddff"
     : effKind === "DAMAGE_TARGET_SELF"  ? "#ff6600"
     : "#cc44ff";
-  const icon = effKind === "DAMAGE_TARGET" ? "💥" : effKind === "BUFF_BOARD_ATK" ? "⚔" : effKind === "BUFF_BOARD_HP" ? "💚" : effKind === "BUFF_ONE_ATK" ? "🗡" : effKind === "BUFF_ONE_HP" ? "💉" : effKind === "DRAW" ? "🃏" : effKind === "GAIN_ENERGY" ? "⚡" : effKind === "PURPLE" ? "🌌" : effKind === "DESTROY_ONE" ? "🗑" : effKind === "COPY_BOARD_CARD" ? "📋" : effKind === "DAMAGE_TARGET_SELF" ? "⚡" : "❄";
+  const icon = effKind === "DAMAGE_TARGET" ? "💥" : effKind === "BUFF_BOARD_ATK" ? "⚔" : effKind === "BUFF_BOARD_HP" ? "💚" : effKind === "BUFF_ONE_ATK" ? "🗡" : effKind === "BUFF_ONE_HP" ? "💉" : effKind === "DRAW" ? "🃏" : effKind === "GAIN_ENERGY" ? "⚡" : effKind === "PURPLE" ? "🌌" : effKind === "DESTROY_ONE" ? "🗑" : effKind === "COPY_BOARD_CARD" ? "📋" : effKind === "DAMAGE_TARGET_SELF" ? "⚡" : effKind === "SHEEPIFY_ONE" ? "🐑" : "❄";
 
   return (
     <motion.div
@@ -279,28 +339,28 @@ function SpellCardView({
       animate={active ? { boxShadow: [`0 0 0 2px ${color}, 0 0 18px ${color}88`, `0 0 0 2px ${color}, 0 0 32px ${color}cc`] } : {}}
       transition={{ duration: 0.6, repeat: active ? Infinity : 0, repeatType: "reverse" }}
       style={{
-        width: 90, borderRadius: 10, padding: "10px 8px",
-        background: `linear-gradient(180deg, ${color}18, rgba(4,4,12,0.95))`,
-        border: `1px solid ${color}55`,
+        width: 116, borderRadius: 12, padding: "14px 12px",
+        background: `linear-gradient(180deg, ${color}22, rgba(4,4,12,0.97))`,
+        border: `1px solid ${color}66`,
         cursor: onClick ? "pointer" : "default",
-        display: "flex", flexDirection: "column", alignItems: "center", gap: 5,
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 7,
         userSelect: "none", flexShrink: 0,
-        boxShadow: `0 4px 16px rgba(0,0,0,0.6), 0 0 10px ${color}22`,
+        boxShadow: `0 6px 20px rgba(0,0,0,0.7), 0 0 14px ${color}28`,
         position: "relative",
       }}
     >
-      <div style={{ fontSize: 24 }}>{icon}</div>
-      <div style={{ fontSize: 9, fontWeight: 900, color, letterSpacing: 0.5, textAlign: "center", lineHeight: 1.3 }}>
+      <div style={{ fontSize: 32 }}>{icon}</div>
+      <div style={{ fontSize: 12, fontWeight: 900, color, letterSpacing: 0.5, textAlign: "center", lineHeight: 1.3 }}>
         {spell.name}
       </div>
-      <div style={{ fontSize: 7, color: `${color}bb`, textAlign: "center", lineHeight: 1.4 }}>
+      <div style={{ fontSize: 10, color: `${color}cc`, textAlign: "center", lineHeight: 1.5 }}>
         {spell.description}
       </div>
       {needsTarget && onClick && (
-        <div style={{ fontSize: 7, color: "#ffcc00", letterSpacing: 1, fontWeight: 900, marginTop: 1 }}>▶ TARGET</div>
+        <div style={{ fontSize: 9, color: "#ffcc00", letterSpacing: 1, fontWeight: 900, marginTop: 2 }}>▶ TARGET</div>
       )}
       {needsOwnTarget && onClick && (
-        <div style={{ fontSize: 7, color: "#88ffcc", letterSpacing: 1, fontWeight: 900, marginTop: 1 }}>▶ PICK CARD</div>
+        <div style={{ fontSize: 9, color: "#88ffcc", letterSpacing: 1, fontWeight: 900, marginTop: 2 }}>▶ PICK CARD</div>
       )}
     </motion.div>
   );
@@ -312,7 +372,7 @@ function CenteredLeader({
   selected, targetable,
   energy, maxEnergy, domainMeter, showDomainBtn,
   onSelect, onDomainActivate,
-  isTop,
+  isTop, domainBadgeDefId, isVacant,
 }: {
   leader: BattleCard; cardDb: Record<string, CardDef>;
   playerName: string; playerIcon: string;
@@ -320,7 +380,7 @@ function CenteredLeader({
   energy?: number; maxEnergy?: number;
   domainMeter?: number; showDomainBtn?: boolean;
   onSelect?: () => void; onDomainActivate?: () => void;
-  isTop: boolean;
+  isTop: boolean; domainBadgeDefId?: string; isVacant?: boolean;
 }) {
   const def = cardDb[leader.defId];
   const hpPct   = Math.max(0, Math.min(100, (leader.currentHp / leader.maxHp) * 100));
@@ -336,22 +396,24 @@ function CenteredLeader({
       gap: 6,
       padding: isTop ? "8px 0 4px" : "4px 0 8px",
     }}>
-      {/* Name + icon row */}
+      {/* Name + icon row (always above card for isTop, always below for bottom player) */}
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <div style={{ borderRadius: 6, overflow: "hidden", border: "1px solid #333" }}>
           <PlayerIcon icon={playerIcon} size={22} style={{ display: "block" }} />
         </div>
         <span style={{ fontSize: 10, color: "#778", letterSpacing: 1, fontWeight: 600 }}>{playerName}</span>
-        {/* HP indicator next to name */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: 4,
-          background: "rgba(0,0,0,0.5)", borderRadius: 6, padding: "2px 8px",
-          border: `1px solid ${hpColor}44`,
-        }}>
-          <span style={{ fontSize: 10, fontWeight: 900, color: "#ff8855" }}>⚔{leader.atk}</span>
-          <span style={{ fontSize: 10, color: "#334" }}>·</span>
-          <span style={{ fontSize: 10, fontWeight: 900, color: hpColor }}>♥{leader.currentHp}/{leader.maxHp}</span>
-        </div>
+        {/* Stats shown inline with name only for bottom player; top player gets them below the card */}
+        {!isTop && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 4,
+            background: "rgba(0,0,0,0.5)", borderRadius: 6, padding: "2px 8px",
+            border: `1px solid ${hpColor}44`,
+          }}>
+            <span style={{ fontSize: 10, fontWeight: 900, color: "#ff8855" }}>⚔{leader.atk}</span>
+            <span style={{ fontSize: 10, color: "#334" }}>·</span>
+            <span style={{ fontSize: 10, fontWeight: 900, color: hpColor }}>♥{leader.currentHp}/{leader.maxHp}</span>
+          </div>
+        )}
         {leader.stunTurns > 0 && (
           <div style={{ background: "#4488ff", borderRadius: 4, fontSize: 8, fontWeight: 900, padding: "1px 6px", color: "#fff" }}>
             STUN
@@ -359,8 +421,8 @@ function CenteredLeader({
         )}
       </div>
 
-      {/* Leader card + rings */}
-      <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+      {/* Leader card + rings (+ right-side stats for top player) */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         {/* Energy/Domain panel — only for active player, shown to the left of their leader */}
         {isActivePlayer && !isTop && (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, width: 110 }}>
@@ -369,25 +431,30 @@ function CenteredLeader({
               ⚡ ENERGY {energy}/{maxEnergy}
             </div>
 
-            {/* Crystal grid */}
+            {/* Crystal grid — always 10 slots; filled = available, empty = spent, locked = not yet unlocked */}
             <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "center" }}>
-              {Array.from({ length: maxEnergy ?? 0 }).map((_, i) => (
-                <motion.div
-                  key={i}
-                  animate={i < (energy ?? 0)
-                    ? { boxShadow: ["0 0 4px #4aeecc66", "0 0 10px #4aeecc", "0 0 4px #4aeecc66"] }
-                    : {}}
-                  transition={{ duration: 1.6, repeat: Infinity, delay: i * 0.07 }}
-                  style={{
-                    width: 14, height: 14, borderRadius: 3,
-                    background: i < (energy ?? 0)
-                      ? "linear-gradient(135deg, #2af 0%, #4aeecc 100%)"
-                      : "#0d0d18",
-                    border: `1px solid ${i < (energy ?? 0) ? "#4aeecc" : "#1e1e2e"}`,
-                    transition: "background 0.2s, border-color 0.2s",
-                  }}
-                />
-              ))}
+              {Array.from({ length: 10 }).map((_, i) => {
+                const unlocked = i < (maxEnergy ?? 0);
+                const filled   = i < (energy ?? 0);
+                return (
+                  <motion.div
+                    key={i}
+                    animate={filled ? { boxShadow: ["0 0 4px #4aeecc66", "0 0 10px #4aeecc", "0 0 4px #4aeecc66"] } : {}}
+                    transition={{ duration: 1.6, repeat: Infinity, delay: i * 0.07 }}
+                    style={{
+                      width: 14, height: 14, borderRadius: 3,
+                      background: filled
+                        ? "linear-gradient(135deg, #2af 0%, #4aeecc 100%)"
+                        : unlocked
+                        ? "#111820"
+                        : "#07070e",
+                      border: `1px solid ${filled ? "#4aeecc" : unlocked ? "#1e2e38" : "#111116"}`,
+                      opacity: unlocked ? 1 : 0.35,
+                      transition: "background 0.2s, border-color 0.2s",
+                    }}
+                  />
+                );
+              })}
             </div>
 
             {/* Domain meter */}
@@ -427,14 +494,24 @@ function CenteredLeader({
           </div>
         )}
 
-        {/* The leader card itself */}
+        {/* The leader card itself (or vacant slot) */}
+        {isVacant ? (
+          <div style={{
+            width: 92, height: 130, borderRadius: 8,
+            border: "2px dashed #331144", background: "rgba(20,0,40,0.5)",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+          }}>
+            <div style={{ fontSize: 18, opacity: 0.4 }}>⚔</div>
+            <div style={{ fontSize: 7, color: "#553377", fontWeight: 900, letterSpacing: 1, textAlign: "center" }}>VACANT<br/>ON BOARD</div>
+          </div>
+        ) : (
         <motion.div
           onClick={onSelect}
           whileHover={onSelect ? { scale: 1.07, y: isTop ? 4 : -4 } : undefined}
           whileTap={onSelect ? { scale: 0.96 } : undefined}
           style={{ position: "relative", cursor: onSelect ? "pointer" : "default", userSelect: "none" }}
         >
-          <CharacterCard defId={leader.defId} def={def} size="sm" noHover />
+          <CharacterCard defId={leader.defId} def={def} size="sm" hideAffinityAndCost />
 
           {/* LEADER badge */}
           <div style={{
@@ -452,14 +529,6 @@ function CenteredLeader({
             />
           </div>
 
-          {/* Selection ring */}
-          {selected && (
-            <motion.div
-              animate={{ boxShadow: ["0 0 0 3px #ffcc00, 0 0 18px #ffcc0088", "0 0 0 3px #ffcc00, 0 0 30px #ffcc00cc"] }}
-              transition={{ duration: 0.7, repeat: Infinity, repeatType: "reverse" }}
-              style={{ position: "absolute", inset: -3, borderRadius: 14, pointerEvents: "none" }}
-            />
-          )}
 
           {/* Target ring */}
           {targetable && !selected && (
@@ -470,6 +539,33 @@ function CenteredLeader({
             />
           )}
         </motion.div>
+        )}{/* end isVacant conditional */}
+
+        {/* Stats + domain badge to the RIGHT of card — only for top player */}
+        {isTop && (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+            {!isVacant ? (
+              <div style={{
+                display: "flex", flexDirection: "column", gap: 4,
+                background: "rgba(0,0,0,0.6)", borderRadius: 8, padding: "8px 12px",
+                border: `1px solid ${hpColor}55`,
+              }}>
+                <span style={{ fontSize: 15, fontWeight: 900, color: "#ff8855" }}>⚔ {leader.atk}</span>
+                <div style={{ width: "100%", height: 1, background: "#222" }} />
+                <span style={{ fontSize: 15, fontWeight: 900, color: hpColor }}>♥ {leader.currentHp}<span style={{ fontSize: 10, color: "#556", fontWeight: 600 }}>/{leader.maxHp}</span></span>
+              </div>
+            ) : (
+              <div style={{
+                display: "flex", flexDirection: "column", gap: 4,
+                background: "rgba(0,0,0,0.4)", borderRadius: 8, padding: "8px 12px",
+                border: "1px solid #33334455",
+              }}>
+                <span style={{ fontSize: 11, color: "#444", fontWeight: 700, letterSpacing: 1 }}>ON BOARD</span>
+              </div>
+            )}
+            {domainBadgeDefId && <DomainBadge defId={domainBadgeDefId} />}
+          </div>
+        )}
 
         {/* Spacer to balance the energy panel on the other side */}
         {isActivePlayer && !isTop && <div style={{ width: 110 }} />}
@@ -482,41 +578,85 @@ function CenteredLeader({
 function LeaderRightPanel({
   leader, cardDb, playerName, playerIcon,
   selected, isVacant,
+  domainMeter, domainCooldown, onDomainActivate,
   onSelect,
 }: {
   leader: BattleCard; cardDb: Record<string, CardDef>;
   playerName: string; playerIcon: string;
   selected?: boolean; isVacant?: boolean;
-  onSelect: () => void;
+  domainMeter?: number; domainCooldown?: number; onDomainActivate?: () => void;
+  onSelect: (ev?: React.MouseEvent) => void;
 }) {
   const def = cardDb[leader.defId];
   const hpPct   = Math.max(0, Math.min(100, (leader.currentHp / leader.maxHp) * 100));
   const hpColor = hpPct > 50 ? "#44ff88" : hpPct > 25 ? "#ffcc00" : "#ff4444";
+  const meterFull = (domainMeter ?? 0) >= 100;
 
   return (
     <div style={{
-      width: 160, flexShrink: 0,
+      width: 252, flexShrink: 0,
       background: "rgba(4,4,16,0.88)", borderLeft: "1px solid #111128",
-      display: "flex", flexDirection: "column", alignItems: "center",
-      padding: "10px 10px", gap: 8, justifyContent: "center",
+      display: "flex", flexDirection: "row", alignItems: "stretch",
+      justifyContent: "center",
     }}>
+      {/* Domain column on the left */}
+      {domainMeter !== undefined && (
+        <div style={{
+          width: 77, flexShrink: 0, display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center", gap: 6,
+          padding: "10px 5px", borderRight: "1px solid #111128",
+        }}>
+          <DomainBadge defId={leader.defId} />
+          {/* Vertical meter bar */}
+          <div style={{ width: 12, height: 72, background: "#111", borderRadius: 5, overflow: "hidden", position: "relative" }}>
+            <motion.div
+              animate={{ height: `${domainMeter}%` }}
+              transition={{ duration: 0.4 }}
+              style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: meterFull ? "#c88fff" : "#4455aa", borderRadius: 5 }}
+            />
+          </div>
+          {meterFull && domainCooldown === 0 && (
+            <motion.button
+              onClick={onDomainActivate}
+              whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.94 }}
+              style={{
+                fontSize: 8, fontWeight: 900, letterSpacing: 0.5,
+                background: "linear-gradient(135deg,#7733cc,#c88fff)",
+                border: "none", borderRadius: 5, color: "#fff",
+                padding: "4px 6px", cursor: "pointer", textAlign: "center",
+              }}
+            >Activate</motion.button>
+          )}
+          {meterFull && (domainCooldown ?? 0) > 0 && (
+            <div style={{ fontSize: 8, color: "#c88fff", textAlign: "center", fontWeight: 700 }}>
+              CD:{domainCooldown}T
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Card + info column */}
+      <div style={{
+        flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
+        padding: "10px 12px", gap: 8, justifyContent: "center",
+      }}>
       {/* Player name + icon */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%" }}>
         <div style={{ borderRadius: 5, overflow: "hidden", border: "1px solid #333", flexShrink: 0 }}>
-          <PlayerIcon icon={playerIcon} size={22} style={{ display: "block" }} />
+          <PlayerIcon icon={playerIcon} size={26} style={{ display: "block" }} />
         </div>
-        <span style={{ fontSize: 9, color: "#778", letterSpacing: 1, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{playerName}</span>
+        <span style={{ fontSize: 11, color: "#778", letterSpacing: 1, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{playerName}</span>
       </div>
 
       {/* Leader card (or vacant slot when on board) */}
       {isVacant ? (
         <div style={{
-          width: 90, height: 120, borderRadius: 8,
+          width: 130, height: 175, borderRadius: 8,
           border: "2px dashed #331144", background: "rgba(20,0,40,0.5)",
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
         }}>
-          <div style={{ fontSize: 18, opacity: 0.4 }}>⚔</div>
-          <div style={{ fontSize: 7, color: "#553377", fontWeight: 900, letterSpacing: 1, textAlign: "center" }}>VACANT<br/>ON BOARD</div>
+          <div style={{ fontSize: 22, opacity: 0.4 }}>⚔</div>
+          <div style={{ fontSize: 8, color: "#553377", fontWeight: 900, letterSpacing: 1, textAlign: "center" }}>VACANT<br/>ON BOARD</div>
         </div>
       ) : (
       <motion.div
@@ -525,26 +665,20 @@ function LeaderRightPanel({
         whileTap={{ scale: 0.96 }}
         style={{ position: "relative", cursor: "pointer", userSelect: "none" }}
       >
-        <CharacterCard defId={leader.defId} def={def} size="sm" noHover hideAffinityAndCost />
+        <CharacterCard defId={leader.defId} def={def} size="lg" hideAffinityAndCost />
         <div style={{
-          position: "absolute", top: 4, left: 4,
-          fontSize: 7, fontWeight: 900, letterSpacing: 1,
+          position: "absolute", top: 5, left: 5,
+          fontSize: 8, fontWeight: 900, letterSpacing: 1,
           background: "rgba(255,200,0,0.88)", color: "#000",
-          padding: "1px 6px", borderRadius: 3,
+          padding: "1px 7px", borderRadius: 3,
         }}>LEADER</div>
         {/* HP bar */}
-        <div style={{ position: "absolute", bottom: 2, left: 4, right: 4, height: 4, background: "#111", borderRadius: 2 }}>
+        <div style={{ position: "absolute", bottom: 3, left: 5, right: 5, height: 5, background: "#111", borderRadius: 2 }}>
           <motion.div animate={{ width: `${hpPct}%` }} transition={{ duration: 0.35 }}
             style={{ height: "100%", background: hpColor, borderRadius: 2 }} />
         </div>
-        {selected && (
-          <motion.div
-            animate={{ boxShadow: ["0 0 0 3px #ffcc00, 0 0 18px #ffcc0088", "0 0 0 3px #ffcc00, 0 0 30px #ffcc00cc"] }}
-            transition={{ duration: 0.7, repeat: Infinity, repeatType: "reverse" }}
-            style={{ position: "absolute", inset: -3, borderRadius: 14, pointerEvents: "none" }} />
-        )}
         {leader.stunTurns > 0 && (
-          <div style={{ position: "absolute", top: 4, right: 4, background: "#4488ff", borderRadius: 3, fontSize: 7, fontWeight: 900, padding: "1px 4px", color: "#fff" }}>STUN</div>
+          <div style={{ position: "absolute", top: 5, right: 5, background: "#4488ff", borderRadius: 3, fontSize: 8, fontWeight: 900, padding: "1px 5px", color: "#fff" }}>STUN</div>
         )}
       </motion.div>
       )}
@@ -552,14 +686,15 @@ function LeaderRightPanel({
       {/* Stats row (only when not vacant) */}
       {!isVacant && (
       <div style={{
-        display: "flex", gap: 8, background: "rgba(0,0,0,0.5)", borderRadius: 6, padding: "4px 10px",
+        display: "flex", gap: 8, background: "rgba(0,0,0,0.5)", borderRadius: 6, padding: "5px 12px",
         border: `1px solid ${hpColor}33`, width: "100%", justifyContent: "center",
       }}>
-        <span style={{ fontSize: 11, fontWeight: 900, color: "#ff8855" }}>⚔{leader.atk}</span>
-        <span style={{ fontSize: 11, color: "#334" }}>·</span>
-        <span style={{ fontSize: 11, fontWeight: 900, color: hpColor }}>♥{leader.currentHp}/{leader.maxHp}</span>
+        <span style={{ fontSize: 15, fontWeight: 900, color: "#ff8855" }}>⚔{leader.atk}</span>
+        <span style={{ fontSize: 15, color: "#334" }}>·</span>
+        <span style={{ fontSize: 15, fontWeight: 900, color: hpColor }}>♥{leader.currentHp}/{leader.maxHp}</span>
       </div>
       )}
+      </div>{/* end card+info column */}
     </div>
   );
 }
@@ -575,7 +710,7 @@ function BoardRow({
   pendingId: string | null; targeting: boolean; myBoard: boolean;
   buffTargeting?: boolean;
   cardScale?: number;
-  onSelectCard?: (id: string) => void; onTargetCard?: (id: string) => void;
+  onSelectCard?: (id: string, ev: React.MouseEvent) => void; onTargetCard?: (id: string) => void;
 }) {
   const slotW = Math.round(72 * cardScale);
   const slotH = Math.round(103 * cardScale);
@@ -593,8 +728,8 @@ function BoardRow({
                 selected={pendingId === card.instanceId}
                 targetable={targeting && !myBoard}
                 friendlyTarget={buffTargeting === true && myBoard}
-                onClick={() => {
-                  if (myBoard && onSelectCard) onSelectCard(card.instanceId);
+                onClick={(ev) => {
+                  if (myBoard && onSelectCard) onSelectCard(card.instanceId, ev!);
                   else if (!myBoard && onTargetCard) onTargetCard(card.instanceId);
                 }}
               />
@@ -779,6 +914,7 @@ export default function BattleBoardScreen({
   const [mulliganSubPhase, setMulliganSubPhase] = useState<MulliganSubPhase>("SELECT");
   const [mulliganReturning, setMulliganReturning] = useState<Set<string>>(new Set());
   const [newCardIds, setNewCardIds] = useState<Set<string>>(new Set());
+  const [goSecondSpellHover, setGoSecondSpellHover] = useState<{ x: number; y: number } | null>(null);
 
   const [initialState] = useState(() => createBattleState(p1Draft, p2Draft, cardDb));
   const [engine] = useState(() => createBattleEngine(initialState));
@@ -789,6 +925,8 @@ export default function BattleBoardScreen({
   const [buffOneTargeting, setBuffOneTargeting] = useState<string | null>(null); // spell id for BUFF_ONE (own-card target)
   const [turnBackTargeting, setTurnBackTargeting] = useState(false);
   const [drewCardId, setDrewCardId] = useState<string | null>(null); // card drawn this turn (for animation)
+  const [attackLineStart, setAttackLineStart] = useState<{ x: number; y: number } | null>(null);
+  const [mousePos, setMousePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const doReplace = (pid: PlayerId) => {
     if (mulliganReturning.size === 0) return;
@@ -826,19 +964,15 @@ export default function BattleBoardScreen({
     }
   }, [engine]);
 
-  useEffect(() => {
-    if (battleState.phase === "DRAW") {
-      dispatch({ type: "END_TURN", pid: battleState.activePlayer });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Sync engine with post-mulligan React state when battle starts.
-  // doReplace() updates battleState directly (bypassing the engine), so we
-  // must push that state into the engine before the first real dispatch.
+  // Sync engine with post-mulligan React state when battle starts, then
+  // advance past the DRAW phase so the first player draws their opening card.
+  // doReplace() bypasses the engine, so we push the mulligan result in first.
   useEffect(() => {
     if (mulliganStep === "BATTLE") {
       engine.setState(battleState);
+      if (battleState.phase === "DRAW") {
+        dispatch({ type: "END_TURN", pid: battleState.activePlayer });
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mulliganStep]);
@@ -855,11 +989,27 @@ export default function BattleBoardScreen({
     dispatch({ type: "PLAY_CARD", pid, instanceId, slot });
   };
 
-  const handleSelectAttacker = (instanceId: string) => {
+  const handleSelectAttacker = (instanceId: string, ev?: React.MouseEvent) => {
     const pid = battleState.activePlayer;
-    if (battleState.pendingAttackerId === instanceId) dispatch({ type: "CANCEL_ATTACK", pid });
-    else dispatch({ type: "SELECT_ATTACKER", pid, instanceId });
+    if (battleState.pendingAttackerId === instanceId) {
+      dispatch({ type: "CANCEL_ATTACK", pid });
+      setAttackLineStart(null);
+    } else {
+      dispatch({ type: "SELECT_ATTACKER", pid, instanceId });
+      if (ev) {
+        const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+        setAttackLineStart({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      }
+    }
   };
+
+  // Track mouse for attack line
+  useEffect(() => {
+    if (!battleState.pendingAttackerId) { setAttackLineStart(null); return; }
+    const onMove = (e: MouseEvent) => setMousePos({ x: e.clientX, y: e.clientY });
+    window.addEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, [battleState.pendingAttackerId]);
 
   const handleTargetCard   = (instanceId: string) => {
     const pid = battleState.activePlayer;
@@ -900,7 +1050,7 @@ export default function BattleBoardScreen({
       setBuffOneTargeting(prev => prev === spell.id ? null : spell.id);
       return;
     }
-    if (eff.kind === "DAMAGE_TARGET" || eff.kind === "STUN_ONE" || eff.kind === "PURPLE" || eff.kind === "DESTROY_ONE" || eff.kind === "COPY_BOARD_CARD" || eff.kind === "DAMAGE_TARGET_SELF") {
+    if (eff.kind === "DAMAGE_TARGET" || eff.kind === "STUN_ONE" || eff.kind === "PURPLE" || eff.kind === "DESTROY_ONE" || eff.kind === "COPY_BOARD_CARD" || eff.kind === "DAMAGE_TARGET_SELF" || eff.kind === "SHEEPIFY_ONE") {
       // Needs a target — enter spell targeting mode (deselect any attacker)
       dispatch({ type: "CANCEL_ATTACK", pid });
       setPendingSpellId(prev => prev === spell.id ? null : spell.id);
@@ -968,7 +1118,7 @@ export default function BattleBoardScreen({
           </div>
 
           {/* Cards */}
-          <div style={{ display: "flex", gap: 18, flexWrap: "wrap", justifyContent: "center" }}>
+          <div style={{ display: "flex", gap: 24, flexWrap: "wrap", justifyContent: "center" }}>
             {mPlayer.hand.map(card => {
               const def = cardDb[card.defId];
               const returning  = !isReplaced && mulliganReturning.has(card.instanceId);
@@ -991,7 +1141,26 @@ export default function BattleBoardScreen({
                   whileTap={!isReplaced ? { scale: 0.97 } : undefined}
                   style={{ cursor: isReplaced ? "default" : "pointer", position: "relative" }}
                 >
-                  {def && <CharacterCard defId={card.defId} def={def} size="sm" />}
+                  {def && (
+                    <div style={{ position: "relative" }}>
+                      <CharacterCard defId={card.defId} def={def} size="md" />
+                      <div style={{
+                        position: "absolute", bottom: 0, left: 0, right: 0,
+                        background: "linear-gradient(transparent, rgba(0,0,0,0.92) 30%)",
+                        borderBottomLeftRadius: 10, borderBottomRightRadius: 10,
+                        padding: "18px 6px 6px",
+                        display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                      }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: "#e8e8e8", letterSpacing: 0.3, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%", paddingLeft: 4, paddingRight: 4 }}>
+                          {def.name}
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-around", width: "100%", padding: "1px 6px" }}>
+                          <span style={{ fontSize: 14, fontWeight: 900, color: "#ff8855" }}>⚔{card.atk}</span>
+                          <span style={{ fontSize: 14, fontWeight: 900, color: "#44ff88" }}>♥{card.currentHp}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Selected-to-return overlay */}
                   {returning && (
@@ -1031,32 +1200,33 @@ export default function BattleBoardScreen({
             borderTop: "1px solid #101024",
           }}>
             <div style={{ fontSize: 8, color: "#334", letterSpacing: 3 }}>YOUR LEADER</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
-              {/* Energy crystals */}
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, width: 110 }}>
-                <div style={{ fontSize: 9, color: "#4aeecc", fontWeight: 800, letterSpacing: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 36 }}>
+              {/* Energy + Domain panel */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, width: 160 }}>
+                <div style={{ fontSize: 13, color: "#4aeecc", fontWeight: 900, letterSpacing: 1 }}>
                   ⚡ ENERGY 2/2
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "center" }}>
-                  {Array.from({ length: 2 }).map((_, i) => (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
+                  {Array.from({ length: 10 }).map((_, i) => (
                     <motion.div
                       key={i}
-                      animate={{ boxShadow: ["0 0 4px #4aeecc66", "0 0 10px #4aeecc", "0 0 4px #4aeecc66"] }}
+                      animate={i < 2 ? { boxShadow: ["0 0 4px #4aeecc66", "0 0 10px #4aeecc", "0 0 4px #4aeecc66"] } : {}}
                       transition={{ duration: 1.6, repeat: Infinity, delay: i * 0.07 }}
                       style={{
-                        width: 14, height: 14, borderRadius: 3,
-                        background: "linear-gradient(135deg, #2af 0%, #4aeecc 100%)",
-                        border: "1px solid #4aeecc",
+                        width: 18, height: 18, borderRadius: 4,
+                        background: i < 2 ? "linear-gradient(135deg, #2af 0%, #4aeecc 100%)" : i < 10 ? "#07070e" : "#07070e",
+                        border: `1px solid ${i < 2 ? "#4aeecc" : "#111116"}`,
+                        opacity: i < 10 ? (i < 2 ? 1 : 0.35) : 0.35,
                       }}
                     />
                   ))}
                 </div>
                 <div style={{ width: "100%" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                    <span style={{ fontSize: 7, color: "#2a2a3a", letterSpacing: 1 }}>DOMAIN</span>
-                    <span style={{ fontSize: 7, color: "#2a2a3a" }}>0%</span>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                    <span style={{ fontSize: 11, color: "#2a2a3a", letterSpacing: 1, fontWeight: 700 }}>DOMAIN</span>
+                    <span style={{ fontSize: 11, color: "#2a2a3a" }}>0%</span>
                   </div>
-                  <div style={{ height: 7, background: "#090912", borderRadius: 4, border: "1px solid #1a1a2e" }} />
+                  <div style={{ height: 12, background: "#090912", borderRadius: 6, border: "1px solid #1a1a2e" }} />
                 </div>
               </div>
               {/* Leader card */}
@@ -1065,25 +1235,87 @@ export default function BattleBoardScreen({
                   <CharacterCard
                     defId={mPid === "P1" ? p1Draft.leaderId : p2Draft.leaderId}
                     def={cardDb[mPid === "P1" ? p1Draft.leaderId : p2Draft.leaderId]}
-                    size="sm" noHover
+                    size="lg" noHover
                   />
                 )}
                 <div style={{
-                  position: "absolute", top: 4, left: 4,
-                  fontSize: 7, fontWeight: 900, letterSpacing: 1,
+                  position: "absolute", top: 6, left: 6,
+                  fontSize: 9, fontWeight: 900, letterSpacing: 1,
                   background: "rgba(255,200,0,0.88)", color: "#000",
-                  padding: "1px 6px", borderRadius: 3,
+                  padding: "2px 8px", borderRadius: 4,
                 }}>LEADER</div>
                 <div style={{
-                  position: "absolute", bottom: 22, left: 0, right: 0,
-                  display: "flex", justifyContent: "space-around", padding: "2px 4px",
-                  background: "rgba(0,0,0,0.75)",
+                  position: "absolute", bottom: 28, left: 0, right: 0,
+                  display: "flex", justifyContent: "space-around", padding: "3px 6px",
+                  background: "rgba(0,0,0,0.82)",
                 }}>
-                  <span style={{ fontSize: 10, fontWeight: 900, color: "#ff8855" }}>⚔2</span>
-                  <span style={{ fontSize: 10, fontWeight: 900, color: "#44ff88" }}>♥20/20</span>
+                  <span style={{ fontSize: 14, fontWeight: 900, color: "#ff8855" }}>⚔2</span>
+                  <span style={{ fontSize: 14, fontWeight: 900, color: "#44ff88" }}>♥30/30</span>
                 </div>
               </div>
-              <div style={{ width: 110 }} />
+
+              {/* FIRST / SECOND indicator — right of leader card */}
+              {(() => {
+                const goSecondSpell = mPlayer.spells.find(s => s.synergyId === "go-second");
+                return (
+                  <motion.div
+                    initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}
+                    style={{
+                      width: 160, display: "flex", flexDirection: "column",
+                      alignItems: "center", justifyContent: "center", gap: 14,
+                      padding: "18px 16px", borderRadius: 14,
+                      background: goesFirst ? "rgba(74,238,204,0.07)" : "rgba(204,68,255,0.07)",
+                      border: `1.5px solid ${goesFirst ? "#4aeecc44" : "#cc44ff44"}`,
+                    }}
+                  >
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{
+                        fontSize: 9, letterSpacing: 3, fontWeight: 700, marginBottom: 8,
+                        color: goesFirst ? "#4aeecc88" : "#cc44ff88",
+                      }}>YOU GO</div>
+                      <div style={{
+                        fontSize: 28, fontWeight: 900, letterSpacing: 3,
+                        color: goesFirst ? "#4aeecc" : "#cc44ff",
+                        textShadow: `0 0 20px ${goesFirst ? "#4aeecc66" : "#cc44ff66"}`,
+                      }}>
+                        {goesFirst ? "FIRST" : "SECOND"}
+                      </div>
+                    </div>
+
+                    {goesFirst ? (
+                      <div style={{ fontSize: 10, color: "#4aeecc66", textAlign: "center", lineHeight: 1.4 }}>
+                        You take the first turn
+                      </div>
+                    ) : goSecondSpell ? (
+                      <>
+                        <div
+                          onMouseMove={ev => setGoSecondSpellHover({ x: ev.clientX, y: ev.clientY })}
+                          onMouseLeave={() => setGoSecondSpellHover(null)}
+                          style={{
+                            display: "inline-flex", alignItems: "center", gap: 5,
+                            padding: "5px 12px", borderRadius: 8, cursor: "default",
+                            background: "rgba(204,68,255,0.15)",
+                            border: "1px solid #cc44ff66",
+                            fontSize: 11, fontWeight: 700, color: "#cc44ff",
+                            letterSpacing: 0.5,
+                          }}
+                        >✦ {goSecondSpell.name}</div>
+                        {goSecondSpellHover && (
+                          <HoverTooltip x={goSecondSpellHover.x} y={goSecondSpellHover.y}>
+                            <div style={{ fontSize: 11, fontWeight: 900, color: "#cc44ff", letterSpacing: 2, marginBottom: 6 }}>✦ BONUS SPELL</div>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: "#fff", marginBottom: 8 }}>{goSecondSpell.name}</div>
+                            <div style={{ fontSize: 13, color: "#ccc", lineHeight: 1.6 }}>{goSecondSpell.description}</div>
+                          </HoverTooltip>
+                        )}
+                      </>
+                    ) : (
+                      <div style={{ fontSize: 10, color: "#cc44ff66", textAlign: "center", lineHeight: 1.4 }}>
+                        + bonus spell on start
+                      </div>
+                    )}
+                  </motion.div>
+                );
+              })()}
             </div>
           </div>
 
@@ -1123,23 +1355,6 @@ export default function BattleBoardScreen({
               }}
             >{isReplaced ? "NEXT →" : "KEEP HAND"}</motion.button>
           </div>
-
-          {/* First / Second indicator — below buttons */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-            style={{
-              padding: "8px 20px", borderRadius: 10, textAlign: "center",
-              background: goesFirst ? "rgba(74,238,204,0.1)" : "rgba(204,68,255,0.1)",
-              border: `1px solid ${goesFirst ? "#4aeecc66" : "#cc44ff66"}`,
-            }}
-          >
-            <div style={{ fontSize: 16, fontWeight: 900, color: goesFirst ? "#4aeecc" : "#cc44ff", letterSpacing: 2 }}>
-              {goesFirst ? "FIRST" : "SECOND"}
-            </div>
-            {!goesFirst && (
-              <div style={{ fontSize: 8, color: "#cc44ffaa", letterSpacing: 1, marginTop: 3 }}>+ extra spell</div>
-            )}
-          </motion.div>
         </div>
       </div>
     );
@@ -1171,12 +1386,12 @@ export default function BattleBoardScreen({
   const leaderTargetable =
     // Attack: only when enemy board is fully cleared (or Toji berserk)
     (battleState.pendingAttackerId !== null && (oppBoardCards.length === 0 || player.tojiBerserk)) ||
-    // Damage / stun spells can hit leader; destroy-cheap and purple cannot (board only)
+    // Damage / stun spells can hit any leader (enemy or own); destroy and purple cannot
     (pendingSpell !== null && (pendingSpell.effect.kind === "DAMAGE_TARGET" || pendingSpell.effect.kind === "STUN_ONE" || pendingSpell.effect.kind === "DAMAGE_TARGET_SELF")) ||
-    // Domain action targets enemy
-    battleState.pendingDomainAction !== null;
+    // Domain action targets enemy (sheepify cannot target the leader)
+    (battleState.pendingDomainAction !== null && battleState.pendingDomainAction.kind !== "SHEEPIFY_ENEMY_CARDS");
 
-  const handleOwnCardClick = (instanceId: string) => {
+  const handleOwnCardClick = (instanceId: string, ev?: React.MouseEvent) => {
     if (turnBackTargeting) {
       const spell = player.spells.find(s => s.effect.kind === "TURN_BACK_SHEEP");
       if (spell) {
@@ -1196,7 +1411,13 @@ export default function BattleBoardScreen({
       setPendingSpellId(null);
       return;
     }
-    handleSelectAttacker(instanceId);
+    // Damage spells can now target own cards
+    if (pendingSpellId && (pendingSpell?.effect.kind === "DAMAGE_TARGET" || pendingSpell?.effect.kind === "DAMAGE_TARGET_SELF")) {
+      dispatch({ type: "CAST_SPELL", pid: battleState.activePlayer, spellId: pendingSpellId, targetInstanceId: instanceId });
+      setPendingSpellId(null);
+      return;
+    }
+    handleSelectAttacker(instanceId, ev);
   };
 
   const winnerName = battleState.winner ? (battleState.winner === "P1" ? p1Name : p2Name) : "";
@@ -1211,31 +1432,45 @@ export default function BattleBoardScreen({
       fontFamily: "'Segoe UI', system-ui, sans-serif",
       overflowX: "hidden", overflowY: "hidden", position: "relative",
     }}>
+      {/* Background image */}
+      <div style={{
+        position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0,
+        backgroundImage: "url('https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?w=1920&q=80')",
+        backgroundSize: "cover", backgroundPosition: "center",
+        filter: "blur(6px) brightness(0.18) saturate(1.4)",
+        transform: "scale(1.05)",
+      }} />
       {/* Subtle grid */}
       <div style={{
         position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0,
         background: "repeating-linear-gradient(0deg,transparent,transparent 47px,#080818 48px)",
-        opacity: 0.4,
+        opacity: 0.25,
       }} />
 
       {/* ── OPPONENT LEADER (top, centered) ──────────────────────────────── */}
       <div style={{
-        borderBottom: "1px solid #0c0c1e", background: "rgba(0,0,0,0.2)",
+        background: "rgba(0,0,0,0.2)",
         position: "relative", zIndex: 1, flexShrink: 0,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        overflow: "visible",
       }}>
-        <CenteredLeader
-          leader={opp.leader} cardDb={cardDb}
-          playerName={oppName} playerIcon={oppIcon}
-          targetable={leaderTargetable}
-          onSelect={leaderTargetable ? handleTargetLeader : undefined}
-          isTop
-        />
+        <div style={{ transform: "scale(1.08)", transformOrigin: "center center" }}>
+          <CenteredLeader
+            leader={opp.leader} cardDb={cardDb}
+            playerName={oppName} playerIcon={oppIcon}
+            targetable={leaderTargetable}
+            onSelect={leaderTargetable ? handleTargetLeader : undefined}
+            isTop
+            domainBadgeDefId={opp.leader.defId}
+            isVacant={opp.sukunaBoardMode || opp.mahoragaBoardMode}
+          />
+        </div>
       </div>
 
       {/* ── OPPONENT BOARD ────────────────────────────────────────────────── */}
       <div style={{
         flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-        borderBottom: "2px solid #0d0d22", position: "relative", zIndex: 20,
+        position: "relative", zIndex: 20,
         background: "rgba(0,0,0,0.1)",
         minHeight: 130,
       }}>
@@ -1271,12 +1506,17 @@ export default function BattleBoardScreen({
       <div style={{
         padding: "6px 24px", zIndex: 2,
         background: "rgba(0,0,0,0.7)",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        borderTop: "1px solid #0d0d1e", borderBottom: "1px solid #0d0d1e",
+        display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center",
+        borderTop: "1px solid #111128",
         flexShrink: 0,
       }}>
+        {/* Left: turn counter only */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ fontSize: 8, color: "#1c1c2c", letterSpacing: 3 }}>TURN {battleState.turn}</div>
+          <div style={{ fontSize: 8, color: "#2a2a3a", letterSpacing: 3 }}>TURN {battleState.turn}</div>
+        </div>
+
+        {/* Center: turn indicator + END TURN button side by side */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "center" }}>
           <div style={{
             fontSize: 10, fontWeight: 800, letterSpacing: 2,
             color: pid === "P1" ? "#4a9eff" : "#ff6666",
@@ -1284,9 +1524,22 @@ export default function BattleBoardScreen({
             padding: "3px 12px", borderRadius: 6,
             border: `1px solid ${pid === "P1" ? "#4a9eff33" : "#ff666633"}`,
           }}>{name}'s TURN</div>
+          <motion.button
+            onClick={handleEndTurn}
+            whileHover={{ scale: 1.05, boxShadow: "0 0 16px #44ff8844" }}
+            whileTap={{ scale: 0.95 }}
+            style={{
+              padding: "7px 28px",
+              background: "linear-gradient(135deg, #0a2a12, #0d3a16)",
+              border: "1px solid #44ff8833",
+              borderRadius: 8, color: "#44ff88", fontSize: 11, fontWeight: 900,
+              letterSpacing: 2, cursor: "pointer", fontFamily: "inherit",
+            }}
+          >END TURN →</motion.button>
         </div>
 
-        <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+        {/* Right: targeting / action badges */}
+        <div style={{ display: "flex", gap: 5, alignItems: "center", justifyContent: "flex-end" }}>
           {pendingSpellId && (
             <div style={{
               fontSize: 7, padding: "2px 8px", borderRadius: 4,
@@ -1323,37 +1576,14 @@ export default function BattleBoardScreen({
               color: "#4a9eff", letterSpacing: 1, fontWeight: 900,
             }}>✦ SELECT YOUR CARD TO BUFF</div>
           )}
-          {player.activeSynergies.map(id => (
-            <div key={id} style={{
-              fontSize: 7, padding: "2px 6px", borderRadius: 4,
-              background: "rgba(100,255,150,0.07)", border: "1px solid #44ff8833",
-              color: "#44ff88aa", letterSpacing: 1,
-            }}>✦ {getSynergyLabel(id)}</div>
-          ))}
         </div>
 
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {/* No cancel button — click card again to deselect */}
-          <motion.button
-            onClick={handleEndTurn}
-            whileHover={{ scale: 1.05, boxShadow: "0 0 16px #44ff8844" }}
-            whileTap={{ scale: 0.95 }}
-            style={{
-              padding: "7px 20px",
-              background: "linear-gradient(135deg, #0a2a12, #0d3a16)",
-              border: "1px solid #44ff8822",
-              borderRadius: 8, color: "#44ff88", fontSize: 10, fontWeight: 900,
-              letterSpacing: 2, cursor: "pointer", fontFamily: "inherit",
-            }}
-          >END TURN →</motion.button>
-        </div>
       </div>
 
       {/* ── MY BOARD + LEADER PANEL (row: board center, leader right) ───── */}
       <div style={{
         flex: 1.5, display: "flex", flexDirection: "row",
-        position: "relative", zIndex: 20, minHeight: 200,
-        borderBottom: "1px solid #0d0d22",
+        position: "relative", zIndex: 20, minHeight: 200, overflow: "visible",
       }}>
         <motion.div
           animate={{ opacity: [0.03, 0.07, 0.03] }}
@@ -1364,92 +1594,89 @@ export default function BattleBoardScreen({
         {/* Board area */}
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", zIndex: 1 }}>
           <div style={{ position: "absolute", top: 4, left: 14, fontSize: 8, letterSpacing: 4, color: "#1a1a2a", zIndex: 1 }}>YOUR BOARD</div>
-          <BoardRow
-            board={player.board} cardDb={cardDb} cardScale={1.5}
-            pendingId={battleState.pendingAttackerId}
-            targeting={false} buffTargeting={buffOneTargeting !== null} myBoard
-            onSelectCard={handleOwnCardClick}
+          {player.activeSynergies.length > 0 && (() => {
+            const obtainedSpellNames = new Set([
+              ...player.spells.map(s => s.name),
+              ...player.spellQueue.map(s => s.name),
+            ]);
+            const visibleSynergies = player.activeSynergies.filter(id => {
+              const rule = BATTLE_SYNERGY_RULES.find(r => r.id === id);
+              return rule && !obtainedSpellNames.has(rule.spellName);
+            });
+            return visibleSynergies.length > 0 ? (
+              <div style={{
+                position: "absolute", top: 18, left: 14, zIndex: 2,
+                display: "flex", flexDirection: "column", gap: 4,
+              }}>
+                {visibleSynergies.map(id => <SynergyTag key={id} id={id} />)}
+              </div>
+            ) : null;
+          })()}
+          <div style={{ marginLeft: 250, transform: "scale(1.2)", transformOrigin: "center center" }}>
+            <BoardRow
+              board={player.board} cardDb={cardDb} cardScale={1.5}
+              pendingId={battleState.pendingAttackerId}
+              targeting={pendingSpellId !== null && (pendingSpell?.effect.kind === "DAMAGE_TARGET" || pendingSpell?.effect.kind === "DAMAGE_TARGET_SELF")}
+              buffTargeting={buffOneTargeting !== null} myBoard
+              onSelectCard={handleOwnCardClick}
+            />
+          </div>
+        </div>
+        {/* Leader panel (right) — domain meter is now built-in on the left of the panel */}
+        <div style={{ marginRight: 40 }}>
+          <LeaderRightPanel
+            leader={player.leader} cardDb={cardDb}
+            playerName={name} playerIcon={icon}
+            isVacant={player.mahoragaBoardMode || player.sukunaBoardMode}
+            selected={!player.mahoragaBoardMode && !player.sukunaBoardMode && battleState.pendingAttackerId === player.leader.instanceId}
+            domainMeter={player.domainMeter}
+            domainCooldown={player.domainCooldown}
+            onDomainActivate={() => dispatch({ type: "ACTIVATE_DOMAIN", pid })}
+            onSelect={(ev) => {
+              if (buffOneTargeting) {
+                dispatch({ type: "CAST_SPELL", pid, spellId: buffOneTargeting, targetInstanceId: player.leader.instanceId });
+                setBuffOneTargeting(null);
+                return;
+              }
+              if (pendingSpellId && (pendingSpell?.effect.kind === "DAMAGE_TARGET" || pendingSpell?.effect.kind === "DAMAGE_TARGET_SELF")) {
+                dispatch({ type: "CAST_SPELL", pid, spellId: pendingSpellId, targetInstanceId: player.leader.instanceId });
+                setPendingSpellId(null);
+                return;
+              }
+              handleSelectAttacker(player.leader.instanceId, ev);
+            }}
           />
         </div>
-        {/* Domain panel — right of board, left of leader */}
-        {(() => {
-          const meterFull = player.domainMeter >= 100;
-          return (
-            <div style={{
-              width: 72, flexShrink: 0,
-              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              padding: "10px 8px", borderLeft: "1px solid #1a1a30", borderRight: "1px solid #1a1a30",
-              gap: 6,
-            }}>
-              <span style={{ fontSize: 7, color: meterFull ? "#cc44ff" : "#2a2a3a", letterSpacing: 1, fontWeight: 900 }}>DOMAIN</span>
-              <span style={{ fontSize: 8, color: meterFull ? "#cc44ff" : "#2a2a3a" }}>{player.domainMeter}%</span>
-              {/* Vertical meter bar */}
-              <div style={{ flex: 1, width: 16, maxHeight: 80, minHeight: 40, background: "#090912", borderRadius: 4, overflow: "hidden", border: "1px solid #1a1a2e", position: "relative" }}>
-                <motion.div
-                  animate={{ height: `${player.domainMeter}%` }}
-                  transition={{ duration: 0.4 }}
-                  style={{
-                    position: "absolute", bottom: 0, left: 0, right: 0,
-                    background: meterFull ? "linear-gradient(0deg, #cc44ff, #ff44cc)" : "linear-gradient(0deg, #3a1070, #5a1eaa)",
-                    borderRadius: 4,
-                    boxShadow: meterFull ? "0 0 8px #cc44ffaa" : "none",
-                  }}
-                />
-              </div>
-              {meterFull && player.domainCooldown === 0 && (
-                <motion.button
-                  onClick={() => dispatch({ type: "ACTIVATE_DOMAIN", pid })}
-                  animate={{ boxShadow: ["0 0 8px #cc44ff77", "0 0 18px #cc44ffbb", "0 0 8px #cc44ff77"] }}
-                  transition={{ duration: 1.2, repeat: Infinity }}
-                  style={{
-                    width: "100%",
-                    background: "linear-gradient(135deg, #3a0066, #7700bb)",
-                    border: "2px solid #cc44ff", borderRadius: 7,
-                    color: "#fff", fontSize: 7, fontWeight: 900, letterSpacing: 1,
-                    padding: "5px 2px", cursor: "pointer", fontFamily: "inherit",
-                  }}
-                >✦ DOMAIN</motion.button>
-              )}
-              {meterFull && player.domainCooldown > 0 && (
-                <div style={{ width: "100%", textAlign: "center", fontSize: 7, color: "#7744aa", fontWeight: 900, letterSpacing: 1 }}>
-                  READY<br/>CD: {player.domainCooldown}T
-                </div>
-              )}
-            </div>
-          );
-        })()}
-        {/* Leader panel (right) */}
-        <LeaderRightPanel
-          leader={player.leader} cardDb={cardDb}
-          playerName={name} playerIcon={icon}
-          isVacant={player.mahoragaBoardMode}
-          selected={!player.mahoragaBoardMode && battleState.pendingAttackerId === player.leader.instanceId}
-          onSelect={() => {
-            if (buffOneTargeting) {
-              dispatch({ type: "CAST_SPELL", pid, spellId: buffOneTargeting, targetInstanceId: player.leader.instanceId });
-              setBuffOneTargeting(null);
-              return;
-            }
-            handleSelectAttacker(player.leader.instanceId);
-          }}
-        />
       </div>
 
       {/* ── HAND + SPELLS + DECK (bottom row) ───────────────────────────────── */}
       <div style={{
         flexShrink: 0, display: "flex", flexDirection: "row",
         background: "rgba(0,0,0,0.35)", borderTop: "1px solid #0c0c1e",
-        position: "relative", zIndex: 30, minHeight: 130, overflow: "visible",
+        position: "relative", zIndex: 30, height: 185, overflow: "visible",
       }}>
-        {/* Spells panel (left column) — always 4 slots */}
+        {/* Spells panel — absolutely positioned, fixed height matching hand row */}
+        <div style={{
+          position: "absolute", left: 0, bottom: 0, zIndex: 40,
+          display: "flex", flexDirection: "row",
+          background: "rgba(0,0,0,0.35)", borderTop: "1px solid #1a1a30",
+        }}>
+        {/* Spells grid */}
         <div style={{
           flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
-          padding: "10px 12px", borderRight: "1px solid #1a1a30", gap: 8, minWidth: 220,
+          padding: "10px 12px", borderRight: "1px solid #1a1a30", gap: 8,
         }}>
-          <div style={{ fontSize: 7, color: "#334", letterSpacing: 3, fontWeight: 700 }}>
-            SPELLS{player.spellQueue.length > 0 && <span style={{ color: "#cc44ff", marginLeft: 4 }}>+{player.spellQueue.length} QUEUED</span>}
+          <div style={{ fontSize: 9, color: "#556", letterSpacing: 3, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+            SPELLS
+            {player.spellQueue.length > 0 && (
+              <span style={{
+                color: "#ee66ff", fontWeight: 900, fontSize: 11,
+                background: "rgba(180,50,255,0.15)", border: "1px solid #cc44ff55",
+                borderRadius: 5, padding: "1px 8px", letterSpacing: 1,
+              }}>+{player.spellQueue.length} QUEUED</span>
+            )}
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             {Array.from({ length: 4 }).map((_, i) => {
               const spell = player.spells[i];
               if (spell) {
@@ -1464,21 +1691,21 @@ export default function BattleBoardScreen({
               }
               return (
                 <div key={`empty-${i}`} style={{
-                  width: 90, borderRadius: 10, padding: "10px 8px",
+                  borderRadius: 10, padding: "14px 10px",
                   background: "rgba(255,255,255,0.01)",
                   border: "1px dashed #1a1a2a",
                   display: "flex", flexDirection: "column", alignItems: "center",
-                  justifyContent: "center", gap: 6, minHeight: 100,
+                  justifyContent: "center", gap: 6, minHeight: 110, minWidth: 110,
                 }}>
-                  <div style={{ fontSize: 18, color: "#1a1a2a" }}>✦</div>
-                  <div style={{ fontSize: 7, color: "#1a1a2a", letterSpacing: 1 }}>EMPTY</div>
+                  <div style={{ fontSize: 22, color: "#1a1a2a" }}>✦</div>
+                  <div style={{ fontSize: 8, color: "#1a1a2a", letterSpacing: 1 }}>EMPTY</div>
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* GET SPELL button column (right of spells) */}
+        {/* GET SPELL button */}
         <div style={{
           flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
           justifyContent: "center", padding: "10px 10px", borderRight: "1px solid #1a1a30", gap: 6, minWidth: 80,
@@ -1529,6 +1756,11 @@ export default function BattleBoardScreen({
           })()}
         </div>
 
+        </div>{/* close absolute spell+getspell wrapper */}
+
+        {/* Spacer matching the absolute spell panel width so energy/hand/deck don't overlap */}
+        <div style={{ flexShrink: 0, width: 370 }} />
+
         {/* Energy column — compact vertical strip between GET SPELL and hand cards */}
         <div style={{
           flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
@@ -1539,30 +1771,31 @@ export default function BattleBoardScreen({
             ⚡ {player.energy}/{player.maxEnergy}
           </span>
           <div style={{ display: "flex", flexDirection: "row", flexWrap: "wrap", gap: 4, justifyContent: "center" }}>
-            {Array.from({ length: player.maxEnergy }).map((_, i) => (
-              <motion.div key={i}
-                animate={i < player.energy
-                  ? { boxShadow: ["0 0 6px #4aeecc88", "0 0 16px #4aeecc", "0 0 6px #4aeecc88"] }
-                  : {}}
-                transition={{ duration: 1.6, repeat: Infinity, delay: i * 0.06 }}
-                style={{
-                  width: 20, height: 20, borderRadius: 5,
-                  background: i < player.energy
-                    ? "linear-gradient(135deg, #1adfff 0%, #4aeecc 100%)"
-                    : "#0d0d18",
-                  border: `1px solid ${i < player.energy ? "#4aeecc" : "#1e1e2e"}`,
-                  transition: "background 0.2s, border-color 0.2s",
-                }}
-              />
-            ))}
+            {Array.from({ length: 10 }).map((_, i) => {
+              const unlocked = i < player.maxEnergy;
+              const filled   = i < player.energy;
+              return (
+                <motion.div key={i}
+                  animate={filled ? { boxShadow: ["0 0 6px #4aeecc88", "0 0 16px #4aeecc", "0 0 6px #4aeecc88"] } : {}}
+                  transition={{ duration: 1.6, repeat: Infinity, delay: i * 0.06 }}
+                  style={{
+                    width: 20, height: 20, borderRadius: 5,
+                    background: filled ? "linear-gradient(135deg, #1adfff 0%, #4aeecc 100%)" : unlocked ? "#111820" : "#07070e",
+                    border: `1px solid ${filled ? "#4aeecc" : unlocked ? "#1e2e38" : "#111116"}`,
+                    opacity: unlocked ? 1 : 0.35,
+                    transition: "background 0.2s, border-color 0.2s",
+                  }}
+                />
+              );
+            })}
           </div>
         </div>
 
         {/* Hand cards */}
         <div style={{ flex: 1, display: "flex", overflow: "visible", position: "relative", zIndex: 10 }}>
           <div style={{
-            flex: 1, display: "flex", gap: 14, justifyContent: "center", alignItems: "center",
-            padding: "8px 20px 8px", overflow: "visible",
+            flex: 1, display: "flex", gap: 22, justifyContent: "center", alignItems: "center",
+            padding: "8px 20px 8px", overflow: "visible", marginLeft: -300,
           }}>
             {player.hand.map(card => {
               const isDrawn = drewCardId === card.instanceId;
@@ -1572,13 +1805,15 @@ export default function BattleBoardScreen({
                   initial={isDrawn ? { y: 60, opacity: 0 } : false}
                   animate={{ y: 0, opacity: 1 }}
                   transition={isDrawn ? { type: "spring", stiffness: 380, damping: 22 } : {}}
-                  style={{ flexShrink: 0, position: "relative", zIndex: 10, transform: "scale(1.1)", transformOrigin: "center center" }}
+                  style={{ flexShrink: 0, position: "relative", zIndex: 10 }}
                 >
-                  <HandCardView
-                    card={card} cardDb={cardDb}
-                    energy={player.energy} costReduction={player.costReduction}
-                    onPlay={() => handlePlayCard(card.instanceId)}
-                  />
+                  <div style={{ transform: "scale(1.25)", transformOrigin: "bottom center" }}>
+                    <HandCardView
+                      card={card} cardDb={cardDb}
+                      energy={player.energy} costReduction={player.costReduction}
+                      onPlay={() => handlePlayCard(card.instanceId)}
+                    />
+                  </div>
                 </motion.div>
               );
             })}
@@ -1618,6 +1853,28 @@ export default function BattleBoardScreen({
           <div style={{ fontSize: 8, color: "#334", letterSpacing: 3 }}>DECK</div>
         </div>
       </div>
+
+      {/* ── Attack line SVG overlay ──────────────────────────────────────── */}
+      {attackLineStart && battleState.pendingAttackerId && (
+        <svg style={{
+          position: "fixed", inset: 0, width: "100vw", height: "100vh",
+          pointerEvents: "none", zIndex: 8000,
+        }}>
+          <defs>
+            <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L8,3 z" fill="#ff2222" />
+            </marker>
+          </defs>
+          <line
+            x1={attackLineStart.x} y1={attackLineStart.y}
+            x2={mousePos.x} y2={mousePos.y}
+            stroke="#ff2222" strokeWidth="2.5" strokeDasharray="8 5"
+            markerEnd="url(#arrowhead)"
+            style={{ filter: "drop-shadow(0 0 6px #ff2222aa)" }}
+          />
+          <circle cx={attackLineStart.x} cy={attackLineStart.y} r="5" fill="#ff2222" opacity="0.8" />
+        </svg>
+      )}
 
       {/* ── Overlays ─────────────────────────────────────────────────────── */}
       <AnimatePresence>

@@ -7,6 +7,7 @@ import PlayerIcon from "../components/PlayerIcon";
 import { BG } from "../backgrounds";
 import AmbientCanvas from "../components/AmbientCanvas";
 import AmbientOverlay from "../components/AmbientOverlay";
+import { BATTLE_SYNERGY_RULES } from "../battleEngine";
 
 interface Props {
   winner: PlayerId;
@@ -20,33 +21,69 @@ interface Props {
   onMenu: () => void;
 }
 
-// Two rows of cards (up to 5 per row) at a reasonable size
-function DeckGrid({ ids, cardDb, color }: { ids: string[]; cardDb: Record<string, CardDef>; color: string }) {
-  const rows = [ids.slice(0, 5), ids.slice(5, 10)];
+function computeSynergies(ids: string[], cardDb: Record<string, CardDef>): string[] {
+  const active: string[] = [];
+  for (const rule of BATTLE_SYNERGY_RULES) {
+    const count = ids.filter(id => {
+      const def = cardDb[id];
+      return def && rule.tags.every(tag => (def.tags ?? []).includes(tag));
+    }).length;
+    if (count >= rule.minCount) active.push(rule.id);
+  }
+  return active;
+}
+
+
+function SynergyPanel({ synergies, color, side }: { synergies: string[]; color: string; side: "left" | "right" }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "center" }}>
-      {rows.map((row, ri) =>
-        row.length > 0 ? (
-          <div key={ri} style={{ display: "flex", gap: 6, justifyContent: "center" }}>
-            {row.map((id, ci) => {
-              const def = cardDb[id];
-              if (!def) return null;
-              return (
-                <motion.div
-                  key={id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: (ri * 5 + ci) * 0.04 }}
-                  style={{ transform: "scale(0.80)", transformOrigin: "center top" }}
-                >
-                  <CharacterCard defId={id} def={def} size="sm" />
-                </motion.div>
-              );
-            })}
-          </div>
-        ) : null
+    <motion.div
+      initial={{ opacity: 0, x: side === "left" ? -24 : 24 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: 0.4, duration: 0.5 }}
+      style={{
+        width: 148, flexShrink: 0,
+        display: "flex", flexDirection: "column", gap: 6,
+        padding: "12px 10px",
+        borderRadius: 12,
+        background: "rgba(4,4,12,0.88)",
+        border: `1px solid ${color}22`,
+        alignSelf: "flex-start",
+      }}
+    >
+      <div style={{ fontSize: 7, letterSpacing: 3, color: `${color}88`, fontWeight: 700, textAlign: "center", marginBottom: 2 }}>
+        SYNERGIES ACTIVATED
+      </div>
+      {synergies.length === 0 ? (
+        <div style={{ fontSize: 8, color: "#2a2a3a", textAlign: "center", padding: "8px 0", letterSpacing: 1 }}>
+          NONE
+        </div>
+      ) : (
+        synergies.map((id, i) => {
+          const rule = BATTLE_SYNERGY_RULES.find(r => r.id === id);
+          if (!rule) return null;
+          return (
+            <motion.div
+              key={id}
+              initial={{ opacity: 0, x: side === "left" ? -8 : 8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.5 + i * 0.07 }}
+              style={{
+                padding: "6px 8px", borderRadius: 8,
+                background: `${color}0e`,
+                border: `1px solid ${color}33`,
+              }}
+            >
+              <div style={{ fontSize: 9, fontWeight: 800, color, letterSpacing: 0.5, marginBottom: 2 }}>
+                ✦ {rule.label}
+              </div>
+              <div style={{ fontSize: 7, color: "#556", letterSpacing: 0.3, lineHeight: 1.4 }}>
+                {rule.spellName}
+              </div>
+            </motion.div>
+          );
+        })
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -57,7 +94,6 @@ function PlayerPanel({
   isWinner: boolean; color: string; side: "left" | "right";
 }) {
   const leaderDef = cardDb[draft.leaderId];
-  const deckIds   = [...draft.combatIds, ...draft.supportIds, ...draft.extraIds];
   const wins   = (profile.quickStats?.wins ?? 0) + (profile.draftStats?.wins ?? 0);
   const losses = (profile.quickStats?.losses ?? 0) + (profile.draftStats?.losses ?? 0);
   const wlPct  = (wins + losses) > 0 ? ((wins / (wins + losses)) * 100).toFixed(0) + "%" : "—";
@@ -68,9 +104,9 @@ function PlayerPanel({
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: 0.25, duration: 0.5 }}
       style={{
-        flex: 1, maxWidth: 480,
-        display: "flex", flexDirection: "column", alignItems: "center", gap: 12,
-        padding: "20px 24px 18px", borderRadius: 20,
+        flex: 1, maxWidth: 280,
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+        padding: "12px 12px 10px", borderRadius: 14,
         background: isWinner
           ? `radial-gradient(ellipse at 50% 0%, ${color}25, rgba(4,4,12,0.97))`
           : "rgba(4,4,12,0.9)",
@@ -95,65 +131,52 @@ function PlayerPanel({
       {/* Result badge */}
       {isWinner ? (
         <motion.div
-          animate={{ boxShadow: [`0 0 16px ${color}66`, `0 0 36px ${color}cc`, `0 0 16px ${color}66`] }}
+          animate={{ boxShadow: [`0 0 10px ${color}66`, `0 0 24px ${color}cc`, `0 0 10px ${color}66`] }}
           transition={{ duration: 1.6, repeat: Infinity }}
           style={{
-            padding: "6px 24px", borderRadius: 20,
+            padding: "4px 16px", borderRadius: 14,
             background: color,
-            fontSize: 11, fontWeight: 900, letterSpacing: 5,
-            color: "#000",
+            fontSize: 8, fontWeight: 900, letterSpacing: 4, color: "#000",
           }}
         >🏆 WINNER</motion.div>
       ) : (
         <div style={{
-          padding: "4px 18px", borderRadius: 20,
+          padding: "3px 12px", borderRadius: 14,
           background: "rgba(255,255,255,0.03)",
           border: "1px solid #1a1a2a",
-          fontSize: 9, fontWeight: 700, letterSpacing: 4, color: "#2a2a3a",
+          fontSize: 7, fontWeight: 700, letterSpacing: 3, color: "#2a2a3a",
         }}>DEFEATED</div>
       )}
 
       {/* Avatar + name */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
         <motion.div
-          animate={isWinner ? { boxShadow: [`0 0 20px ${color}55`, `0 0 40px ${color}88`, `0 0 20px ${color}55`] } : {}}
+          animate={isWinner ? { boxShadow: [`0 0 14px ${color}55`, `0 0 28px ${color}88`, `0 0 14px ${color}55`] } : {}}
           transition={{ duration: 2, repeat: Infinity }}
-          style={{
-            width: 64, height: 64, borderRadius: "50%",
-            border: `3px solid ${color}`,
-            overflow: "hidden",
-          }}
+          style={{ borderRadius: 10, border: `2px solid ${color}`, overflow: "hidden" }}
         >
-          <PlayerIcon icon={profile.icon} size={64} style={{ display: "block" }} />
+          <PlayerIcon icon={profile.icon} size={60} style={{ display: "block" }} />
         </motion.div>
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>{profile.name}</div>
-          <div style={{ fontSize: 8, color: color, letterSpacing: 3, marginTop: 2 }}>
+          <div style={{ fontSize: 12, fontWeight: 900, color: "#fff" }}>{profile.name}</div>
+          <div style={{ fontSize: 7, color, letterSpacing: 3, marginTop: 2 }}>
             PLAYER {color === "#4a9eff" ? "1" : "2"}
           </div>
         </div>
       </div>
 
-      {/* Leader + label */}
+      {/* Leader card */}
       {leaderDef && (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-          <div style={{ fontSize: 8, color: "#334", letterSpacing: 3 }}>LEADER</div>
-          <div style={{ transform: "scale(0.70)", transformOrigin: "center top" }}>
-            <CharacterCard defId={draft.leaderId} def={leaderDef} size="lg" />
-          </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+          <div style={{ fontSize: 6, color: "#334", letterSpacing: 3 }}>LEADER</div>
+          <CharacterCard defId={draft.leaderId} def={leaderDef} size="lg" noHover hideAffinityAndCost />
         </div>
       )}
-
-      {/* Drafted deck in rows */}
-      <div style={{ width: "100%", textAlign: "center" }}>
-        <div style={{ fontSize: 8, color: "#334", letterSpacing: 3, marginBottom: 10 }}>DRAFTED DECK</div>
-        <DeckGrid ids={deckIds} cardDb={cardDb} color={color} />
-      </div>
 
       {/* Stats */}
       <div style={{
         display: "flex", gap: 0, width: "100%",
-        borderTop: "1px solid #1a1a2a", paddingTop: 14, marginTop: 2,
+        borderTop: "1px solid #1a1a2a", paddingTop: 8, marginTop: 2,
       }}>
         {[
           { label: "DRAFT WINS",   value: String(profile.draftStats?.wins ?? 0),   c: "#44ff88" },
@@ -161,8 +184,8 @@ function PlayerPanel({
           { label: "WIN RATE",     value: wlPct,                                     c: color },
         ].map(({ label, value, c }) => (
           <div key={label} style={{ flex: 1, textAlign: "center" }}>
-            <div style={{ fontSize: 20, fontWeight: 900, color: c }}>{value}</div>
-            <div style={{ fontSize: 7, color: "#334", letterSpacing: 2, marginTop: 2 }}>{label}</div>
+            <div style={{ fontSize: 13, fontWeight: 900, color: c }}>{value}</div>
+            <div style={{ fontSize: 5, color: "#334", letterSpacing: 2, marginTop: 2 }}>{label}</div>
           </div>
         ))}
       </div>
@@ -175,6 +198,11 @@ export default function PostGameScreen({
 }: Props) {
   const winnerProfile = winner === "P1" ? p1Profile : p2Profile;
   const winnerColor   = winner === "P1" ? "#4a9eff" : "#ff6666";
+
+  const p1DeckIds = [...p1Draft.combatIds, ...p1Draft.supportIds, ...p1Draft.extraIds];
+  const p2DeckIds = [...p2Draft.combatIds, ...p2Draft.supportIds, ...p2Draft.extraIds];
+  const p1Synergies = computeSynergies([p1Draft.leaderId, ...p1DeckIds], cardDb);
+  const p2Synergies = computeSynergies([p2Draft.leaderId, ...p2DeckIds], cardDb);
 
   return (
     <div style={{
@@ -191,7 +219,7 @@ export default function PostGameScreen({
       <div style={{
         position: "relative", zIndex: 3,
         display: "flex", flexDirection: "column", alignItems: "center",
-        padding: "28px 24px 24px", gap: 20, width: "100%", maxWidth: 1060,
+        padding: "20px 16px 16px", gap: 14, width: "100%", maxWidth: 960,
         overflowY: "auto",
       }}>
         {/* Title */}
@@ -199,24 +227,24 @@ export default function PostGameScreen({
           initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}
           style={{ textAlign: "center" }}
         >
-          <div style={{ fontSize: 10, letterSpacing: 5, color: "#334", marginBottom: 6 }}>BATTLE OVER</div>
-          <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: 3, color: "#778", marginBottom: 4 }}>
-            Winner
-          </div>
+          <div style={{ fontSize: 8, letterSpacing: 5, color: "#334", marginBottom: 4 }}>BATTLE OVER</div>
+          <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: 3, color: "#778", marginBottom: 3 }}>Winner</div>
           <motion.div
-            animate={{ textShadow: [`0 0 30px ${winnerColor}88`, `0 0 60px ${winnerColor}cc`, `0 0 30px ${winnerColor}88`] }}
+            animate={{ textShadow: [`0 0 20px ${winnerColor}88`, `0 0 42px ${winnerColor}cc`, `0 0 20px ${winnerColor}88`] }}
             transition={{ duration: 1.8, repeat: Infinity }}
-            style={{ fontSize: 38, fontWeight: 900, letterSpacing: 3, color: winnerColor, marginBottom: 4 }}
+            style={{ fontSize: 27, fontWeight: 900, letterSpacing: 3, color: winnerColor, marginBottom: 3 }}
           >
             {winnerProfile.name}
           </motion.div>
-          <div style={{ fontSize: 9, color: "#334", letterSpacing: 3 }}>
+          <div style={{ fontSize: 7, color: "#334", letterSpacing: 3 }}>
             {turnCount} TURNS · DRAFT BATTLE
           </div>
         </motion.div>
 
-        {/* Player panels */}
-        <div style={{ display: "flex", gap: 18, width: "100%", alignItems: "flex-start" }}>
+        {/* Main row: synergy | P1 | VS | P2 | synergy */}
+        <div style={{ display: "flex", gap: 10, width: "100%", alignItems: "flex-start" }}>
+          <SynergyPanel synergies={p1Synergies} color="#4a9eff" side="left" />
+
           <PlayerPanel
             profile={p1Profile} draft={p1Draft} cardDb={cardDb}
             isWinner={winner === "P1"} color="#4a9eff" side="left"
@@ -225,20 +253,22 @@ export default function PostGameScreen({
           {/* Center divider */}
           <div style={{
             display: "flex", flexDirection: "column", alignItems: "center",
-            gap: 10, paddingTop: 90, flexShrink: 0,
+            gap: 7, paddingTop: 56, flexShrink: 0,
           }}>
             <motion.div
               animate={{ opacity: [0.4, 1, 0.4], scale: [1, 1.06, 1] }}
               transition={{ duration: 2, repeat: Infinity }}
-              style={{ fontSize: 26, fontWeight: 900, color: "#ff3333" }}
+              style={{ fontSize: 18, fontWeight: 900, color: "#ff3333" }}
             >VS</motion.div>
-            <div style={{ width: 2, height: 100, background: "linear-gradient(to bottom, transparent, #ff333444, transparent)" }} />
+            <div style={{ width: 2, height: 60, background: "linear-gradient(to bottom, transparent, #ff333444, transparent)" }} />
           </div>
 
           <PlayerPanel
             profile={p2Profile} draft={p2Draft} cardDb={cardDb}
             isWinner={winner === "P2"} color="#ff6666" side="right"
           />
+
+          <SynergyPanel synergies={p2Synergies} color="#ff6666" side="right" />
         </div>
 
         {/* Buttons */}
@@ -250,22 +280,22 @@ export default function PostGameScreen({
             whileHover={{ scale: 1.05, y: -2 }} whileTap={{ scale: 0.97 }}
             onClick={onPlayAgain}
             style={{
-              padding: "12px 38px",
+              padding: "8px 26px",
               background: `linear-gradient(135deg, ${winnerColor}88, ${winnerColor})`,
-              border: "none", borderRadius: 12,
-              color: "#000", fontSize: 12, fontWeight: 900, letterSpacing: 5,
+              border: "none", borderRadius: 8,
+              color: "#000", fontSize: 9, fontWeight: 900, letterSpacing: 4,
               cursor: "pointer", fontFamily: "inherit",
-              boxShadow: `0 0 28px ${winnerColor}44`,
+              boxShadow: `0 0 20px ${winnerColor}44`,
             }}
           >PLAY AGAIN</motion.button>
           <motion.button
             whileHover={{ scale: 1.05, y: -2 }} whileTap={{ scale: 0.97 }}
             onClick={onMenu}
             style={{
-              padding: "12px 38px",
+              padding: "8px 26px",
               background: "rgba(255,255,255,0.04)",
-              border: "1px solid #252535", borderRadius: 12,
-              color: "#556", fontSize: 12, fontWeight: 700, letterSpacing: 5,
+              border: "1px solid #252535", borderRadius: 8,
+              color: "#556", fontSize: 9, fontWeight: 700, letterSpacing: 4,
               cursor: "pointer", fontFamily: "inherit",
             }}
           >MAIN MENU</motion.button>

@@ -284,12 +284,16 @@ interface CharacterCardProps {
   smallBadges?: boolean;
   /** Show ATK/HP stats inside the card + cost badge on top-right (moves with card tilt) */
   showStats?: { atk: number; hp: number };
+  /** Show an HP bar inside the card info strip */
+  hpBar?: { current: number; max: number };
+  /** Render name + ATK/HP + HP bar as an overlay inside the card (art stays full height) */
+  statsOverlay?: { name?: string; atk: number; hp: number; maxHp: number };
 }
 
 export default function CharacterCard({
   defId, def, size = "md", selected = false, dimmed = false,
   equippedBonus, overlay, noHover = false, costOverride, rarityOverride, starLevel = 0,
-  hideInfo = false, hideAffinityAndCost = false, smallBadges = false, showStats,
+  hideInfo = false, hideAffinityAndCost = false, smallBadges = false, showStats, hpBar, statsOverlay,
 }: CharacterCardProps) {
   const [imgFailed, setImgFailed] = useState(false);
   const [sheenPos, setSheenPos] = useState({ x: 50, y: 50 });
@@ -299,11 +303,11 @@ export default function CharacterCard({
   // Stable random phase offset so each card floats out-of-sync with neighbours
   const floatDelay = useRef(Math.random() * 3.2);
 
-  // 3D tilt — spring-damped so it feels physical
+  // 3D tilt — firm spring, minimal wobble
   const rawRotX = useMotionValue(0);
   const rawRotY = useMotionValue(0);
-  const rotX = useSpring(rawRotX, { stiffness: 280, damping: 22 });
-  const rotY = useSpring(rawRotY, { stiffness: 280, damping: 22 });
+  const rotX = useSpring(rawRotX, { stiffness: 500, damping: 40 });
+  const rotY = useSpring(rawRotY, { stiffness: 500, damping: 40 });
 
   // Parallax offsets — badge/icon nearest viewer (+9 px swing); name/pts mid-depth (+4 px).
   const badgeX = useTransform(rotY, [-18, 18], [-9,  9]);
@@ -319,8 +323,8 @@ export default function CharacterCard({
     const ny = (e.clientY - rect.top)  / rect.height;
     setSheenPos({ x: nx * 100, y: ny * 100 });
     if (!noHover && !dimmed) {
-      rawRotY.set((nx - 0.5) * 36);  // ±18° horizontal
-      rawRotX.set(-(ny - 0.5) * 30); // ±15° vertical
+      rawRotY.set((nx - 0.5) * 16);
+      rawRotX.set(-(ny - 0.5) * 12);
     }
   };
 
@@ -357,7 +361,6 @@ export default function CharacterCard({
         width: d.w, height: d.h,
         borderRadius: 10,
         boxShadow: baseShadow,
-        opacity: dimmed ? 0.45 : 1,
         position: "relative",
         flexShrink: 0,
         cursor: "inherit",
@@ -374,10 +377,10 @@ export default function CharacterCard({
             : { y: 0, scale: 1 }
       }
       whileHover={!noHover && !dimmed ? {
-        y: selected ? -12 : -10,
-        scale: selected ? 1.08 : 1.06,
+        y: selected ? -8 : -6,
+        scale: selected ? 1.05 : 1.03,
         boxShadow: hoverShadow,
-        transition: { type: "spring", stiffness: 420, damping: 22 },
+        transition: { type: "spring", stiffness: 600, damping: 45 },
       } : undefined}
       transition={
         selected || noHover || dimmed
@@ -467,22 +470,7 @@ export default function CharacterCard({
           </div>
         )}
 
-        {/* Cost badge (always shows energy cost; costOverride lets callers force a specific value) */}
-        <motion.div style={{
-          position: "absolute", top: 4, left: 4,
-          fontSize: smallBadges ? 8 : d.rarityFontSize + 3, fontWeight: 900,
-          color: "#4aeecc",
-          background: "#000000cc", borderRadius: 5, padding: smallBadges ? "1px 4px" : "2px 7px",
-          letterSpacing: 0,
-          border: "1px solid #4aeecc88",
-          backdropFilter: "blur(4px)",
-          textShadow: "0 0 8px #4aeecc99",
-          x: !noHover && !dimmed ? badgeX : 0,
-          y: !noHover && !dimmed ? badgeY : 0,
-          zIndex: 5,
-        }}>
-          {costOverride !== undefined ? costOverride : (def ? deriveStats(def).cost : "?")}
-        </motion.div>
+        {/* Cost bubble — pinned to top-left corner, outside the card clip */}
 
         {/* Affinity icon — same depth as badge */}
         {def?.affinity && (
@@ -525,7 +513,17 @@ export default function CharacterCard({
         {showStats && (
           <div style={{ display: "flex", justifyContent: "space-around", alignItems: "center" }}>
             <span style={{ fontSize: d.ptsFontSize, fontWeight: 900, color: "#ff8855" }}>⚔{showStats.atk}</span>
-            <span style={{ fontSize: d.ptsFontSize, fontWeight: 900, color: "#44ff88" }}>♥{showStats.hp}</span>
+            <span style={{ fontSize: d.ptsFontSize, fontWeight: 900, color: hpBar ? (hpBar.current / hpBar.max > 0.6 ? "#44ff88" : hpBar.current / hpBar.max > 0.3 ? "#ffcc00" : "#ff4444") : "#44ff88" }}>♥{showStats.hp}</span>
+          </div>
+        )}
+        {hpBar && (
+          <div style={{ width: "100%", height: 3, background: "#111", borderRadius: 2, overflow: "hidden" }}>
+            <div style={{
+              height: "100%", borderRadius: 2,
+              width: `${Math.max(0, Math.min(100, (hpBar.current / hpBar.max) * 100))}%`,
+              background: hpBar.current / hpBar.max > 0.6 ? "#44ff88" : hpBar.current / hpBar.max > 0.3 ? "#ffcc00" : "#ff4444",
+              transition: "width 0.3s",
+            }} />
           </div>
         )}
         {equippedBonus !== undefined && (
@@ -617,6 +615,15 @@ export default function CharacterCard({
         </>
       )}
 
+      {/* ── Dim overlay — replaces opacity on parent so sheen can escape it ── */}
+      {dimmed && (
+        <div style={{
+          position: "absolute", inset: 0, borderRadius: 9,
+          background: "rgba(0,0,0,0.58)",
+          pointerEvents: "none", zIndex: 18,
+        }} />
+      )}
+
       {/* ── Cursor-tracking light sheen (all rarities) ── */}
       <div style={{
         position: "absolute", inset: 0, borderRadius: 10,
@@ -631,21 +638,20 @@ export default function CharacterCard({
       {(() => {
         const boosted = starLevel >= 5;
         const isHighRarity = effectiveRarity === "SSS" || effectiveRarity === "X";
-        // base opacity: 0.12 for all cards, up to 0.30 for high rarity/stars
-        const baseOpacity = isHighRarity ? 0.22 : 0.12;
-        const boostOpacity = boosted ? 0.18 : 0;
+        const baseOpacity = isHighRarity ? 0.55 : 0.38;
+        const boostOpacity = boosted ? 0.22 : 0;
         const foilOpacity = baseOpacity + boostOpacity;
         return (
           <div style={{
             position: "absolute", inset: boosted ? -2 : 0, borderRadius: boosted ? 12 : 10,
             pointerEvents: "none", zIndex: 21,
-            opacity: isHovered ? 1 : (isHighRarity ? 0 : 0),
+            opacity: isHovered ? 1 : 0,
             transition: "opacity 0.18s",
             background: `radial-gradient(circle at ${sheenPos.x}% ${sheenPos.y}%,
-              hsla(${sheenPos.x * 3.6},        90%, 72%, ${foilOpacity}) 0%,
-              hsla(${sheenPos.x * 3.6 + 80},   90%, 72%, ${foilOpacity * 0.64}) 35%,
-              hsla(${sheenPos.x * 3.6 + 160},  90%, 72%, ${foilOpacity * 0.36}) 55%,
-              transparent 70%)`,
+              hsla(${sheenPos.x * 3.6},        95%, 75%, ${foilOpacity}) 0%,
+              hsla(${sheenPos.x * 3.6 + 80},   95%, 75%, ${foilOpacity * 0.72}) 30%,
+              hsla(${sheenPos.x * 3.6 + 160},  95%, 75%, ${foilOpacity * 0.44}) 55%,
+              transparent 78%)`,
             mixBlendMode: "color-dodge",
             ...(boosted && isHovered ? {
               boxShadow: `0 0 28px ${color}77, 0 0 56px ${color}33`,
@@ -662,7 +668,75 @@ export default function CharacterCard({
         null
       )}
 
+      {/* ── Stats overlay — rendered inside the clip so it's bounded by the card ── */}
+      {statsOverlay && (() => {
+        const pct = Math.max(0, Math.min(1, statsOverlay.hp / statsOverlay.maxHp));
+        const hpCol = pct > 0.6 ? "#44ff88" : pct > 0.3 ? "#ffcc00" : "#ff4444";
+        const fs = size === "xs" ? 9 : size === "sm" ? 10 : 11;
+        return (
+          <div style={{
+            position: "absolute", bottom: 0, left: 0, right: 0,
+            background: "linear-gradient(transparent, rgba(0,0,0,0.88) 28%)",
+            borderBottomLeftRadius: 9, borderBottomRightRadius: 9,
+            padding: `${size === "xs" ? 10 : 14}px 4px 4px`,
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+            pointerEvents: "none",
+          }}>
+            {statsOverlay.name && (
+              <div style={{ fontSize: fs - 1, fontWeight: 800, color: "#e8e8e8", letterSpacing: 0.3, textAlign: "center", lineHeight: 1.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%", paddingLeft: 3, paddingRight: 3 }}>
+                {statsOverlay.name}
+              </div>
+            )}
+            <div style={{ display: "flex", justifyContent: "space-around", width: "100%", padding: "1px 4px" }}>
+              <span style={{ fontSize: fs + 2, fontWeight: 900, color: "#ff8855" }}>⚔{statsOverlay.atk}</span>
+              <span style={{ fontSize: fs + 2, fontWeight: 900, color: hpCol }}>♥{statsOverlay.hp}</span>
+            </div>
+            <div style={{ width: "calc(100% - 8px)", height: 3, background: "#111", borderRadius: 2, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${pct * 100}%`, background: hpCol, borderRadius: 2, transition: "width 0.3s" }} />
+            </div>
+          </div>
+        );
+      })()}
+
       </div> {/* end inner clip */}
+
+      {/* ── Cursor-tracking sheen — outside the clip so dimmed cards still show it ── */}
+      <div style={{
+        position: "absolute", inset: 0, borderRadius: 10,
+        pointerEvents: "none", zIndex: 30,
+        opacity: isHovered ? 1 : 0,
+        transition: "opacity 0.18s",
+        background: `radial-gradient(circle at ${sheenPos.x}% ${sheenPos.y}%, rgba(255,255,255,${dimmed ? 0.40 : 0.22}) 0%, rgba(255,255,255,${dimmed ? 0.16 : 0.08}) 40%, transparent 68%)`,
+        mixBlendMode: "screen",
+      }} />
+
+      {/* Cost bubble — outside the clip so it's fully visible, glued to top-left */}
+      {!hideAffinityAndCost && (() => {
+        const bs = smallBadges ? 16 : Math.round(d.w * 0.28);
+        const fs = smallBadges ? 7 : Math.round(d.w * 0.14);
+        const cost = costOverride !== undefined ? costOverride : (def ? deriveStats(def).cost : "?");
+        return (
+          <motion.div
+            style={{
+              position: "absolute",
+              top: -(bs * 0.3), left: -(bs * 0.3),
+              width: bs, height: bs, borderRadius: "50%",
+              background: "linear-gradient(135deg, #1a1a2e 0%, #0d0d1a 100%)",
+              border: "2px solid rgba(255,255,255,0.5)",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.7), 0 0 6px rgba(255,255,255,0.15)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              zIndex: 10,
+              x: !noHover && !dimmed ? badgeX : 0,
+              y: !noHover && !dimmed ? badgeY : 0,
+            }}
+          >
+            <span style={{
+              fontSize: fs, fontWeight: 900, color: "#fff",
+              lineHeight: 1, textShadow: "0 1px 4px rgba(0,0,0,0.9)",
+            }}>{cost}</span>
+          </motion.div>
+        );
+      })()}
     </motion.div>
   );
 }
@@ -693,8 +767,8 @@ export function CardBack({
     const ny = (e.clientY - rect.top)  / rect.height;
     setSheenPos({ x: nx * 100, y: ny * 100 });
     if (!noHover) {
-      rawRotY.set((nx - 0.5) * 36);
-      rawRotX.set(-(ny - 0.5) * 30);
+      rawRotY.set((nx - 0.5) * 16);
+      rawRotX.set(-(ny - 0.5) * 12);
     }
   };
 

@@ -221,3 +221,17 @@ Attack and hp points balancing.
 
 Weapon introduction and synergy meaning to the game. cards dont die as quickly, have more impact on the game. same with 
 leaders, dont die as quickly. Spell cards introduce later depending on leader. 
+
+
+
+The spells box, make it ALWAYS HAVE 4 vacant 2x2 spots. its fixed like that and the logic is the same as before.  do it without altering or moving any other stuff. 
+
+
+
+
+
+make the cards in hand about 15% bigger.  do it without altering or moving any other stuff only the panel its in make it longer according to the top of the card. 
+
+
+
+make the leader box for the bottom player with the leader card domain meter and icon and name about 20% bigger and move it 40 pixels towards the middle. do it without altering or moving any other stuff. 

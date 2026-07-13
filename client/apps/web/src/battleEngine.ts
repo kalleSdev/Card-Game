@@ -60,7 +60,8 @@ export type SpellEffect =
   | { kind: "BUFF_ONE_ATK"; amount: number }              // buff one own card's ATK
   | { kind: "DESTROY_ONE" }                                // destroy any one enemy board card
   | { kind: "COPY_BOARD_CARD" }                            // place a 3/3 copy of any board card
-  | { kind: "DAMAGE_TARGET_SELF"; amount: number; selfAmount: number }; // damage enemy + hurt self
+  | { kind: "DAMAGE_TARGET_SELF"; amount: number; selfAmount: number } // damage enemy + hurt self
+  | { kind: "SHEEPIFY_ONE" };                                          // turn one enemy board card into 1/1 sheep
 
 export interface SpellCard {
   id: string;
@@ -175,8 +176,10 @@ export const DOMAIN_BATTLE_EFFECTS: Record<string, DomainEntry> = {
     grantSpell: { name: "Projection Slash", desc: "All your cards gain +3 ATK for 1 turn", effect: { kind: "BUFF_BOARD_ATK", amount: 3, turns: 1 } } },
   "maki":      { name: "Heavenly Restriction Assault", effect: { kind: "GRANT_SPELL", spellName: "Dragon Bone Strike", spellDesc: "Deal 5 damage to any target", spell: { kind: "DAMAGE_TARGET", amount: 5 } },
     secondEffect: { kind: "GRANT_SPELL", spellName: "Dragon Bone Strike", spellDesc: "Deal 5 damage to any target", spell: { kind: "DAMAGE_TARGET", amount: 5 } } },
-  "takaba":    { name: "Comedian",                   effect: { kind: "SHEEPIFY_ENEMY_CARDS", count: 2 },
-    secondEffect: { kind: "SHEEPIFY_ENEMY_CARDS", count: 2 } },
+  "takaba":    { name: "Comedian",                   effect: { kind: "GRANT_SPELL", spellName: "Comedian's Curse", spellDesc: "Turn an enemy board card into a 1/1 sheep", spell: { kind: "SHEEPIFY_ONE" } },
+    grantSpell: { name: "Comedian's Curse", desc: "Turn an enemy board card into a 1/1 sheep", effect: { kind: "SHEEPIFY_ONE" } },
+    secondEffect: { kind: "GRANT_SPELL", spellName: "Comedian's Curse", spellDesc: "Turn an enemy board card into a 1/1 sheep", spell: { kind: "SHEEPIFY_ONE" } },
+    secondGrantSpell: { name: "Comedian's Curse", desc: "Turn an enemy board card into a 1/1 sheep", effect: { kind: "SHEEPIFY_ONE" } } },
 };
 
 const DEFAULT_DOMAIN_EFFECT: { name: string; effect: DomainEffect } = {
@@ -466,7 +469,7 @@ function buildPlayer(
     hand:  allDeckCards.slice(0, hand.length),
     deck:  allDeckCards.slice(hand.length),
     energy: 2,
-    maxEnergy: 2,
+    maxEnergy: 1,
     domainMeter: 0,
     domainActive: false,
     domainCooldown: 0,
@@ -494,6 +497,19 @@ function buildPlayer(
   };
 
   return player;
+}
+
+// Give Mahoraga's board card +1 ATK if the card with hitInstanceId is Mahoraga and its HP dropped.
+function adaptMahoragaIfHit(player: BattlePlayer, hitInstanceId: string, hpBefore: number, hpAfter: number): BattlePlayer {
+  if (!player.mahoragaBoardMode) return player;
+  if (hpAfter >= hpBefore) return player; // no damage taken
+  const mCard = player.board.find(c => c?.isLeaderCard && c.instanceId === hitInstanceId);
+  if (!mCard) return player;
+  return {
+    ...player,
+    mahoragaAdaptAtk: player.mahoragaAdaptAtk + 1,
+    board: player.board.map(c => c?.instanceId === hitInstanceId ? { ...c, atk: c.atk + 1 } : c),
+  };
 }
 
 function shuffle<T>(arr: T[]): T[] {
@@ -652,11 +668,14 @@ function applyDomainEffect(
     case "DAMAGE_ALL_ENEMIES": {
       const targets = [o.leader, ...boardCards(o)];
       const dmgEach = Math.floor(effect.amount / Math.max(targets.length, 1));
+      // Track Mahoraga HP before damage for adaptation
+      const mCardBefore = o.mahoragaBoardMode ? o.board.find(c => c?.isLeaderCard) : null;
       o = {
         ...o,
         leader: { ...o.leader, currentHp: o.leader.currentHp - dmgEach },
         board:  o.board.map(c => c ? { ...c, currentHp: c.currentHp - dmgEach } : null),
       };
+      if (mCardBefore) o = adaptMahoragaIfHit(o, mCardBefore.instanceId, mCardBefore.currentHp, mCardBefore.currentHp - dmgEach);
       // Remove dead board cards
       o = { ...o, board: o.board.map(c => c && c.currentHp > 0 ? c : null) };
       break;
@@ -752,8 +771,12 @@ function applyDomainEffect(
       };
     }
     case "SUKUNA_BOARD_MODE": {
-      // Wipe both boards, then place Sukuna as a 4/17 board card
-      o = { ...o, board: o.board.map(() => null) };
+      // Wipe both boards; enemy leader card on board takes 3 damage but is not killed
+      o = { ...o, board: o.board.map(c => {
+        if (!c) return null;
+        if (c.isLeaderCard) return { ...c, currentHp: Math.max(1, c.currentHp - 3) };
+        return null;
+      }) };
       p = { ...p, board: p.board.map(() => null) };
       const sukunaCard: BattleCard = {
         instanceId: `sukuna-board-${++_instanceCounter}`,
@@ -1160,13 +1183,12 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       p = spawnGetoEntities(p, p.getoEntityAtk, p.getoEntityHp);
       o = spawnGetoEntities(o, o.getoEntityAtk, o.getoEntityHp);
 
-      // Mahoraga adaptation: +1 ATK each time his board card is hit and survives
-      if (o.mahoragaBoardMode) {
-        const mCard = o.board.find(c => c?.isLeaderCard);
-        if (mCard && target.instanceId === mCard.instanceId) {
-          o = { ...o, mahoragaAdaptAtk: o.mahoragaAdaptAtk + 1,
-            board: o.board.map(c => c?.isLeaderCard ? { ...c, atk: c.atk + 1 } : c) };
-        }
+      // Mahoraga adaptation: +1 ATK whenever Mahoraga's HP drops (as target OR as attacker taking counter)
+      if (!isLeaderTarget) {
+        o = adaptMahoragaIfHit(o, target.instanceId, target.currentHp, target.currentHp - damage);
+      }
+      if (!isLeaderAttacker) {
+        p = adaptMahoragaIfHit(p, attacker.instanceId, attacker.currentHp, attacker.currentHp - actualCounter - kashimoSelf);
       }
       if (attacker.currentHp - actualCounter - kashimoSelf <= 0) events.push({ type: "CARD_DIED", pid, instanceId: attacker.instanceId });
       if (target.currentHp - damage <= 0)          events.push({ type: "CARD_DIED", pid: opp, instanceId: target.instanceId });
@@ -1263,13 +1285,27 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       switch (eff.kind) {
         case "DAMAGE_TARGET": {
           if (!intent.targetInstanceId) return illegal("Target required for damage spell");
-          const tgt = findOnBoard(o, intent.targetInstanceId);
+          // Can target any card: enemy board/leader OR own board/leader
+          const tgtOpp  = findOnBoard(o, intent.targetInstanceId);
+          const tgtSelf = findOnBoard(p, intent.targetInstanceId);
+          const tgt = tgtOpp ?? tgtSelf;
           if (!tgt) return illegal("Target not found");
-          if (tgt.instanceId === o.leader.instanceId) {
-            o = { ...o, leader: { ...o.leader, currentHp: o.leader.currentHp - eff.amount } };
+          if (tgtOpp) {
+            if (tgt.instanceId === o.leader.instanceId) {
+              o = { ...o, leader: { ...o.leader, currentHp: o.leader.currentHp - eff.amount } };
+            } else {
+              const hpBefore = tgt.currentHp;
+              o = { ...o, board: o.board.map(c => c?.instanceId === tgt.instanceId ? { ...c, currentHp: c.currentHp - eff.amount } : c) };
+              o = adaptMahoragaIfHit(o, tgt.instanceId, hpBefore, hpBefore - eff.amount);
+              o = { ...o, board: o.board.map(c => (c && c.currentHp <= 0) ? null : c) };
+            }
           } else {
-            o = { ...o, board: o.board.map(c => c?.instanceId === tgt.instanceId ? { ...c, currentHp: c.currentHp - eff.amount } : c) };
-            o = { ...o, board: o.board.map(c => (c && c.currentHp <= 0) ? null : c) };
+            if (tgt.instanceId === p.leader.instanceId) {
+              p = { ...p, leader: { ...p.leader, currentHp: p.leader.currentHp - eff.amount } };
+            } else {
+              p = { ...p, board: p.board.map(c => c?.instanceId === tgt.instanceId ? { ...c, currentHp: c.currentHp - eff.amount } : c) };
+              p = { ...p, board: p.board.map(c => (c && c.currentHp <= 0) ? null : c) };
+            }
           }
           break;
         }
@@ -1348,6 +1384,19 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
           o = { ...o, board: o.board.map(c => c?.instanceId === intent.targetInstanceId ? null : c) };
           break;
         }
+        case "SHEEPIFY_ONE": {
+          if (!intent.targetInstanceId) return illegal("Select an enemy board card to sheepify");
+          const sheepTgt = o.board.find(c => c?.instanceId === intent.targetInstanceId);
+          if (!sheepTgt) return illegal("Target not on enemy board");
+          if (sheepTgt.isLeaderCard) return illegal("Cannot sheepify the enemy leader");
+          const sheepified: BattleCard = {
+            ...sheepTgt,
+            preSheepAtk: sheepTgt.atk, preSheepHp: sheepTgt.currentHp,
+            isSheep: true, atk: 1, baseAtk: 1, currentHp: 1, maxHp: 1,
+          };
+          o = { ...o, board: o.board.map(c => c?.instanceId === intent.targetInstanceId ? sheepified : c) };
+          break;
+        }
         case "BUFF_ONE_HP": {
           if (!intent.targetInstanceId) return illegal("Select one of your cards to buff HP");
           const isLeader = p.leader.instanceId === intent.targetInstanceId;
@@ -1373,14 +1422,27 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
           break;
         }
         case "DAMAGE_TARGET_SELF": {
-          if (!intent.targetInstanceId) return illegal("Select an enemy target");
-          const tgt = findOnBoard(o, intent.targetInstanceId);
-          if (!tgt) return illegal("Target not found");
-          if (tgt.instanceId === o.leader.instanceId) {
-            o = { ...o, leader: { ...o.leader, currentHp: o.leader.currentHp - eff.amount } };
+          if (!intent.targetInstanceId) return illegal("Select a target");
+          const tgtOppS  = findOnBoard(o, intent.targetInstanceId);
+          const tgtSelfS = findOnBoard(p, intent.targetInstanceId);
+          const tgtS = tgtOppS ?? tgtSelfS;
+          if (!tgtS) return illegal("Target not found");
+          if (tgtOppS) {
+            if (tgtS.instanceId === o.leader.instanceId) {
+              o = { ...o, leader: { ...o.leader, currentHp: o.leader.currentHp - eff.amount } };
+            } else {
+              const hpBefore = tgtS.currentHp;
+              o = { ...o, board: o.board.map(c => c?.instanceId === tgtS.instanceId ? { ...c, currentHp: c.currentHp - eff.amount } : c) };
+              o = adaptMahoragaIfHit(o, tgtS.instanceId, hpBefore, hpBefore - eff.amount);
+              o = { ...o, board: o.board.map(c => (c && c.currentHp <= 0) ? null : c) };
+            }
           } else {
-            o = { ...o, board: o.board.map(c => c?.instanceId === tgt.instanceId ? { ...c, currentHp: c.currentHp - eff.amount } : c) };
-            o = { ...o, board: o.board.map(c => (c && c.currentHp <= 0) ? null : c) };
+            if (tgtS.instanceId === p.leader.instanceId) {
+              p = { ...p, leader: { ...p.leader, currentHp: p.leader.currentHp - eff.amount } };
+            } else {
+              p = { ...p, board: p.board.map(c => c?.instanceId === tgtS.instanceId ? { ...c, currentHp: c.currentHp - eff.amount } : c) };
+              p = { ...p, board: p.board.map(c => (c && c.currentHp <= 0) ? null : c) };
+            }
           }
           // Self-damage to caster's leader
           p = { ...p, leader: { ...p.leader, currentHp: p.leader.currentHp - eff.selfAmount } };
@@ -1559,6 +1621,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
         case "SHEEPIFY_ENEMY_CARDS": {
           const tgt = state.players[opp].board.find(c => c?.instanceId === intent.targetInstanceId);
           if (!tgt) return illegal("Target not found on enemy board");
+          if (tgt.isLeaderCard) return illegal("Cannot sheepify the enemy leader");
           const sheepified: BattleCard = {
             ...tgt,
             preSheepAtk: tgt.atk,
