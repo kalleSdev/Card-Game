@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import type { CardDef } from "@cg/contracts";
 import { ROULETTE_ITEM_MAP } from "@cg/engine";
 import { rc } from "../helpers";
 import { SYNERGY_LABEL } from "../constants";
+import { DOMAIN_BATTLE_EFFECTS } from "../battleEngine";
 import CharacterCard from "../components/CharacterCard";
 import AmbientOverlay from "../components/AmbientOverlay";
 import AmbientCanvas from "../components/AmbientCanvas";
@@ -54,6 +56,53 @@ function weaponBonusesForCard(defId: string, cardDef: CardDef): WeaponEntry[] {
   return result;
 }
 
+const DOMAIN_ELIGIBLE = new Set(["SS", "SSS", "X"]);
+
+function getDomainDesc(defId: string): { name: string; desc: string; secondDesc?: string } | null {
+  if (!DOMAIN_ELIGIBLE) return null; // guard for tree-shaking
+  const d = DOMAIN_BATTLE_EFFECTS[defId];
+  if (!d) return null;
+  const e = d.effect;
+  let desc = "";
+  const grantSuffix = defId === "gojo-base"
+    ? " Grants Hollow Purple (4 damage). Filling twice grants 2 Hollow Purples."
+    : d.grantSpell ? ` Also grants "${d.grantSpell.name}" — ${d.grantSpell.desc}.` : "";
+  switch (e.kind) {
+    case "STUN_ENEMY_BOARD":      desc = `Fully immobilizes all enemies for ${e.turns} turn${e.turns > 1 ? "s" : ""} — no actions allowed.`; break;
+    case "DAMAGE_ALL_ENEMIES":    desc = `Deals ${e.amount} damage split across all enemies.`; break;
+    case "BUFF_OWN_BOARD":        desc = `Gives own board +${e.atkBonus} ATK / +${e.hpBonus} HP for ${e.turns} turn${e.turns > 1 ? "s" : ""}.`; break;
+    case "KILL_ALL_BOARD":        desc = "Destroys all non-leader cards on both sides."; break;
+    case "SPAWN_ENTITIES":        desc = `Spawns ${e.count}× ${e.atk}/${e.hp} Cursed Spirits on your board.`; break;
+    case "GRANT_RANDOM_SPELLS":   desc = `Grants ${e.count} random synergy spells.`; break;
+    case "REDUCE_COSTS":          desc = `All cards cost ${e.amount} less for ${e.turns} turn${e.turns > 1 ? "s" : ""}.`; break;
+    case "GRANT_SPELL":           desc = `Grants spell: "${e.spellName}" — ${e.spellDesc}.`; break;
+    case "BUFF_LEADER_PERMANENT": desc = e.atk > 0 && e.hp > 0
+      ? `Leader gains +${e.atk} ATK / +${e.hp} HP permanently.`
+      : e.atk > 0 ? `Leader gains +${e.atk} ATK permanently.`
+      : `Leader gains +${e.hp} HP permanently.`; break;
+    case "SHEEPIFY_BOARD":        desc = "All board cards become 1/1 sheep."; break;
+    case "SHEEPIFY_ENEMY_CARDS":  desc = `Choose ${e.count} enemy board cards to turn into 1/1 sheep.`; break;
+    case "SNEAK_ATTACK_DOMAIN":   desc = `Deal ${e.amount} damage to any target — no counter damage.`; break;
+    case "SUKUNA_BOARD_MODE":     desc = "Wipes all board cards. Sukuna enters as a 4/17 playing card — always targetable. His death ends the match."; break;
+    case "MAHORAGA_BOARD_MODE":   desc = "Mahoraga enters the board as a 1/25 card. Gains +1 ATK each time he's hit. His death ends the match."; break;
+    case "SUMMON_RIKA_AND_COPY":  desc = "Summons Rika (5/5 Cursed Spirit). Grants Cursed Copy spell — place a 3/3 copy of any board card."; break;
+    default:                      desc = "Activates a powerful cursed technique.";
+  }
+  let secondDesc: string | undefined;
+  if (d.secondEffect) {
+    const s = d.secondEffect;
+    if (s.kind === "GRANT_SPELL") secondDesc = `2nd fill: grants "${s.spellName}" — ${s.spellDesc}.`;
+    else if (s.kind === "BUFF_LEADER_PERMANENT") secondDesc = `2nd fill: leader gains +${s.atk} ATK / +${s.hp} HP permanently.`;
+    else if (s.kind === "SHEEPIFY_ENEMY_LEADER") secondDesc = "2nd fill: enemy leader becomes a 1/7 sheep.";
+    else if (s.kind === "SUMMON_RIKA_AND_COPY") secondDesc = "2nd fill: summon Rika (5/5) again.";
+    else if (s.kind === "SPAWN_ENTITIES") secondDesc = `2nd fill: spawns ${s.count}× ${s.atk}/${s.hp} entity.`;
+    else if (s.kind === "GRANT_RANDOM_SPELLS") secondDesc = `2nd fill: grants ${s.count} more random spells.`;
+    else if (s.kind === "SHEEPIFY_ENEMY_CARDS") secondDesc = `2nd fill: choose ${s.count} more enemy cards to sheepify.`;
+    else secondDesc = "2nd fill: activates a secondary effect.";
+  }
+  return { name: d.name, desc: desc + grantSuffix, secondDesc };
+}
+
 // Synergy tags → display labels
 const TAG_SYNERGY: Record<string, string> = {
   "strongest":      "🔥 The Strongest",
@@ -82,9 +131,44 @@ const MEMORY_RESONANCE_IDS = new Set(["gojo-base", "geto"]);
 const RARITY_ORDER = ["X", "SSS", "SS", "S", "A", "B", "C"];
 
 // ── Card detail panel ─────────────────────────────────────────────────────────
+function DomainTooltip({ info, x, y }: { info: { name: string; desc: string; secondDesc?: string }; x: number; y: number }) {
+  return createPortal(
+    <div style={{
+      position: "fixed",
+      left: Math.min(x + 14, window.innerWidth - 320),
+      top: Math.max(8, y - 8),
+      zIndex: 9999,
+      pointerEvents: "none",
+      width: 300,
+      background: "rgba(8,4,20,0.97)",
+      border: "1px solid #7744cc88",
+      borderRadius: 12,
+      padding: "14px 16px",
+      boxShadow: "0 8px 40px rgba(0,0,0,0.8), 0 0 24px #7744cc22",
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 900, color: "#cc44ff", letterSpacing: 2, marginBottom: 6 }}>
+        🌀 DOMAIN EXPANSION
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", marginBottom: 8 }}>{info.name}</div>
+      <div style={{ fontSize: 11, color: "#bbb", lineHeight: 1.5 }}>{info.desc}</div>
+      {info.secondDesc && (
+        <div style={{
+          marginTop: 10, paddingTop: 8,
+          borderTop: "1px solid #7744cc33",
+          fontSize: 10, color: "#aa77ff", lineHeight: 1.5,
+        }}>
+          {info.secondDesc}
+        </div>
+      )}
+    </div>,
+    document.body
+  );
+}
+
 function CardDetail({ defId, def, onClose }: { defId: string; def: CardDef; onClose: () => void }) {
   const color = rc(def.rarity);
   const [scene, setScene] = useState<"reveal" | "pick-left" | "pick-right" | null>(null);
+  const [domainHover, setDomainHover] = useState<{ x: number; y: number } | null>(null);
   const weapons = weaponBonusesForCard(defId, def);
   const cardSynergies = def.tags
     .filter(t => TAG_SYNERGY[t])
@@ -92,6 +176,7 @@ function CardDetail({ defId, def, onClose }: { defId: string; def: CardDef; onCl
   if (MEMORY_RESONANCE_IDS.has(defId)) {
     cardSynergies.push({ tag: "memory-resonance", label: "👁 Memory Resonance +3% (w/ Gojo or Geto)" });
   }
+  const domainInfo = DOMAIN_ELIGIBLE.has(def.rarity) ? getDomainDesc(defId) : null;
 
   return (
     <div
@@ -132,8 +217,23 @@ function CardDetail({ defId, def, onClose }: { defId: string; def: CardDef; onCl
               <span style={{ fontSize: 11, color: "#ffd700", background: "#1a1400", border: "1px solid #443300", borderRadius: 6, padding: "3px 9px", fontWeight: "bold" }}>
                 {def.basePoints.toLocaleString()} pts
               </span>
+              {domainInfo && (
+                <span
+                  onMouseMove={e => setDomainHover({ x: e.clientX, y: e.clientY })}
+                  onMouseLeave={() => setDomainHover(null)}
+                  style={{
+                    fontSize: 11, color: "#cc44ff", background: "rgba(100,30,180,0.18)",
+                    border: "1px solid #7744cc88", borderRadius: 6, padding: "3px 9px",
+                    fontWeight: "bold", cursor: "default", letterSpacing: 1,
+                    boxShadow: "0 0 8px #7744cc22",
+                  }}
+                >
+                  🌀 DOMAIN
+                </span>
+              )}
             </div>
           </div>
+          {domainHover && domainInfo && <DomainTooltip info={domainInfo} x={domainHover.x} y={domainHover.y} />}
 
           {/* Synergy groups */}
           {cardSynergies.length > 0 && (

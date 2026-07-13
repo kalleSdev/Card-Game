@@ -177,20 +177,34 @@ function getSynergyBadges(def: CardDef, pickedIds: string[], cardDb: Record<stri
 
 // ── Domain effect human-readable description ─────────────────────────────────
 function domainEffectDesc(defId: string): { name: string; desc: string } {
-  // Toji has no traditional domain — describe his passive instead
+  // Toji has no traditional domain — describe his passive
   if (defId === "toji") return {
     name: "Heavenly Restriction",
-    desc: "Passive: 1 ATK. Attacks TWICE per turn without taking counter damage. When domain meter fills, grants a 4-damage spell.",
+    desc: "Passive: 1 ATK. Can attack any card on the board, never takes counter damage. Domain meter fills → grants Toji Strike (4 damage). Fills again → another Toji Strike.",
   };
   const d = DOMAIN_BATTLE_EFFECTS[defId];
   if (!d) return { name: "Cursed Technique", desc: "Buffs own board cards." };
   const e = d.effect;
   let desc = "";
   const bonusSpellSuffix = defId === "gojo-base"
-    ? " Also grants Hollow Purple — destroy any 1 enemy board card."
-    : d.grantSpell ? ` Also grants spell "${d.grantSpell.name}" — ${d.grantSpell.desc}.` : "";
+    ? " Grants Hollow Purple (deal 4 damage to any enemy). Filling meter twice gives 2 Hollow Purples."
+    : d.grantSpell ? ` Also grants "${d.grantSpell.name}" — ${d.grantSpell.desc}.` : "";
+  const secondSuffix = d.secondEffect
+    ? (() => {
+        const s = d.secondEffect;
+        if (s.kind === "GRANT_SPELL") return ` 2nd fill: gains "${s.spellName}" — ${s.spellDesc}.`;
+        if (s.kind === "BUFF_LEADER_PERMANENT") return ` 2nd fill: leader gains +${s.atk} ATK / +${s.hp} HP permanently.`;
+        if (s.kind === "SHEEPIFY_ENEMY_LEADER") return " 2nd fill: enemy leader becomes a 1/7 sheep.";
+        if (s.kind === "SUMMON_RIKA_AND_COPY") return " 2nd fill: summon Rika (5/5) again.";
+        if (s.kind === "STUN_ENEMY_BOARD") return ` 2nd fill: stun enemy board again.`;
+        if (s.kind === "SPAWN_ENTITIES") return ` 2nd fill: spawns ${s.count}× ${s.atk}/${s.hp} entity.`;
+        if (s.kind === "GRANT_RANDOM_SPELLS") return ` 2nd fill: grants ${s.count} more random spells.`;
+        if (s.kind === "SHEEPIFY_ENEMY_CARDS") return ` 2nd fill: choose ${s.count} more enemy cards to sheepify.`;
+        return " 2nd fill: activates a secondary effect.";
+      })()
+    : "";
   switch (e.kind) {
-    case "STUN_ENEMY_BOARD":       desc = `Stuns all enemy cards for ${e.turns} turn${e.turns > 1 ? "s" : ""}.`; break;
+    case "STUN_ENEMY_BOARD":       desc = `Fully immobilizes enemy for ${e.turns} turn${e.turns > 1 ? "s" : ""} (no actions allowed).`; break;
     case "DAMAGE_ALL_ENEMIES":     desc = `Deals ${e.amount} damage split across all enemies.`; break;
     case "BUFF_OWN_BOARD":         desc = `Gives own board +${e.atkBonus} ATK / +${e.hpBonus} HP for ${e.turns} turn${e.turns > 1 ? "s" : ""}.`; break;
     case "HEAL_LEADER":            desc = `Restores ${e.amount} HP to your leader.`; break;
@@ -203,12 +217,22 @@ function domainEffectDesc(defId: string): { name: string; desc: string } {
     case "CHOOSE_KILL_ENEMIES":    desc = `Choose ${e.count} enemy board cards to instantly destroy.`; break;
     case "COPY_ENEMY_CARD":        desc = "Copy one enemy board card (−1 ATK, −1 HP) onto your board."; break;
     case "HEAL_AND_KILL_ONE":      desc = `Heal your leader for ${e.healAmount} HP, then destroy one enemy card.`; break;
-    case "SHEEPIFY_BOARD":         desc = "All board cards become 1/1 sheep. Your leader attacks twice. Grants Turn Back spell."; break;
+    case "SHEEPIFY_BOARD":         desc = "All board cards become 1/1 sheep."; break;
+    case "SHEEPIFY_ENEMY_CARDS":   desc = `Choose ${e.count} enemy board cards to turn into 1/1 sheep.`; break;
     case "SNEAK_ATTACK_DOMAIN":    desc = `Deal ${e.amount} damage to any target — no counter damage.`; break;
     case "GRANT_SPELL":            desc = `Grants spell: "${e.spellName}" — ${e.spellDesc}.`; break;
+    case "BUFF_LEADER_PERMANENT":  desc = e.atk > 0 && e.hp > 0
+      ? `Leader gains +${e.atk} ATK / +${e.hp} HP permanently.`
+      : e.atk > 0 ? `Leader gains +${e.atk} ATK permanently.`
+      : `Leader gains +${e.hp} HP permanently.`; break;
+    case "SUKUNA_BOARD_MODE":      desc = "Wipes all board cards. Sukuna enters the board as a 4/17 playing card — always targetable. Leader death ends the match."; break;
+    case "MAHORAGA_BOARD_MODE":    desc = "Mahoraga enters the board as a 1/25 card. Each hit he receives gives him +1 ATK (adaptation). Leader card death ends the match."; break;
+    case "BUFF_LEADER_PERMANENT":  desc = `Permanently grants your leader +${e.atk} ATK / +${e.hp} HP.`; break;
+    case "SHEEPIFY_ENEMY_LEADER":  desc = "Transforms the enemy leader into a 1/7 sheep."; break;
+    case "SUMMON_RIKA_AND_COPY":   desc = "Summons Rika Orimoto (5/5 Cursed Spirit) onto your board. Grants Cursed Copy spell — place a 3/3 copy of any board card."; break;
     default:                       desc = "Activates a powerful cursed technique.";
   }
-  return { name: d.name, desc: desc + bonusSpellSuffix };
+  return { name: d.name, desc: desc + bonusSpellSuffix + secondSuffix };
 }
 
 // ── Small corner checkmark on selected card ───────────────────────────────────
@@ -384,7 +408,8 @@ function CardDraftPhase({ pid, profile, color, pickIndex, options, cardDb, picke
             if (!def) return null;
             const isSelected = selected === id;
             const badges = getSynergyBadges(def, pickedSoFar, cardDb);
-            const stats = deriveStats(def);
+            const rawStats = deriveStats(def);
+            const stats = def.affinity === "LEADER" ? { atk: 2, hp: 30, cost: rawStats.cost } : rawStats;
             return (
               <motion.div key={id}
                 onClick={() => setSelected(id === selected ? null : id)}

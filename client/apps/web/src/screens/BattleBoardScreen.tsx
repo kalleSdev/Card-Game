@@ -128,6 +128,15 @@ function BoardCardView({
         }}>STUN</div>
       )}
 
+      {/* Leader card crown indicator (Sukuna/Mahoraga board mode) */}
+      {card.isLeaderCard && (
+        <div style={{
+          position: "absolute", top: 3, left: 3,
+          background: "rgba(255, 165, 0, 0.9)", borderRadius: 3,
+          fontSize: 9, padding: "1px 3px",
+        }}>👑</div>
+      )}
+
       {/* Selection ring */}
       {selected && (
         <motion.div
@@ -256,9 +265,11 @@ function SpellCardView({
     : effKind === "DRAW"           ? "#4488ff"
     : effKind === "GAIN_ENERGY"    ? "#4aeecc"
     : effKind === "PURPLE"         ? "#bb44ff"
-    : effKind === "DESTROY_ONE"  ? "#ff44aa"
+    : effKind === "DESTROY_ONE"    ? "#ff44aa"
+    : effKind === "COPY_BOARD_CARD"     ? "#44ddff"
+    : effKind === "DAMAGE_TARGET_SELF"  ? "#ff6600"
     : "#cc44ff";
-  const icon = effKind === "DAMAGE_TARGET" ? "💥" : effKind === "BUFF_BOARD_ATK" ? "⚔" : effKind === "BUFF_BOARD_HP" ? "💚" : effKind === "BUFF_ONE_ATK" ? "🗡" : effKind === "BUFF_ONE_HP" ? "💉" : effKind === "DRAW" ? "🃏" : effKind === "GAIN_ENERGY" ? "⚡" : effKind === "PURPLE" ? "🌌" : effKind === "DESTROY_ONE" ? "🗑" : "❄";
+  const icon = effKind === "DAMAGE_TARGET" ? "💥" : effKind === "BUFF_BOARD_ATK" ? "⚔" : effKind === "BUFF_BOARD_HP" ? "💚" : effKind === "BUFF_ONE_ATK" ? "🗡" : effKind === "BUFF_ONE_HP" ? "💉" : effKind === "DRAW" ? "🃏" : effKind === "GAIN_ENERGY" ? "⚡" : effKind === "PURPLE" ? "🌌" : effKind === "DESTROY_ONE" ? "🗑" : effKind === "COPY_BOARD_CARD" ? "📋" : effKind === "DAMAGE_TARGET_SELF" ? "⚡" : "❄";
 
   return (
     <motion.div
@@ -470,12 +481,12 @@ function CenteredLeader({
 // ── LeaderRightPanel — player's leader shown as a right-column panel ──────────
 function LeaderRightPanel({
   leader, cardDb, playerName, playerIcon,
-  selected,
+  selected, isVacant,
   onSelect,
 }: {
   leader: BattleCard; cardDb: Record<string, CardDef>;
   playerName: string; playerIcon: string;
-  selected?: boolean;
+  selected?: boolean; isVacant?: boolean;
   onSelect: () => void;
 }) {
   const def = cardDb[leader.defId];
@@ -497,7 +508,17 @@ function LeaderRightPanel({
         <span style={{ fontSize: 9, color: "#778", letterSpacing: 1, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{playerName}</span>
       </div>
 
-      {/* Leader card */}
+      {/* Leader card (or vacant slot when on board) */}
+      {isVacant ? (
+        <div style={{
+          width: 90, height: 120, borderRadius: 8,
+          border: "2px dashed #331144", background: "rgba(20,0,40,0.5)",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+        }}>
+          <div style={{ fontSize: 18, opacity: 0.4 }}>⚔</div>
+          <div style={{ fontSize: 7, color: "#553377", fontWeight: 900, letterSpacing: 1, textAlign: "center" }}>VACANT<br/>ON BOARD</div>
+        </div>
+      ) : (
       <motion.div
         onClick={onSelect}
         whileHover={{ scale: 1.06, y: -4 }}
@@ -526,8 +547,10 @@ function LeaderRightPanel({
           <div style={{ position: "absolute", top: 4, right: 4, background: "#4488ff", borderRadius: 3, fontSize: 7, fontWeight: 900, padding: "1px 4px", color: "#fff" }}>STUN</div>
         )}
       </motion.div>
+      )}
 
-      {/* Stats row */}
+      {/* Stats row (only when not vacant) */}
+      {!isVacant && (
       <div style={{
         display: "flex", gap: 8, background: "rgba(0,0,0,0.5)", borderRadius: 6, padding: "4px 10px",
         border: `1px solid ${hpColor}33`, width: "100%", justifyContent: "center",
@@ -536,6 +559,7 @@ function LeaderRightPanel({
         <span style={{ fontSize: 11, color: "#334" }}>·</span>
         <span style={{ fontSize: 11, fontWeight: 900, color: hpColor }}>♥{leader.currentHp}/{leader.maxHp}</span>
       </div>
+      )}
     </div>
   );
 }
@@ -876,8 +900,8 @@ export default function BattleBoardScreen({
       setBuffOneTargeting(prev => prev === spell.id ? null : spell.id);
       return;
     }
-    if (eff.kind === "DAMAGE_TARGET" || eff.kind === "STUN_ONE" || eff.kind === "PURPLE" || eff.kind === "DESTROY_ONE") {
-      // Needs enemy target — enter spell targeting mode (deselect any attacker)
+    if (eff.kind === "DAMAGE_TARGET" || eff.kind === "STUN_ONE" || eff.kind === "PURPLE" || eff.kind === "DESTROY_ONE" || eff.kind === "COPY_BOARD_CARD" || eff.kind === "DAMAGE_TARGET_SELF") {
+      // Needs a target — enter spell targeting mode (deselect any attacker)
       dispatch({ type: "CANCEL_ATTACK", pid });
       setPendingSpellId(prev => prev === spell.id ? null : spell.id);
     } else {
@@ -1148,7 +1172,7 @@ export default function BattleBoardScreen({
     // Attack: only when enemy board is fully cleared (or Toji berserk)
     (battleState.pendingAttackerId !== null && (oppBoardCards.length === 0 || player.tojiBerserk)) ||
     // Damage / stun spells can hit leader; destroy-cheap and purple cannot (board only)
-    (pendingSpell !== null && (pendingSpell.effect.kind === "DAMAGE_TARGET" || pendingSpell.effect.kind === "STUN_ONE")) ||
+    (pendingSpell !== null && (pendingSpell.effect.kind === "DAMAGE_TARGET" || pendingSpell.effect.kind === "STUN_ONE" || pendingSpell.effect.kind === "DAMAGE_TARGET_SELF")) ||
     // Domain action targets enemy
     battleState.pendingDomainAction !== null;
 
@@ -1164,6 +1188,12 @@ export default function BattleBoardScreen({
     if (buffOneTargeting) {
       dispatch({ type: "CAST_SPELL", pid: battleState.activePlayer, spellId: buffOneTargeting, targetInstanceId: instanceId });
       setBuffOneTargeting(null);
+      return;
+    }
+    // COPY_BOARD_CARD can target own board cards too
+    if (pendingSpellId && pendingSpell?.effect.kind === "COPY_BOARD_CARD") {
+      dispatch({ type: "CAST_SPELL", pid: battleState.activePlayer, spellId: pendingSpellId, targetInstanceId: instanceId });
+      setPendingSpellId(null);
       return;
     }
     handleSelectAttacker(instanceId);
@@ -1217,7 +1247,13 @@ export default function BattleBoardScreen({
         <BoardParticles />
         <div style={{ position: "absolute", top: 4, left: 14, fontSize: 8, letterSpacing: 4, color: "#1a1a2a", zIndex: 1, display: "flex", gap: 8, alignItems: "center" }}>
           OPPONENT
-          {opp.cardPlayFrozen > 0 && (
+          {opp.turnFrozen > 0 && (
+            <motion.div animate={{ opacity: [0.7, 1, 0.7] }} transition={{ duration: 0.8, repeat: Infinity }}
+              style={{ fontSize: 7, letterSpacing: 2, color: "#cc44ff", background: "rgba(204,68,255,0.12)", border: "1px solid #cc44ff44", borderRadius: 4, padding: "1px 5px" }}>
+              🌌 VOID IMMOBILIZED {opp.turnFrozen}T
+            </motion.div>
+          )}
+          {opp.cardPlayFrozen > 0 && opp.turnFrozen <= 0 && (
             <motion.div animate={{ opacity: [0.7, 1, 0.7] }} transition={{ duration: 0.8, repeat: Infinity }}
               style={{ fontSize: 7, letterSpacing: 2, color: "#4488ff", background: "rgba(68,136,255,0.12)", border: "1px solid #4488ff44", borderRadius: 4, padding: "1px 5px" }}>
               ❄ FROZEN {opp.cardPlayFrozen}T
@@ -1360,7 +1396,7 @@ export default function BattleBoardScreen({
                   }}
                 />
               </div>
-              {meterFull && (
+              {meterFull && player.domainCooldown === 0 && (
                 <motion.button
                   onClick={() => dispatch({ type: "ACTIVATE_DOMAIN", pid })}
                   animate={{ boxShadow: ["0 0 8px #cc44ff77", "0 0 18px #cc44ffbb", "0 0 8px #cc44ff77"] }}
@@ -1374,6 +1410,11 @@ export default function BattleBoardScreen({
                   }}
                 >✦ DOMAIN</motion.button>
               )}
+              {meterFull && player.domainCooldown > 0 && (
+                <div style={{ width: "100%", textAlign: "center", fontSize: 7, color: "#7744aa", fontWeight: 900, letterSpacing: 1 }}>
+                  READY<br/>CD: {player.domainCooldown}T
+                </div>
+              )}
             </div>
           );
         })()}
@@ -1381,7 +1422,8 @@ export default function BattleBoardScreen({
         <LeaderRightPanel
           leader={player.leader} cardDb={cardDb}
           playerName={name} playerIcon={icon}
-          selected={battleState.pendingAttackerId === player.leader.instanceId}
+          isVacant={player.mahoragaBoardMode}
+          selected={!player.mahoragaBoardMode && battleState.pendingAttackerId === player.leader.instanceId}
           onSelect={() => {
             if (buffOneTargeting) {
               dispatch({ type: "CAST_SPELL", pid, spellId: buffOneTargeting, targetInstanceId: player.leader.instanceId });
@@ -1404,7 +1446,9 @@ export default function BattleBoardScreen({
           flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
           padding: "10px 12px", borderRight: "1px solid #1a1a30", gap: 8, minWidth: 220,
         }}>
-          <div style={{ fontSize: 7, color: "#334", letterSpacing: 3, fontWeight: 700 }}>SPELLS</div>
+          <div style={{ fontSize: 7, color: "#334", letterSpacing: 3, fontWeight: 700 }}>
+            SPELLS{player.spellQueue.length > 0 && <span style={{ color: "#cc44ff", marginLeft: 4 }}>+{player.spellQueue.length} QUEUED</span>}
+          </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
             {Array.from({ length: 4 }).map((_, i) => {
               const spell = player.spells[i];
