@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import type { CardDef, PlayerId } from "@cg/contracts";
 import CharacterCard from "../components/CharacterCard";
@@ -7,7 +8,7 @@ import { BG } from "../backgrounds";
 import AmbientCanvas from "../components/AmbientCanvas";
 import AmbientOverlay from "../components/AmbientOverlay";
 import type { Profile } from "../profiles";
-import { BATTLE_SYNERGY_RULES, DOMAIN_BATTLE_EFFECTS } from "../battleEngine";
+import { BATTLE_SYNERGY_RULES, DOMAIN_BATTLE_EFFECTS, deriveStats } from "../battleEngine";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface PlayerDraftResult {
@@ -77,7 +78,29 @@ function getRandomOptions(cardDb: Record<string, CardDef>, exclude: string[]): s
 }
 
 // ── Synergy progress panel ─────────────────────────────────────────────────────
+function SpellTooltip({ rule, active, mouseX, mouseY }: { rule: typeof BATTLE_SYNERGY_RULES[0]; active: boolean; mouseX: number; mouseY: number }) {
+  const accentColor = active ? "#44ff88" : "#ffcc00";
+  return createPortal(
+    <div style={{
+      position: "fixed", left: mouseX - 220, top: mouseY - 70,
+      width: 200, padding: "10px 12px", borderRadius: 10, zIndex: 9999, pointerEvents: "none",
+      background: "rgba(6,6,18,0.97)", border: `1px solid ${accentColor}55`,
+      boxShadow: `0 4px 24px rgba(0,0,0,0.7), 0 0 12px ${accentColor}22`,
+    }}>
+      <div style={{ fontSize: 7, color: accentColor, letterSpacing: 3, fontWeight: 900, marginBottom: 5 }}>
+        {active ? "✦ SPELL UNLOCKED" : "◆ SPELL REWARD"}
+      </div>
+      <div style={{ fontSize: 12, fontWeight: 900, color: "#fff", marginBottom: 4 }}>{rule.spellName}</div>
+      <div style={{ fontSize: 10, color: "#bbb", lineHeight: 1.5 }}>{rule.spellDesc}</div>
+    </div>,
+    document.body
+  );
+}
+
 function SynergyTracker({ pickedIds, cardDb }: { pickedIds: string[]; cardDb: Record<string, CardDef> }) {
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [mouseX, setMouseX] = useState(0);
+  const [mouseY, setMouseY] = useState(0);
   const defs = pickedIds.map(id => cardDb[id]).filter(Boolean);
   const activeSynergies = BATTLE_SYNERGY_RULES.filter(rule => {
     const count = defs.filter(def => rule.tags.every(t => (def?.tags ?? []).includes(t))).length;
@@ -89,27 +112,48 @@ function SynergyTracker({ pickedIds, cardDb }: { pickedIds: string[]; cardDb: Re
   });
   if (activeSynergies.length === 0 && progressSynergies.length === 0) return null;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 160 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {activeSynergies.map(rule => (
-        <div key={rule.id} style={{
-          padding: "5px 8px", borderRadius: 6,
-          background: "rgba(100,255,150,0.07)", border: "1px solid #44ff8855",
-          fontSize: 8, color: "#44ff88", letterSpacing: 1,
-        }}>
-          <div style={{ fontWeight: 900 }}>✦ {rule.label}</div>
-          <div style={{ color: "#44ff8899", marginTop: 1 }}>→ {rule.spellName}</div>
+        <div key={rule.id}
+          style={{
+            padding: "8px 10px", borderRadius: 8, cursor: "default", position: "relative",
+            background: hoveredId === rule.id ? "rgba(100,255,150,0.18)" : "rgba(100,255,150,0.10)",
+            border: `1px solid ${hoveredId === rule.id ? "#44ff88bb" : "#44ff8866"}`,
+            transition: "background 0.15s, border-color 0.15s",
+          }}
+          onMouseEnter={(e) => { setHoveredId(rule.id); setMouseX(e.clientX); setMouseY(e.clientY); }}
+          onMouseMove={(e) => { setMouseX(e.clientX); setMouseY(e.clientY); }}
+          onMouseLeave={() => setHoveredId(null)}
+        >
+          {hoveredId === rule.id && <SpellTooltip rule={rule} active={true} mouseX={mouseX} mouseY={mouseY} />}
+          <div style={{ fontSize: 12, fontWeight: 900, color: "#44ff88", letterSpacing: 0.5 }}>✦ {rule.label}</div>
+          <div style={{ fontSize: 10, color: "#44ff8899", marginTop: 3 }}>→ {rule.spellName}</div>
         </div>
       ))}
       {progressSynergies.map(rule => {
         const count = defs.filter(def => rule.tags.every(t => (def?.tags ?? []).includes(t))).length;
         return (
-          <div key={rule.id} style={{
-            padding: "5px 8px", borderRadius: 6,
-            background: "rgba(255,200,50,0.05)", border: "1px solid #ffcc0033",
-            fontSize: 8, color: "#ffcc0088", letterSpacing: 1,
-          }}>
-            <div style={{ fontWeight: 900 }}>{rule.label} ({count}/{rule.minCount})</div>
-            <div style={{ color: "#ffcc0055", marginTop: 1 }}>→ {rule.spellName}</div>
+          <div key={rule.id}
+            style={{
+              padding: "8px 10px", borderRadius: 8, cursor: "default", position: "relative",
+              background: hoveredId === rule.id ? "rgba(255,200,50,0.14)" : "rgba(255,200,50,0.07)",
+              border: `1px solid ${hoveredId === rule.id ? "#ffcc0088" : "#ffcc0044"}`,
+              transition: "background 0.15s, border-color 0.15s",
+            }}
+            onMouseEnter={(e) => { setHoveredId(rule.id); setMouseY(e.clientY); }}
+            onMouseMove={(e) => setMouseY(e.clientY)}
+            onMouseLeave={() => setHoveredId(null)}
+          >
+            {hoveredId === rule.id && <SpellTooltip rule={rule} active={false} mouseX={mouseX} mouseY={mouseY} />}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+              <div style={{ fontSize: 11, fontWeight: 900, color: "#ffcc00bb", letterSpacing: 0.5 }}>{rule.label}</div>
+              <div style={{
+                fontSize: 13, fontWeight: 900, color: "#ffcc00",
+                background: "rgba(255,200,50,0.15)", borderRadius: 6,
+                padding: "1px 7px", letterSpacing: 0,
+              }}>{count}/{rule.minCount}</div>
+            </div>
+            <div style={{ fontSize: 10, color: "#ffcc0066", marginTop: 3 }}>→ {rule.spellName}</div>
           </div>
         );
       })}
@@ -142,6 +186,9 @@ function domainEffectDesc(defId: string): { name: string; desc: string } {
   if (!d) return { name: "Cursed Technique", desc: "Buffs own board cards." };
   const e = d.effect;
   let desc = "";
+  const bonusSpellSuffix = defId === "gojo-base"
+    ? " Also grants Hollow Purple — destroy any 1 enemy board card."
+    : d.grantSpell ? ` Also grants spell "${d.grantSpell.name}" — ${d.grantSpell.desc}.` : "";
   switch (e.kind) {
     case "STUN_ENEMY_BOARD":       desc = `Stuns all enemy cards for ${e.turns} turn${e.turns > 1 ? "s" : ""}.`; break;
     case "DAMAGE_ALL_ENEMIES":     desc = `Deals ${e.amount} damage split across all enemies.`; break;
@@ -161,7 +208,7 @@ function domainEffectDesc(defId: string): { name: string; desc: string } {
     case "GRANT_SPELL":            desc = `Grants spell: "${e.spellName}" — ${e.spellDesc}.`; break;
     default:                       desc = "Activates a powerful cursed technique.";
   }
-  return { name: d.name, desc };
+  return { name: d.name, desc: desc + bonusSpellSuffix };
 }
 
 // ── Small corner checkmark on selected card ───────────────────────────────────
@@ -226,7 +273,7 @@ function LeaderPickPhase({ pid, profile, color, options, cardDb, onPick }: {
               style={{ cursor: "pointer", position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}
             >
               <div style={{ transform: "scale(1.25)", transformOrigin: "top center", position: "relative" }}>
-                <CharacterCard defId={id} def={def} size="lg" />
+                <CharacterCard defId={id} def={def} size="lg" hideAffinityAndCost />
                 {isSelected && <SelectedBadge />}
               </div>
               <div style={{ textAlign: "center", width: 160, paddingTop: 8 }}>
@@ -282,72 +329,12 @@ function CardDraftPhase({ pid, profile, color, pickIndex, options, cardDb, picke
     ? (spec.affinity === "COMBAT" ? "#ff6644" : "#44aaff")
     : "#bb88ff";
 
-  const leaderDef = cardDb[leaderId];
-  const leaderDomain = leaderId ? domainEffectDesc(leaderId) : null;
-
   return (
     <motion.div
       key={pickIndex}
       initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }}
-      style={{ position: "relative" }}
+      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 28 }}
     >
-    {/* Left sidebar — leader info + deck preview, absolute so no layout shift */}
-    <motion.div
-      initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
-      style={{
-        position: "absolute", left: -200, top: 0,
-        display: "flex", flexDirection: "column", alignItems: "stretch", gap: 10,
-        padding: "16px 14px", borderRadius: 14,
-        background: "rgba(4,4,12,0.88)", border: `1px solid ${color}22`,
-        backdropFilter: "blur(10px)", width: 175,
-        boxShadow: `0 4px 32px rgba(0,0,0,0.5), 0 0 24px ${color}0a`,
-      }}
-    >
-      {/* Leader section */}
-      {leaderDef && leaderDomain ? (
-        <>
-          <div style={{ fontSize: 7, color: color, letterSpacing: 3, fontWeight: 900, textAlign: "center" }}>YOUR LEADER</div>
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <div style={{ transform: "scale(0.82)", transformOrigin: "top center", marginBottom: -20 }}>
-              <CharacterCard defId={leaderId} def={leaderDef} size="sm" noHover />
-            </div>
-          </div>
-          <div style={{ fontSize: 11, fontWeight: 800, color: "#fff", textAlign: "center", letterSpacing: 0.5 }}>{leaderDef.name}</div>
-          <div style={{
-            width: "100%", padding: "10px 10px", borderRadius: 10,
-            background: "rgba(102,0,170,0.18)", border: "1px solid #9933cc44",
-          }}>
-            <div style={{ fontSize: 7, color: "#cc44ff", letterSpacing: 2, fontWeight: 900, marginBottom: 4 }}>✦ DOMAIN</div>
-            <div style={{ fontSize: 11, color: "#fff", fontWeight: 800, marginBottom: 5, lineHeight: 1.2 }}>{leaderDomain.name}</div>
-            <div style={{ fontSize: 9, color: "#ddd", lineHeight: 1.5, fontWeight: 500 }}>{leaderDomain.desc}</div>
-          </div>
-          <div style={{ height: 1, background: "rgba(255,255,255,0.05)", margin: "2px 0" }} />
-        </>
-      ) : (
-        <div style={{ fontSize: 9, color: "#334", letterSpacing: 2, textAlign: "center", padding: "8px 0" }}>NO LEADER YET</div>
-      )}
-
-      {/* Deck preview */}
-      <div style={{ fontSize: 7, color: "#334", letterSpacing: 3, textAlign: "center", fontWeight: 700 }}>
-        DECK ({pickedSoFar.length}/{PICK_SPECS.length})
-      </div>
-      {pickedSoFar.length > 0 ? (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "center" }}>
-          {pickedSoFar.map(cid => {
-            const d = cardDb[cid];
-            return d ? (
-              <div key={cid} style={{ transform: "scale(0.44)", transformOrigin: "top left", width: 42, height: 55, flexShrink: 0, overflow: "visible" }}>
-                <CharacterCard defId={cid} def={d} size="sm" noHover />
-              </div>
-            ) : null;
-          })}
-        </div>
-      ) : (
-        <div style={{ fontSize: 8, color: "#222", textAlign: "center", padding: "6px 0" }}>—</div>
-      )}
-    </motion.div>
-    {/* Main draft content */}
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 28 }}>
       {/* Header */}
       <div style={{ textAlign: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "center", marginBottom: 10 }}>
@@ -366,7 +353,7 @@ function CardDraftPhase({ pid, profile, color, pickIndex, options, cardDb, picke
           </div>
         </div>
         <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: 3, color: "#fff", marginBottom: 4 }}>
-          {isRandom ? "PICK ANY CARD" : `PICK YOUR ${(spec as { kind: "TYPED"; affinity: string }).affinity} CARD`}
+          {isRandom ? `PICK ANY CARD. CURRENT PICK: ${pickIndex + 1}` : `PICK YOUR ${(spec as { kind: "TYPED"; affinity: string }).affinity} CARD`}
         </div>
         <div style={{ fontSize: 9, color: "#445", letterSpacing: 2 }}>Pick {pickIndex + 1} of {PICK_SPECS.length}</div>
 
@@ -397,6 +384,7 @@ function CardDraftPhase({ pid, profile, color, pickIndex, options, cardDb, picke
             if (!def) return null;
             const isSelected = selected === id;
             const badges = getSynergyBadges(def, pickedSoFar, cardDb);
+            const stats = deriveStats(def);
             return (
               <motion.div key={id}
                 onClick={() => setSelected(id === selected ? null : id)}
@@ -404,42 +392,32 @@ function CardDraftPhase({ pid, profile, color, pickIndex, options, cardDb, picke
                 whileHover={{ y: -10, scale: 1.05 }} whileTap={{ scale: 0.97 }}
                 style={{ cursor: "pointer", position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}
               >
-                <div style={{ transform: "scale(1.2)", transformOrigin: "top center", position: "relative" }}>
-                  <CharacterCard defId={id} def={def} size="lg" />
+                <div style={{ transform: "scale(1.2)", transformOrigin: "top center", position: "relative", marginBottom: 50 }}>
+                  <CharacterCard defId={id} def={def} size="lg" showStats={stats} />
                   {isSelected && <SelectedBadge />}
                 </div>
-                <div style={{ textAlign: "center", width: 140, paddingTop: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: isSelected ? "#fff" : "#aaa" }}>{def.name}</div>
-                  <div style={{ fontSize: 8, color: isSelected ? color : "#334", letterSpacing: 2, marginTop: 3 }}>
-                    {isSelected ? "✓ SELECTED" : def.affinity}
+
+                {/* Synergy badges */}
+                {badges.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "center", marginTop: 4 }}>
+                    {badges.map(b => (
+                      <div key={b.label} style={{
+                        fontSize: 11, fontWeight: 800, padding: "4px 10px", borderRadius: 6, letterSpacing: 0.5,
+                        background: b.activates ? "rgba(68,255,136,0.15)" : "rgba(255,200,50,0.12)",
+                        border: `1px solid ${b.activates ? "#44ff88aa" : "#ffcc0077"}`,
+                        color: b.activates ? "#44ff88" : "#ffcc00",
+                        boxShadow: b.activates ? "0 0 8px #44ff8833" : "0 0 8px #ffcc0022",
+                        whiteSpace: "nowrap",
+                      }}>
+                        {b.activates ? "✦ " : "◆ "}{b.label}
+                      </div>
+                    ))}
                   </div>
-                  {/* Synergy badges */}
-                  {badges.length > 0 && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 5, alignItems: "center" }}>
-                      {badges.map(b => (
-                        <div key={b.label} style={{
-                          fontSize: 7, padding: "2px 6px", borderRadius: 4, letterSpacing: 1,
-                          background: b.activates ? "rgba(100,255,150,0.1)" : "rgba(255,200,50,0.07)",
-                          border: `1px solid ${b.activates ? "#44ff8866" : "#ffcc0033"}`,
-                          color: b.activates ? "#44ff88" : "#ffcc0088",
-                        }}>
-                          {b.activates ? "✦ " : "◆ "}{b.label}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                )}
               </motion.div>
             );
           })}
         </div>
-        {/* Synergy tracker sidebar */}
-        {pickedSoFar.length > 0 && (
-          <div style={{ paddingTop: 8 }}>
-            <div style={{ fontSize: 7, color: "#334", letterSpacing: 3, marginBottom: 6 }}>SYNERGIES</div>
-            <SynergyTracker pickedIds={pickedSoFar} cardDb={cardDb} />
-          </div>
-        )}
       </div>
 
 
@@ -447,6 +425,7 @@ function CardDraftPhase({ pid, profile, color, pickIndex, options, cardDb, picke
         whileHover={selected ? { scale: 1.05, y: -2 } : {}} whileTap={selected ? { scale: 0.97 } : {}}
         onClick={() => { if (selected) onPick(selected); }}
         style={{
+          marginTop: 50,
           padding: "12px 52px",
           background: selected ? `linear-gradient(135deg, ${color}cc, ${color})` : "rgba(255,255,255,0.04)",
           border: `2px solid ${selected ? color : "#2a2a3a"}`, borderRadius: 12,
@@ -456,7 +435,6 @@ function CardDraftPhase({ pid, profile, color, pickIndex, options, cardDb, picke
           boxShadow: selected ? `0 0 28px ${color}55` : "none",
         }}
       >PICK CARD</motion.button>
-    </div>{/* end main draft content */}
     </motion.div>
   );
 }
@@ -655,6 +633,104 @@ export default function DraftBattleScreen({
         </div>
       )}
 
+      {/* ── LEFT PANEL — fixed overlay, does not affect page layout ── */}
+      <AnimatePresence>
+        {phase.step === "CARD_DRAFT" && (() => {
+          const { pid } = phase;
+          const draft = getDraft(pid);
+          const leaderId = draft.leaderId ?? "";
+          const leaderDef = cardDb[leaderId];
+          const leaderDomain = leaderId ? domainEffectDesc(leaderId) : null;
+          const pickedSoFar = getAllPicked(draft).filter(Boolean).slice(1);
+          const color = PLAYER_COLOR[pid];
+          return (
+            <motion.div
+              key="side-panel"
+              initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+              style={{
+                position: "fixed", left: 150, top: 100, bottom: 100, width: 380, zIndex: 5,
+                display: "flex", flexDirection: "column", alignItems: "stretch", gap: 12,
+                padding: "140px 18px 24px",
+                background: "rgba(4,4,12,0.92)", border: `1px solid ${color}22`, borderRadius: 14,
+                backdropFilter: "blur(12px)",
+                boxShadow: `0 8px 40px rgba(0,0,0,0.6)`,
+                overflowY: "auto",
+              }}
+            >
+              {leaderDef && leaderDomain ? (
+                <>
+                  <div style={{ fontSize: 7, color, letterSpacing: 3, fontWeight: 900, textAlign: "center" }}>YOUR LEADER</div>
+                  <div style={{ display: "flex", justifyContent: "center" }}>
+                    <div style={{ transform: "scale(1.0)", transformOrigin: "top center", marginBottom: 4 }}>
+                      <CharacterCard defId={leaderId} def={leaderDef} size="sm" noHover hideAffinityAndCost />
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: "#fff", textAlign: "center", letterSpacing: 0.5 }}>{leaderDef.name}</div>
+                  <div style={{
+                    width: "100%", padding: "10px 10px", borderRadius: 10,
+                    background: "rgba(102,0,170,0.18)", border: "1px solid #9933cc44",
+                  }}>
+                    <div style={{ fontSize: 7, color: "#cc44ff", letterSpacing: 2, fontWeight: 900, marginBottom: 4 }}>✦ DOMAIN</div>
+                    <div style={{ fontSize: 11, color: "#fff", fontWeight: 800, marginBottom: 5, lineHeight: 1.2 }}>{leaderDomain.name}</div>
+                    <div style={{ fontSize: 9, color: "#ddd", lineHeight: 1.5, fontWeight: 500 }}>{leaderDomain.desc}</div>
+                  </div>
+                  <div style={{ height: 1, background: "rgba(255,255,255,0.05)", margin: "2px 0" }} />
+                </>
+              ) : (
+                <div style={{ fontSize: 9, color: "#334", letterSpacing: 2, textAlign: "center", padding: "8px 0" }}>NO LEADER YET</div>
+              )}
+              <div style={{ fontSize: 7, color: "#334", letterSpacing: 3, textAlign: "center", fontWeight: 700 }}>
+                DECK ({pickedSoFar.length}/{PICK_SPECS.length})
+              </div>
+              {pickedSoFar.length > 0 ? (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "flex-start" }}>
+                  {pickedSoFar.map(cid => {
+                    const d = cardDb[cid];
+                    return d ? (
+                      <div key={cid} style={{ transform: "scale(0.65)", transformOrigin: "top left", width: 62, height: 80, flexShrink: 0, overflow: "visible" }}>
+                        <CharacterCard defId={cid} def={d} size="sm" noHover />
+                      </div>
+                    ) : null;
+                  })}
+                </div>
+              ) : (
+                <div style={{ fontSize: 8, color: "#222", textAlign: "center", padding: "6px 0" }}>—</div>
+              )}
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* ── RIGHT PANEL — synergy tracker, fixed overlay ── */}
+      <AnimatePresence>
+        {phase.step === "CARD_DRAFT" && (() => {
+          const { pid } = phase;
+          const draft = getDraft(pid);
+          const pickedSoFar = getAllPicked(draft).filter(Boolean).slice(1);
+          const color = PLAYER_COLOR[pid];
+          if (pickedSoFar.length === 0) return null;
+          return (
+            <motion.div
+              key="right-panel"
+              initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
+              style={{
+                position: "fixed", right: 150, top: 100, bottom: 100, width: 264, zIndex: 5,
+                display: "flex", flexDirection: "column", gap: 10,
+                padding: "180px 16px 24px",
+                background: "rgba(4,4,12,0.92)", border: `1px solid ${color}22`, borderRadius: 14,
+                backdropFilter: "blur(12px)",
+                boxShadow: `0 8px 40px rgba(0,0,0,0.6)`,
+                overflowY: "auto",
+              }}
+            >
+              <div style={{ fontSize: 7, color: "#334", letterSpacing: 3, fontWeight: 700, textAlign: "center" }}>SYNERGIES</div>
+              <SynergyTracker pickedIds={pickedSoFar} cardDb={cardDb} />
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* ── MAIN CONTENT — centered on full page ── */}
       <div style={{
         position: "relative", zIndex: 3,
         flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
@@ -722,7 +798,7 @@ export default function DraftBattleScreen({
           )}
 
         </AnimatePresence>
-      </div>
+      </div>{/* end main content */}
     </div>
   );
 }

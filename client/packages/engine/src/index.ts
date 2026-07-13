@@ -206,7 +206,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "S",
     basePoints: 10000,
     affinity: "COMBAT",
-    tags: ["sorcerer", "curse", "jujutsu-high", "kenjaku", "brother", "gojo-student"],
+    tags: ["sorcerer", "curse", "jujutsu-high", "kenjaku", "brother", "gojo-student", "culling-game"],
     offRolePenalties: { leader: 0.85, support: 0.75 },
   },
   "toji": {
@@ -299,7 +299,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "SSS",
     basePoints: 13000,
     affinity: "LEADER",
-    tags: ["sorcerer", "jujutsu-high", "six-eyes", "rika"],
+    tags: ["sorcerer", "jujutsu-high", "six-eyes", "rika", "culling-game", "tokyo-senior"],
     offRolePenalties: { combat: 0.9, support: 0.8 },
   },
   "higuruma": {
@@ -308,7 +308,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "S",
     basePoints: 10000,
     affinity: "LEADER",
-    tags: ["sorcerer", "judgeman"],
+    tags: ["sorcerer", "judgeman", "culling-game"],
     offRolePenalties: { combat: 0.9, support: 0.9 },
   },
   "gakuganji": {
@@ -391,7 +391,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "SS",
     basePoints: 12000,
     affinity: "COMBAT",
-    tags: ["sorcerer", "gambler", "stars"],
+    tags: ["sorcerer", "gambler", "stars", "culling-game"],
     offRolePenalties: { leader: 0.9, support: 0.7 },
   },
   "kirara": {
@@ -400,7 +400,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "A",
     basePoints: 9000,
     affinity: "SUPPORT",
-    tags: ["sorcerer", "star-map", "stars"],
+    tags: ["sorcerer", "star-map", "stars", "culling-game"],
     offRolePenalties: { leader: 0.7, combat: 0.6 },
   },
   "mechamaru": {

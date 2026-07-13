@@ -84,8 +84,8 @@ function BoardCardView({
           ? "brightness(1.2) drop-shadow(0 0 8px #4aeecc)"
           : targetable
           ? "brightness(1.2) drop-shadow(0 0 8px #ff4444)"
-          : card.exhausted
-          ? "brightness(0.5) saturate(0.35)"
+          : (card.exhausted || !card.canAttack || card.stunTurns > 0)
+          ? "brightness(0.55) saturate(0.3) grayscale(0.4)"
           : "brightness(1)",
       }}
       whileHover={onClick ? { y: -8, scale: selected ? 1.1 : 1.07 } : undefined}
@@ -93,7 +93,7 @@ function BoardCardView({
       transition={{ type: "spring", stiffness: 400, damping: 22 }}
       style={{ position: "relative", cursor: onClick ? "pointer" : "default", userSelect: "none" }}
     >
-      <CharacterCard defId={card.defId} def={def} size="xs" noHover hideInfo />
+      <CharacterCard defId={card.defId} def={def} size="xs" noHover hideInfo smallBadges />
 
       {/* Bottom overlay: name + ATK/HP */}
       <div style={{
@@ -107,8 +107,8 @@ function BoardCardView({
           {def?.name ?? card.defId}
         </div>
         <div style={{ display: "flex", justifyContent: "space-around", width: "100%", padding: "1px 4px" }}>
-          <span style={{ fontSize: 10, fontWeight: 900, color: "#ff8855" }}>⚔{card.atk}</span>
-          <span style={{ fontSize: 10, fontWeight: 900, color: hpColor }}>♥{card.currentHp}</span>
+          <span style={{ fontSize: 13, fontWeight: 900, color: "#ff8855" }}>⚔{card.atk}</span>
+          <span style={{ fontSize: 13, fontWeight: 900, color: hpColor }}>♥{card.currentHp}</span>
         </div>
         {/* HP bar */}
         <div style={{ width: "calc(100% - 8px)", height: 3, background: "#111", borderRadius: 2 }}>
@@ -226,8 +226,8 @@ function HandCardView({
           {def?.name ?? card.defId}
         </div>
         <div style={{ display: "flex", justifyContent: "space-around", width: "100%", padding: "1px 4px" }}>
-          <span style={{ fontSize: 10, fontWeight: 900, color: "#ff8855" }}>⚔{card.atk}</span>
-          <span style={{ fontSize: 10, fontWeight: 900, color: hpColor }}>♥{card.currentHp}</span>
+          <span style={{ fontSize: 13, fontWeight: 900, color: "#ff8855" }}>⚔{card.atk}</span>
+          <span style={{ fontSize: 13, fontWeight: 900, color: hpColor }}>♥{card.currentHp}</span>
         </div>
         <div style={{ width: "calc(100% - 8px)", height: 3, background: "#111", borderRadius: 2 }}>
           <motion.div animate={{ width: `${hpPct}%` }} transition={{ duration: 0.3 }}
@@ -256,8 +256,9 @@ function SpellCardView({
     : effKind === "DRAW"           ? "#4488ff"
     : effKind === "GAIN_ENERGY"    ? "#4aeecc"
     : effKind === "PURPLE"         ? "#bb44ff"
+    : effKind === "DESTROY_ONE"  ? "#ff44aa"
     : "#cc44ff";
-  const icon = effKind === "DAMAGE_TARGET" ? "💥" : effKind === "BUFF_BOARD_ATK" ? "⚔" : effKind === "BUFF_BOARD_HP" ? "💚" : effKind === "BUFF_ONE_ATK" ? "🗡" : effKind === "BUFF_ONE_HP" ? "💉" : effKind === "DRAW" ? "🃏" : effKind === "GAIN_ENERGY" ? "⚡" : effKind === "PURPLE" ? "🌌" : "❄";
+  const icon = effKind === "DAMAGE_TARGET" ? "💥" : effKind === "BUFF_BOARD_ATK" ? "⚔" : effKind === "BUFF_BOARD_HP" ? "💚" : effKind === "BUFF_ONE_ATK" ? "🗡" : effKind === "BUFF_ONE_HP" ? "💉" : effKind === "DRAW" ? "🃏" : effKind === "GAIN_ENERGY" ? "⚡" : effKind === "PURPLE" ? "🌌" : effKind === "DESTROY_ONE" ? "🗑" : "❄";
 
   return (
     <motion.div
@@ -469,24 +470,21 @@ function CenteredLeader({
 // ── LeaderRightPanel — player's leader shown as a right-column panel ──────────
 function LeaderRightPanel({
   leader, cardDb, playerName, playerIcon,
-  selected, energy, maxEnergy, domainMeter,
-  onSelect, onDomainActivate,
+  selected,
+  onSelect,
 }: {
   leader: BattleCard; cardDb: Record<string, CardDef>;
   playerName: string; playerIcon: string;
   selected?: boolean;
-  energy: number; maxEnergy: number;
-  domainMeter: number;
-  onSelect: () => void; onDomainActivate: () => void;
+  onSelect: () => void;
 }) {
   const def = cardDb[leader.defId];
   const hpPct   = Math.max(0, Math.min(100, (leader.currentHp / leader.maxHp) * 100));
   const hpColor = hpPct > 50 ? "#44ff88" : hpPct > 25 ? "#ffcc00" : "#ff4444";
-  const meterFull = domainMeter >= 100;
 
   return (
     <div style={{
-      width: 190, flexShrink: 0,
+      width: 160, flexShrink: 0,
       background: "rgba(4,4,16,0.88)", borderLeft: "1px solid #111128",
       display: "flex", flexDirection: "column", alignItems: "center",
       padding: "10px 10px", gap: 8, justifyContent: "center",
@@ -506,7 +504,7 @@ function LeaderRightPanel({
         whileTap={{ scale: 0.96 }}
         style={{ position: "relative", cursor: "pointer", userSelect: "none" }}
       >
-        <CharacterCard defId={leader.defId} def={def} size="sm" noHover />
+        <CharacterCard defId={leader.defId} def={def} size="sm" noHover hideAffinityAndCost />
         <div style={{
           position: "absolute", top: 4, left: 4,
           fontSize: 7, fontWeight: 900, letterSpacing: 1,
@@ -537,37 +535,6 @@ function LeaderRightPanel({
         <span style={{ fontSize: 11, fontWeight: 900, color: "#ff8855" }}>⚔{leader.atk}</span>
         <span style={{ fontSize: 11, color: "#334" }}>·</span>
         <span style={{ fontSize: 11, fontWeight: 900, color: hpColor }}>♥{leader.currentHp}/{leader.maxHp}</span>
-      </div>
-
-      {/* Domain meter */}
-      <div style={{ width: "100%" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-          <span style={{ fontSize: 7, color: meterFull ? "#cc44ff" : "#2a2a3a", letterSpacing: 1 }}>DOMAIN</span>
-          <span style={{ fontSize: 7, color: meterFull ? "#cc44ff" : "#2a2a3a" }}>{domainMeter}%</span>
-        </div>
-        <div style={{ height: 7, background: "#090912", borderRadius: 4, overflow: "hidden", border: "1px solid #1a1a2e" }}>
-          <motion.div animate={{ width: `${domainMeter}%` }} transition={{ duration: 0.4 }}
-            style={{
-              height: "100%",
-              background: meterFull ? "linear-gradient(90deg, #cc44ff, #ff44cc)" : "linear-gradient(90deg, #3a1070, #5a1eaa)",
-              borderRadius: 4,
-              boxShadow: meterFull ? "0 0 8px #cc44ffaa" : "none",
-            }} />
-        </div>
-        {meterFull && (
-          <motion.button
-            onClick={onDomainActivate}
-            animate={{ boxShadow: ["0 0 10px #cc44ff77", "0 0 22px #cc44ffbb", "0 0 10px #cc44ff77"] }}
-            transition={{ duration: 1.2, repeat: Infinity }}
-            style={{
-              width: "100%", marginTop: 5,
-              background: "linear-gradient(135deg, #3a0066, #7700bb)",
-              border: "2px solid #cc44ff", borderRadius: 8,
-              color: "#fff", fontSize: 9, fontWeight: 900, letterSpacing: 2,
-              padding: "5px 0", cursor: "pointer", fontFamily: "inherit",
-            }}
-          >✦ DOMAIN</motion.button>
-        )}
       </div>
     </div>
   );
@@ -909,7 +876,7 @@ export default function BattleBoardScreen({
       setBuffOneTargeting(prev => prev === spell.id ? null : spell.id);
       return;
     }
-    if (eff.kind === "DAMAGE_TARGET" || eff.kind === "STUN_ONE" || eff.kind === "PURPLE") {
+    if (eff.kind === "DAMAGE_TARGET" || eff.kind === "STUN_ONE" || eff.kind === "PURPLE" || eff.kind === "DESTROY_ONE") {
       // Needs enemy target — enter spell targeting mode (deselect any attacker)
       dispatch({ type: "CANCEL_ATTACK", pid });
       setPendingSpellId(prev => prev === spell.id ? null : spell.id);
@@ -945,31 +912,6 @@ export default function BattleBoardScreen({
         position: "relative", overflow: "hidden",
       }}>
         <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 50% 30%, #0a0a1a, #04040a)", zIndex: 0 }} />
-        {/* First / Second indicator (left edge) */}
-        <motion.div
-          initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}
-          style={{
-            position: "absolute", left: 24, top: "50%", transform: "translateY(-50%)",
-            zIndex: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
-          }}
-        >
-          <div style={{
-            padding: "8px 16px", borderRadius: 10,
-            background: goesFirst ? "rgba(74,238,204,0.1)" : "rgba(204,68,255,0.1)",
-            border: `1px solid ${goesFirst ? "#4aeecc66" : "#cc44ff66"}`,
-            textAlign: "center",
-          }}>
-            <div style={{ fontSize: 18, fontWeight: 900, color: goesFirst ? "#4aeecc" : "#cc44ff", letterSpacing: 2 }}>
-              {goesFirst ? "FIRST" : "SECOND"}
-            </div>
-            {!goesFirst && (
-              <div style={{ fontSize: 8, color: "#cc44ffaa", letterSpacing: 1, marginTop: 3 }}>
-                + extra spell
-              </div>
-            )}
-          </div>
-        </motion.div>
-
         <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 22 }}>
           {/* Player header */}
           <div style={{ textAlign: "center" }}>
@@ -1157,6 +1099,23 @@ export default function BattleBoardScreen({
               }}
             >{isReplaced ? "NEXT →" : "KEEP HAND"}</motion.button>
           </div>
+
+          {/* First / Second indicator — below buttons */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+            style={{
+              padding: "8px 20px", borderRadius: 10, textAlign: "center",
+              background: goesFirst ? "rgba(74,238,204,0.1)" : "rgba(204,68,255,0.1)",
+              border: `1px solid ${goesFirst ? "#4aeecc66" : "#cc44ff66"}`,
+            }}
+          >
+            <div style={{ fontSize: 16, fontWeight: 900, color: goesFirst ? "#4aeecc" : "#cc44ff", letterSpacing: 2 }}>
+              {goesFirst ? "FIRST" : "SECOND"}
+            </div>
+            {!goesFirst && (
+              <div style={{ fontSize: 8, color: "#cc44ffaa", letterSpacing: 1, marginTop: 3 }}>+ extra spell</div>
+            )}
+          </motion.div>
         </div>
       </div>
     );
@@ -1181,6 +1140,17 @@ export default function BattleBoardScreen({
   // enemyTargeting highlights opponent cards; own-card buff targeting does NOT
   const enemyTargeting = battleState.pendingAttackerId !== null || pendingSpellId !== null || battleState.pendingDomainAction !== null;
   const targeting = enemyTargeting || buffOneTargeting !== null;
+
+  // Leader is only a valid target in specific modes
+  const oppBoardCards = opp.board.filter(c => c !== null);
+  const pendingSpell  = pendingSpellId ? player.spells.find(s => s.id === pendingSpellId) ?? null : null;
+  const leaderTargetable =
+    // Attack: only when enemy board is fully cleared (or Toji berserk)
+    (battleState.pendingAttackerId !== null && (oppBoardCards.length === 0 || player.tojiBerserk)) ||
+    // Damage / stun spells can hit leader; destroy-cheap and purple cannot (board only)
+    (pendingSpell !== null && (pendingSpell.effect.kind === "DAMAGE_TARGET" || pendingSpell.effect.kind === "STUN_ONE")) ||
+    // Domain action targets enemy
+    battleState.pendingDomainAction !== null;
 
   const handleOwnCardClick = (instanceId: string) => {
     if (turnBackTargeting) {
@@ -1226,8 +1196,8 @@ export default function BattleBoardScreen({
         <CenteredLeader
           leader={opp.leader} cardDb={cardDb}
           playerName={oppName} playerIcon={oppIcon}
-          targetable={targeting}
-          onSelect={targeting ? handleTargetLeader : undefined}
+          targetable={leaderTargetable}
+          onSelect={leaderTargetable ? handleTargetLeader : undefined}
           isTop
         />
       </div>
@@ -1365,13 +1335,53 @@ export default function BattleBoardScreen({
             onSelectCard={handleOwnCardClick}
           />
         </div>
+        {/* Domain panel — right of board, left of leader */}
+        {(() => {
+          const meterFull = player.domainMeter >= 100;
+          return (
+            <div style={{
+              width: 72, flexShrink: 0,
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              padding: "10px 8px", borderLeft: "1px solid #1a1a30", borderRight: "1px solid #1a1a30",
+              gap: 6,
+            }}>
+              <span style={{ fontSize: 7, color: meterFull ? "#cc44ff" : "#2a2a3a", letterSpacing: 1, fontWeight: 900 }}>DOMAIN</span>
+              <span style={{ fontSize: 8, color: meterFull ? "#cc44ff" : "#2a2a3a" }}>{player.domainMeter}%</span>
+              {/* Vertical meter bar */}
+              <div style={{ flex: 1, width: 16, maxHeight: 80, minHeight: 40, background: "#090912", borderRadius: 4, overflow: "hidden", border: "1px solid #1a1a2e", position: "relative" }}>
+                <motion.div
+                  animate={{ height: `${player.domainMeter}%` }}
+                  transition={{ duration: 0.4 }}
+                  style={{
+                    position: "absolute", bottom: 0, left: 0, right: 0,
+                    background: meterFull ? "linear-gradient(0deg, #cc44ff, #ff44cc)" : "linear-gradient(0deg, #3a1070, #5a1eaa)",
+                    borderRadius: 4,
+                    boxShadow: meterFull ? "0 0 8px #cc44ffaa" : "none",
+                  }}
+                />
+              </div>
+              {meterFull && (
+                <motion.button
+                  onClick={() => dispatch({ type: "ACTIVATE_DOMAIN", pid })}
+                  animate={{ boxShadow: ["0 0 8px #cc44ff77", "0 0 18px #cc44ffbb", "0 0 8px #cc44ff77"] }}
+                  transition={{ duration: 1.2, repeat: Infinity }}
+                  style={{
+                    width: "100%",
+                    background: "linear-gradient(135deg, #3a0066, #7700bb)",
+                    border: "2px solid #cc44ff", borderRadius: 7,
+                    color: "#fff", fontSize: 7, fontWeight: 900, letterSpacing: 1,
+                    padding: "5px 2px", cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >✦ DOMAIN</motion.button>
+              )}
+            </div>
+          );
+        })()}
         {/* Leader panel (right) */}
         <LeaderRightPanel
           leader={player.leader} cardDb={cardDb}
           playerName={name} playerIcon={icon}
           selected={battleState.pendingAttackerId === player.leader.instanceId}
-          energy={player.energy} maxEnergy={player.maxEnergy}
-          domainMeter={player.domainMeter}
           onSelect={() => {
             if (buffOneTargeting) {
               dispatch({ type: "CAST_SPELL", pid, spellId: buffOneTargeting, targetInstanceId: player.leader.instanceId });
@@ -1380,7 +1390,6 @@ export default function BattleBoardScreen({
             }
             handleSelectAttacker(player.leader.instanceId);
           }}
-          onDomainActivate={() => dispatch({ type: "ACTIVATE_DOMAIN", pid })}
         />
       </div>
 
@@ -1390,24 +1399,38 @@ export default function BattleBoardScreen({
         background: "rgba(0,0,0,0.35)", borderTop: "1px solid #0c0c1e",
         position: "relative", zIndex: 30, minHeight: 130, overflow: "visible",
       }}>
-        {/* Spells panel (left column) */}
+        {/* Spells panel (left column) — always 4 slots */}
         <div style={{
           flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
-          padding: "10px 12px", borderRight: "1px solid #1a1a30", gap: 8, minWidth: 110,
+          padding: "10px 12px", borderRight: "1px solid #1a1a30", gap: 8, minWidth: 220,
         }}>
           <div style={{ fontSize: 7, color: "#334", letterSpacing: 3, fontWeight: 700 }}>SPELLS</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
-            {player.spells.map(spell => (
-              <SpellCardView
-                key={spell.id}
-                spell={spell}
-                active={pendingSpellId === spell.id || buffOneTargeting === spell.id}
-                onClick={() => handleSpellClick(spell)}
-              />
-            ))}
-            {player.spells.length === 0 && (
-              <div style={{ fontSize: 7, color: "#222", letterSpacing: 1, paddingTop: 4 }}>—</div>
-            )}
+            {Array.from({ length: 4 }).map((_, i) => {
+              const spell = player.spells[i];
+              if (spell) {
+                return (
+                  <SpellCardView
+                    key={spell.id}
+                    spell={spell}
+                    active={pendingSpellId === spell.id || buffOneTargeting === spell.id}
+                    onClick={() => handleSpellClick(spell)}
+                  />
+                );
+              }
+              return (
+                <div key={`empty-${i}`} style={{
+                  width: 90, borderRadius: 10, padding: "10px 8px",
+                  background: "rgba(255,255,255,0.01)",
+                  border: "1px dashed #1a1a2a",
+                  display: "flex", flexDirection: "column", alignItems: "center",
+                  justifyContent: "center", gap: 6, minHeight: 100,
+                }}>
+                  <div style={{ fontSize: 18, color: "#1a1a2a" }}>✦</div>
+                  <div style={{ fontSize: 7, color: "#1a1a2a", letterSpacing: 1 }}>EMPTY</div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -1462,41 +1485,40 @@ export default function BattleBoardScreen({
           })()}
         </div>
 
-        {/* Hand cards + energy bar (stacked in a flex column) */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "visible", position: "relative", zIndex: 10 }}>
-          {/* Energy bar — horizontal, spans full width above cards */}
-          <div style={{
-            display: "flex", alignItems: "center", gap: 8,
-            padding: "8px 20px 4px",
-            borderBottom: "1px solid #0e0e22",
-          }}>
-            <span style={{ fontSize: 10, color: "#4aeecc", fontWeight: 900, letterSpacing: 1, flexShrink: 0 }}>
-              ⚡ {player.energy}/{player.maxEnergy}
-            </span>
-            <div style={{ display: "flex", gap: 5, alignItems: "center", flex: 1 }}>
-              {Array.from({ length: player.maxEnergy }).map((_, i) => (
-                <motion.div key={i}
-                  animate={i < player.energy
-                    ? { boxShadow: ["0 0 6px #4aeecc88", "0 0 14px #4aeecc", "0 0 6px #4aeecc88"] }
-                    : {}}
-                  transition={{ duration: 1.6, repeat: Infinity, delay: i * 0.06 }}
-                  style={{
-                    flex: 1, height: 18, borderRadius: 5,
-                    background: i < player.energy
-                      ? "linear-gradient(135deg, #1adfff 0%, #4aeecc 100%)"
-                      : "#0d0d18",
-                    border: `1px solid ${i < player.energy ? "#4aeecc" : "#1e1e2e"}`,
-                    transition: "background 0.2s, border-color 0.2s",
-                  }}
-                />
-              ))}
-            </div>
+        {/* Energy column — compact vertical strip between GET SPELL and hand cards */}
+        <div style={{
+          flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
+          justifyContent: "center", padding: "10px 12px", borderRight: "1px solid #1a1a30",
+          gap: 7, minWidth: 70,
+        }}>
+          <span style={{ fontSize: 14, color: "#4aeecc", fontWeight: 900, letterSpacing: 1, textAlign: "center" }}>
+            ⚡ {player.energy}/{player.maxEnergy}
+          </span>
+          <div style={{ display: "flex", flexDirection: "row", flexWrap: "wrap", gap: 4, justifyContent: "center" }}>
+            {Array.from({ length: player.maxEnergy }).map((_, i) => (
+              <motion.div key={i}
+                animate={i < player.energy
+                  ? { boxShadow: ["0 0 6px #4aeecc88", "0 0 16px #4aeecc", "0 0 6px #4aeecc88"] }
+                  : {}}
+                transition={{ duration: 1.6, repeat: Infinity, delay: i * 0.06 }}
+                style={{
+                  width: 20, height: 20, borderRadius: 5,
+                  background: i < player.energy
+                    ? "linear-gradient(135deg, #1adfff 0%, #4aeecc 100%)"
+                    : "#0d0d18",
+                  border: `1px solid ${i < player.energy ? "#4aeecc" : "#1e1e2e"}`,
+                  transition: "background 0.2s, border-color 0.2s",
+                }}
+              />
+            ))}
           </div>
+        </div>
 
-          {/* Hand cards */}
+        {/* Hand cards */}
+        <div style={{ flex: 1, display: "flex", overflow: "visible", position: "relative", zIndex: 10 }}>
           <div style={{
-            flex: 1, display: "flex", gap: 10, justifyContent: "center", alignItems: "flex-end",
-            padding: "10px 20px 10px", overflow: "visible",
+            flex: 1, display: "flex", gap: 14, justifyContent: "center", alignItems: "center",
+            padding: "8px 20px 8px", overflow: "visible",
           }}>
             {player.hand.map(card => {
               const isDrawn = drewCardId === card.instanceId;
@@ -1506,7 +1528,7 @@ export default function BattleBoardScreen({
                   initial={isDrawn ? { y: 60, opacity: 0 } : false}
                   animate={{ y: 0, opacity: 1 }}
                   transition={isDrawn ? { type: "spring", stiffness: 380, damping: 22 } : {}}
-                  style={{ flexShrink: 0, position: "relative", zIndex: 10 }}
+                  style={{ flexShrink: 0, position: "relative", zIndex: 10, transform: "scale(1.1)", transformOrigin: "center center" }}
                 >
                   <HandCardView
                     card={card} cardDb={cardDb}

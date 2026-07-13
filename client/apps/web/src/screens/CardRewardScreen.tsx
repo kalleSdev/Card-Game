@@ -160,10 +160,10 @@ export default function CardRewardScreen({ profile, options, cardDb, isWinner, o
                 <motion.div
                   initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                   style={{
-                    position: "absolute", top: 6, left: 6, zIndex: 20,
-                    padding: "2px 6px", borderRadius: 6,
+                    position: "absolute", top: 8, left: 8, zIndex: 20,
+                    padding: "3px 8px", borderRadius: 6,
                     background: "#ffd700", color: "#000",
-                    fontSize: 7, fontWeight: 900, letterSpacing: 1,
+                    fontSize: 9, fontWeight: 900, letterSpacing: 1.5,
                   }}
                 >NEW</motion.div>
               )}
@@ -171,37 +171,63 @@ export default function CardRewardScreen({ profile, options, cardDb, isWinner, o
               {/* ASCEND badge */}
               {aboutToAscend && !isNew && !isSelected && (
                 <motion.div
-                  animate={{ opacity: [0.7, 1, 0.7] }}
+                  animate={{ opacity: [0.8, 1, 0.8] }}
                   transition={{ duration: 1, repeat: Infinity }}
                   style={{
-                    position: "absolute", top: 6, left: 6, zIndex: 20,
-                    padding: "2px 6px", borderRadius: 6,
+                    position: "absolute", top: 8, left: 8, zIndex: 20,
+                    padding: "3px 8px", borderRadius: 6,
                     background: "#aa44ff", color: "#fff",
-                    fontSize: 7, fontWeight: 900, letterSpacing: 1,
+                    fontSize: 9, fontWeight: 900, letterSpacing: 1.5,
                   }}
                 >ASCEND</motion.div>
               )}
 
               <div style={{ transform: "scale(1.1)", transformOrigin: "center top" }}>
-                <CharacterCard defId={id} def={def} size="lg" rarityOverride="S" costOverride={cost} />
+                <CharacterCard defId={id} def={def} size="lg" costOverride={cost} />
               </div>
 
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: isSelected ? "#fff" : "#aaa" }}>{def.name}</div>
-                <div style={{ fontSize: 8, letterSpacing: 2, color: "#ffd700", marginTop: 3 }}>S TIER</div>
-                {(() => {
+              {/* Status info block below card */}
+              {(() => {
                 const collected = profile.collection.find(c => c.defId === id);
                 const dupeStars = collected ? collected.duplicateStars : 0;
-                const starDisplay = collected ? `${dupeStars % 5}/5 ★` : "";
-                return isNew ? (
-                  <div style={{ fontSize: 8, color: "#ffd700", letterSpacing: 1, marginTop: 3 }}>✦ new card</div>
-                ) : aboutToAscend ? (
-                  <div style={{ fontSize: 8, color: "#aa44ff", letterSpacing: 1, marginTop: 3 }}>★ {starDisplay} — ready to ascend!</div>
-                ) : (
-                  <div style={{ fontSize: 8, color: "#cc44ff99", letterSpacing: 1, marginTop: 3 }}>{starDisplay} — +1 on collect</div>
+                if (isNew) return (
+                  <div style={{
+                    textAlign: "center", padding: "8px 14px", borderRadius: 10, width: "100%",
+                    background: "rgba(255,215,0,0.12)", border: "1px solid #ffd70066",
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 900, color: "#ffd700", letterSpacing: 1 }}>✦ NEW CARD</div>
+                    <div style={{ fontSize: 10, color: "#ffd700aa", marginTop: 3 }}>Added to your collection</div>
+                  </div>
+                );
+                if (aboutToAscend) return (
+                  <div style={{
+                    textAlign: "center", padding: "8px 14px", borderRadius: 10, width: "100%",
+                    background: "rgba(170,68,255,0.14)", border: "1px solid #aa44ff88",
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 900, color: "#cc88ff", letterSpacing: 1 }}>★ READY TO ASCEND</div>
+                    <div style={{ display: "flex", justifyContent: "center", gap: 3, marginTop: 5 }}>
+                      {Array.from({ length: 5 }).map((_, s) => (
+                        <span key={s} style={{ fontSize: 12, color: s < dupeStars % 5 ? "#aa44ff" : "#333" }}>★</span>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 9, color: "#aa44ffaa", marginTop: 4 }}>Collecting will ascend this card</div>
+                  </div>
+                );
+                return (
+                  <div style={{
+                    textAlign: "center", padding: "8px 14px", borderRadius: 10, width: "100%",
+                    background: "rgba(100,100,180,0.1)", border: "1px solid #4455aa55",
+                  }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "#aabbff", letterSpacing: 1 }}>DUPLICATE</div>
+                    <div style={{ display: "flex", justifyContent: "center", gap: 3, marginTop: 5 }}>
+                      {Array.from({ length: 5 }).map((_, s) => (
+                        <span key={s} style={{ fontSize: 12, color: s < dupeStars % 5 ? "#6688ff" : "#222" }}>★</span>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 9, color: "#6688ffaa", marginTop: 4 }}>{dupeStars % 5 + 1}/5 — +1 star on collect</div>
+                  </div>
                 );
               })()}
-              </div>
             </motion.div>
           );
         })}

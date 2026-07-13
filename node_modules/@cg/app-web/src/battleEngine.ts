@@ -33,8 +33,8 @@ const RARITY_STATS: Record<string, { atk: number; hp: number; cost: number }> = 
   A:   { atk: 3, hp: 4,  cost: 2 },
   S:   { atk: 4, hp: 5,  cost: 3 },
   SS:  { atk: 6, hp: 6,  cost: 4 },
-  SSS: { atk: 6, hp: 7,  cost: 5 },
-  X:   { atk: 7, hp: 7,  cost: 7 },
+  SSS: { atk: 7, hp: 7,  cost: 5 },
+  X:   { atk: 8, hp: 8,  cost: 7 },
 };
 
 export function deriveStats(def: CardDef): { atk: number; hp: number; cost: number } {
@@ -57,7 +57,8 @@ export type SpellEffect =
   | { kind: "GAIN_ENERGY"; amount: number }                // gain extra energy this turn
   | { kind: "PURPLE" }                                     // kill own + enemy card at same slot
   | { kind: "BUFF_ONE_HP"; amount: number }               // buff one own card's HP
-  | { kind: "BUFF_ONE_ATK"; amount: number };              // buff one own card's ATK
+  | { kind: "BUFF_ONE_ATK"; amount: number }              // buff one own card's ATK
+  | { kind: "DESTROY_ONE" };                               // destroy any one enemy board card
 
 export interface SpellCard {
   id: string;
@@ -83,16 +84,16 @@ type SynergyRule = {
 
 export const BATTLE_SYNERGY_RULES: SynergyRule[] = [
   { id: "strongest",     tags: ["strongest"],            minCount: 2, label: "The Strongest",       spellName: "Peak Pressure",     spellDesc: "Deal 4 damage to any enemy",              spell: { kind: "DAMAGE_TARGET", amount: 4 } },
-  { id: "disaster",      tags: ["disaster-curse"],       minCount: 2, label: "Disaster Curses",     spellName: "Calamity Surge",    spellDesc: "All your cards gain +2 ATK for 2 turns",  spell: { kind: "BUFF_BOARD_ATK", amount: 2, turns: 2 } },
-  { id: "jujutsu_high",  tags: ["jujutsu-high"],         minCount: 3, label: "Jujutsu High",        spellName: "School Spirit",     spellDesc: "All your cards gain +3 HP",               spell: { kind: "BUFF_BOARD_HP", amount: 3 } },
-  { id: "zenin_clan",    tags: ["zenin-clan"],           minCount: 2, label: "Zenin Clan",          spellName: "Clan Inheritance",  spellDesc: "Draw 1 card",                             spell: { kind: "DRAW", count: 1 } },
-  { id: "brotherhood",   tags: ["brother"],              minCount: 2, label: "Brotherhood",         spellName: "Sworn Bond",        spellDesc: "All your cards gain +2 ATK for 1 turn",   spell: { kind: "BUFF_BOARD_ATK", amount: 2, turns: 1 } },
-  { id: "heavenly",      tags: ["heavenly-restriction"], minCount: 2, label: "Heavenly Restriction", spellName: "Pure Body",        spellDesc: "All your cards gain +4 HP",               spell: { kind: "BUFF_BOARD_HP", amount: 4 } },
+  { id: "disaster",      tags: ["disaster-curse"],       minCount: 2, label: "Disaster Curses",     spellName: "Calamity Surge",    spellDesc: "All your cards gain +1 ATK for 2 turns",  spell: { kind: "BUFF_BOARD_ATK", amount: 1, turns: 2 } },
+  { id: "jujutsu_high",  tags: ["jujutsu-high"],         minCount: 3, label: "Jujutsu High",        spellName: "School Spirit",     spellDesc: "All your cards gain +1 HP",               spell: { kind: "BUFF_BOARD_HP", amount: 1 } },
+  { id: "zenin_clan",    tags: ["zenin-clan"],           minCount: 2, label: "Zenin Clan",          spellName: "Clan Mastery",      spellDesc: "Give one of your cards +3 ATK",           spell: { kind: "BUFF_ONE_ATK", amount: 3 } },
+  { id: "brotherhood",   tags: ["brother"],              minCount: 2, label: "Brotherhood",         spellName: "Sworn Bond",        spellDesc: "All your cards gain +1 ATK for 1 turn",   spell: { kind: "BUFF_BOARD_ATK", amount: 1, turns: 1 } },
+  { id: "heavenly",      tags: ["heavenly-restriction"], minCount: 2, label: "Heavenly Restriction", spellName: "Pure Body",        spellDesc: "All your cards gain +1 HP",               spell: { kind: "BUFF_BOARD_HP", amount: 1 } },
   { id: "culling_game",  tags: ["culling-game"],         minCount: 3, label: "Culling Game",        spellName: "Kill Score",        spellDesc: "Deal 3 damage to any enemy",              spell: { kind: "DAMAGE_TARGET", amount: 3 } },
   { id: "six_eyes",      tags: ["six-eyes"],             minCount: 2, label: "Six Eyes",            spellName: "Infinity",          spellDesc: "Stun one enemy card for 1 turn",          spell: { kind: "STUN_ONE" } },
-  { id: "gojo_students", tags: ["gojo-student"],         minCount: 2, label: "Gojo's Students",     spellName: "Sensei's Lessons",  spellDesc: "Draw 2 cards",                            spell: { kind: "DRAW", count: 2 } },
+  { id: "gojo_students", tags: ["gojo-student"],         minCount: 2, label: "Gojo's Students",     spellName: "Sensei's Guidance", spellDesc: "Give one of your cards +3 HP",            spell: { kind: "BUFF_ONE_HP", amount: 3 } },
   { id: "tokyo_senior",  tags: ["tokyo-senior"],         minCount: 3, label: "Tokyo Trio",          spellName: "Senior Formation",  spellDesc: "Deal 3 damage to any enemy",              spell: { kind: "DAMAGE_TARGET", amount: 3 } },
-  { id: "stars",         tags: ["stars"],                minCount: 2, label: "Stars",                spellName: "Starfall",          spellDesc: "All your cards gain +4 HP",               spell: { kind: "BUFF_BOARD_HP", amount: 4 } },
+  { id: "stars",         tags: ["stars"],                minCount: 2, label: "Stars",                spellName: "Starfall",          spellDesc: "All your cards gain +1 HP",               spell: { kind: "BUFF_BOARD_HP", amount: 1 } },
   { id: "gojo_geto_bond", tags: ["gojo-geto"],           minCount: 2, label: "Destined Rivals",      spellName: "Hollow Purple",     spellDesc: "Deal 6 damage to any enemy",              spell: { kind: "DAMAGE_TARGET", amount: 6 } },
 ];
 
@@ -123,23 +124,38 @@ export type DomainEffect =
   | { kind: "SNEAK_ATTACK_DOMAIN"; amount: number }      // Maki (interactive, no counter)
   | { kind: "GRANT_SPELL"; spellName: string; spellDesc: string; spell: SpellEffect }; // grants a spell to caster
 
-export const DOMAIN_BATTLE_EFFECTS: Record<string, { name: string; effect: DomainEffect }> = {
-  "gojo-base": { name: "Infinite Void",              effect: { kind: "STUN_ENEMY_BOARD",   turns: 1 } },
-  "sukuna":    { name: "Malevolent Shrine",           effect: { kind: "KILL_ALL_BOARD" } },
-  "mahito":    { name: "Self-Embodiment of Perfection", effect: { kind: "BUFF_OWN_BOARD",  atkBonus: 25, hpBonus: 0, turns: 2 } },
+type DomainEntry = {
+  name: string;
+  effect: DomainEffect;
+  grantSpell?: { name: string; desc: string; effect: SpellEffect };
+};
+
+export const DOMAIN_BATTLE_EFFECTS: Record<string, DomainEntry> = {
+  "gojo-base": { name: "Infinite Void",              effect: { kind: "STUN_ENEMY_BOARD",   turns: 1 } }, // Gojo special-cased in applyDomainEffect to also grant Hollow Purple
+  "sukuna":    { name: "Malevolent Shrine",           effect: { kind: "KILL_ALL_BOARD" },
+    grantSpell: { name: "Dismantle", desc: "Destroy any 1 enemy board card", effect: { kind: "DESTROY_ONE" } } },
+  "mahito":    { name: "Self-Embodiment of Perfection", effect: { kind: "BUFF_OWN_BOARD",  atkBonus: 25, hpBonus: 0, turns: 2 },
+    grantSpell: { name: "Transfiguration", desc: "All your cards gain +2 ATK for 2 turns", effect: { kind: "BUFF_BOARD_ATK", amount: 2, turns: 2 } } },
   "yuta":      { name: "Rika Orimoto",               effect: { kind: "COPY_ENEMY_CARD" } },
   "geto":      { name: "Maximum: Uzumaki",            effect: { kind: "SPAWN_ENTITIES",    count: 3, atk: 3, hp: 3 } },
-  "megumi":    { name: "Chimera Shadow Garden",       effect: { kind: "BUFF_OWN_BOARD",     atkBonus: 20, hpBonus: 15, turns: 3 } },
+  "megumi":    { name: "Chimera Shadow Garden",       effect: { kind: "BUFF_OWN_BOARD",     atkBonus: 20, hpBonus: 15, turns: 3 },
+    grantSpell: { name: "Shadow Strike", desc: "All your cards gain +2 ATK for 3 turns", effect: { kind: "BUFF_BOARD_ATK", amount: 2, turns: 3 } } },
   "hakari":    { name: "Idle Death Gamble",           effect: { kind: "GRANT_RANDOM_SPELLS", count: 3 } },
-  "higuruma":  { name: "Deadly Sentencing",           effect: { kind: "STUN_ENEMY_BOARD",   turns: 1 } },
-  "jogo":      { name: "Coffin of the Iron Mountain", effect: { kind: "DAMAGE_ALL_ENEMIES", amount: 30 } },
-  "dagon":     { name: "Horizon of the Captivating Skandha", effect: { kind: "DAMAGE_ALL_ENEMIES", amount: 20 } },
+  "higuruma":  { name: "Deadly Sentencing",           effect: { kind: "STUN_ENEMY_BOARD",   turns: 1 },
+    grantSpell: { name: "Judgeman's Verdict", desc: "Stun one enemy card for 1 turn", effect: { kind: "STUN_ONE" } } },
+  "jogo":      { name: "Coffin of the Iron Mountain", effect: { kind: "DAMAGE_ALL_ENEMIES", amount: 30 },
+    grantSpell: { name: "Ember Insects", desc: "Deal 5 damage to any enemy", effect: { kind: "DAMAGE_TARGET", amount: 5 } } },
+  "dagon":     { name: "Horizon of the Captivating Skandha", effect: { kind: "DAMAGE_ALL_ENEMIES", amount: 20 },
+    grantSpell: { name: "Tidal Surge", desc: "Deal 4 damage to any enemy", effect: { kind: "DAMAGE_TARGET", amount: 4 } } },
   "toji":      { name: "Heavenly Restriction Assault", effect: { kind: "GRANT_SPELL", spellName: "Toji Strike", spellDesc: "Deal 4 damage to any target", spell: { kind: "DAMAGE_TARGET", amount: 4 } } },
-  "kashimo":   { name: "Mythological Beast Amber",   effect: { kind: "PERMANENT_LEADER_ATK", atk: 5, counterDmg: 5 } },
-  "mahoraga":  { name: "Adaptation",                 effect: { kind: "HEAL_AND_KILL_ONE",  healAmount: 6 } },
+  "kashimo":   { name: "Mythological Beast Amber",   effect: { kind: "GRANT_SPELL", spellName: "Beast Amber", spellDesc: "Give any one of your cards +3 permanent ATK", spell: { kind: "BUFF_ONE_ATK", amount: 3 } } },
+  "mahoraga":  { name: "Adaptation",                 effect: { kind: "HEAL_AND_KILL_ONE",  healAmount: 6 },
+    grantSpell: { name: "Adaptation Strike", desc: "Destroy any 1 enemy board card", effect: { kind: "DESTROY_ONE" } } },
   "uro":       { name: "Shattered Heaven",           effect: { kind: "REDUCE_COSTS",        amount: 2, turns: 2 } },
-  "dabura":    { name: "Demon Realm",                effect: { kind: "CHOOSE_KILL_ENEMIES", count: 2 } },
-  "naoya":     { name: "Projection Strike",          effect: { kind: "BUFF_OWN_BOARD",      atkBonus: 30, hpBonus: 0, turns: 1 } },
+  "dabura":    { name: "Demon Realm",                effect: { kind: "CHOOSE_KILL_ENEMIES", count: 2 },
+    grantSpell: { name: "Demon King's Curse", desc: "Destroy any 1 enemy board card", effect: { kind: "DESTROY_ONE" } } },
+  "naoya":     { name: "Projection Strike",          effect: { kind: "BUFF_OWN_BOARD",      atkBonus: 30, hpBonus: 0, turns: 1 },
+    grantSpell: { name: "Projection Slash", desc: "All your cards gain +3 ATK for 1 turn", effect: { kind: "BUFF_BOARD_ATK", amount: 3, turns: 1 } } },
   "maki":      { name: "Heavenly Restriction Assault", effect: { kind: "SNEAK_ATTACK_DOMAIN", amount: 5 } },
   "takaba":    { name: "Comedian",                   effect: { kind: "SHEEPIFY_BOARD" } },
 };
@@ -198,8 +214,7 @@ export interface BattlePlayer {
   maxEnergy: number;            // grows by 1 per turn, capped at 10
   domainMeter: number;          // 0–100; fills as you play cards and take damage
   domainActive: boolean;        // true during domain effect's active turns
-  domainCooldown: number;       // turns until domain can be activated again
-  domainUsed: boolean;          // once per match flag (optional limit — set false to allow multi-use)
+  domainCooldown: number;       // turns until domain can be activated again (4 turns after use)
   activeSynergies: string[];    // synergy rule ids active based on draft deck composition
   spells: SpellCard[];          // spell cards in hand (usable immediately)
   spellPool: SpellCard[];       // pool of synergy spells available to draw (one per synergy, depletes)
@@ -425,7 +440,6 @@ function buildPlayer(
     domainMeter: 0,
     domainActive: false,
     domainCooldown: 0,
-    domainUsed: false,
     activeSynergies,
     spells: defaultSpells,
     spellPool,
@@ -586,9 +600,9 @@ function applyDomainEffect(
         const purpleSpell: SpellCard = {
           id: `spell-purple-${++_instanceCounter}`,
           synergyId: "gojo-purple",
-          name: "Purple",
-          description: "Destroy 1 own card + 1 enemy card at the same board slot",
-          effect: { kind: "PURPLE" },
+          name: "Hollow Purple",
+          description: "Destroy any 1 enemy board card",
+          effect: { kind: "DESTROY_ONE" },
         };
         p = { ...p, spells: [...p.spells, purpleSpell] };
       }
@@ -740,6 +754,20 @@ function applyDomainEffect(
       p = { ...p, spells: [...p.spells, grantedSpell] };
       break;
     }
+  }
+
+  // Grant bonus spell if the domain entry defines one
+  const domainEntry = DOMAIN_BATTLE_EFFECTS[p.leader.defId];
+  if (domainEntry?.grantSpell) {
+    const gs = domainEntry.grantSpell;
+    const bonusSpell: SpellCard = {
+      id: `spell-domain-bonus-${++_instanceCounter}`,
+      synergyId: "domain",
+      name: gs.name,
+      description: gs.desc,
+      effect: gs.effect,
+    };
+    p = { ...p, spells: [...p.spells, bonusSpell] };
   }
 
   return { ...state, players: { ...state.players, [pid]: p, [opp]: o } };
@@ -1040,7 +1068,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
             ...c, atk: c.atk + eff.amount, tempAtkBonus: c.tempAtkBonus + eff.amount,
             tempBonusTurns: Math.max(c.tempBonusTurns, eff.turns),
           });
-          p = { ...p, leader: buffAtk(p.leader), board: p.board.map(c => c ? buffAtk(c) : null) };
+          p = { ...p, board: p.board.map(c => c ? buffAtk(c) : null) };
           break;
         }
         case "BUFF_BOARD_HP": {
@@ -1048,7 +1076,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
             ...c, maxHp: c.maxHp + eff.amount, currentHp: c.currentHp + eff.amount,
             tempHpBonus: c.tempHpBonus + eff.amount, tempBonusTurns: Math.max(c.tempBonusTurns, 2),
           });
-          p = { ...p, leader: buffHp(p.leader), board: p.board.map(c => c ? buffHp(c) : null) };
+          p = { ...p, board: p.board.map(c => c ? buffHp(c) : null) };
           break;
         }
         case "DRAW": {
@@ -1102,6 +1130,13 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
           p = { ...p, board: p.board.map((c, i) => i === enemySlot ? null : c) };
           break;
         }
+        case "DESTROY_ONE": {
+          if (!intent.targetInstanceId) return illegal("Select an enemy card to destroy");
+          const target = o.board.find(c => c?.instanceId === intent.targetInstanceId);
+          if (!target) return illegal("Target not on enemy board");
+          o = { ...o, board: o.board.map(c => c?.instanceId === intent.targetInstanceId ? null : c) };
+          break;
+        }
         case "BUFF_ONE_HP": {
           if (!intent.targetInstanceId) return illegal("Select one of your cards to buff HP");
           const isLeader = p.leader.instanceId === intent.targetInstanceId;
@@ -1153,7 +1188,6 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
             domainMeter:   0,
             domainActive:  true,
             domainCooldown: 4,
-            domainUsed:    true,
           },
         },
       };

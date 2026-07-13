@@ -278,12 +278,18 @@ interface CharacterCardProps {
   starLevel?: number;
   /** Hide the bottom info strip (name/affinity/cost) so a parent overlay can replace it */
   hideInfo?: boolean;
+  /** Hide only the affinity + energy cost row, but keep the name */
+  hideAffinityAndCost?: boolean;
+  /** Shrink the rarity badge and affinity emoji (for scaled-up board cards) */
+  smallBadges?: boolean;
+  /** Show ATK/HP stats inside the card + cost badge on top-right (moves with card tilt) */
+  showStats?: { atk: number; hp: number };
 }
 
 export default function CharacterCard({
   defId, def, size = "md", selected = false, dimmed = false,
   equippedBonus, overlay, noHover = false, costOverride, rarityOverride, starLevel = 0,
-  hideInfo = false,
+  hideInfo = false, hideAffinityAndCost = false, smallBadges = false, showStats,
 }: CharacterCardProps) {
   const [imgFailed, setImgFailed] = useState(false);
   const [sheenPos, setSheenPos] = useState({ x: 50, y: 50 });
@@ -418,7 +424,7 @@ export default function CharacterCard({
       }}>
 
       {/* ── Art area ── */}
-      <div style={{ height: hideInfo ? "100%" : "72%", position: "relative", overflow: "hidden", flexShrink: 0 }}>
+      <div style={{ height: hideInfo ? "100%" : "80%", position: "relative", overflow: "hidden", flexShrink: 0 }}>
         {!imgFailed ? (
           <img
             src={cardImageSrc(defId)}
@@ -461,28 +467,29 @@ export default function CharacterCard({
           </div>
         )}
 
-        {/* Rarity / cost badge */}
+        {/* Cost badge (always shows energy cost; costOverride lets callers force a specific value) */}
         <motion.div style={{
-          position: "absolute", top: 5, left: 5,
-          fontSize: d.rarityFontSize, fontWeight: "bold",
-          color: costOverride !== undefined ? "#4aeecc" : color,
-          background: "#000000aa", borderRadius: 4, padding: "2px 5px",
-          letterSpacing: costOverride !== undefined ? 0 : 1,
-          border: `1px solid ${costOverride !== undefined ? "#4aeecc55" : color + "55"}`,
+          position: "absolute", top: 4, left: 4,
+          fontSize: smallBadges ? 8 : d.rarityFontSize + 3, fontWeight: 900,
+          color: "#4aeecc",
+          background: "#000000cc", borderRadius: 5, padding: smallBadges ? "1px 4px" : "2px 7px",
+          letterSpacing: 0,
+          border: "1px solid #4aeecc88",
           backdropFilter: "blur(4px)",
+          textShadow: "0 0 8px #4aeecc99",
           x: !noHover && !dimmed ? badgeX : 0,
           y: !noHover && !dimmed ? badgeY : 0,
           zIndex: 5,
         }}>
-          {costOverride !== undefined ? costOverride : (def?.rarity ?? "?")}
+          {costOverride !== undefined ? costOverride : (def ? deriveStats(def).cost : "?")}
         </motion.div>
 
         {/* Affinity icon — same depth as badge */}
         {def?.affinity && (
           <motion.div style={{
             position: "absolute", top: 5, right: 5,
-            fontSize: d.rarityFontSize + 1,
-            background: "#000000aa", borderRadius: 4, padding: "2px 4px",
+            fontSize: smallBadges ? 7 : d.rarityFontSize + 1,
+            background: "#000000aa", borderRadius: 4, padding: smallBadges ? "1px 3px" : "2px 4px",
             backdropFilter: "blur(4px)",
             x: !noHover && !dimmed ? badgeX : 0,
             y: !noHover && !dimmed ? badgeY : 0,
@@ -515,14 +522,12 @@ export default function CharacterCard({
         }}>
           {def?.name ?? "Unknown"}
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: d.rarityFontSize, color: "#cccccc", letterSpacing: 1 }}>
-            {def?.affinity ?? ""}
-          </span>
-          <span style={{ fontSize: d.ptsFontSize, color: "#4aeecc", fontWeight: "bold" }}>
-            {def ? `${deriveStats(def).cost} ⚡` : ""}
-          </span>
-        </div>
+        {showStats && (
+          <div style={{ display: "flex", justifyContent: "space-around", alignItems: "center" }}>
+            <span style={{ fontSize: d.ptsFontSize, fontWeight: 900, color: "#ff8855" }}>⚔{showStats.atk}</span>
+            <span style={{ fontSize: d.ptsFontSize, fontWeight: 900, color: "#44ff88" }}>♥{showStats.hp}</span>
+          </div>
+        )}
         {equippedBonus !== undefined && (
           <div style={{ fontSize: d.rarityFontSize, color: "#44cc44", fontWeight: "bold" }}>
             ⚔ +{equippedBonus.toLocaleString()}
