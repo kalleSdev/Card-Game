@@ -16,8 +16,8 @@ export interface MatchRecord {
 
 export interface CollectedCard {
   defId: string;
-  duplicateStars: number;  // each 5 = ascend one tier (S→SS→SSS→X)
-  killStars: number;       // red stars from killing enemy leader; each 5 = 1 kill-X mark
+  duplicateStars: number;  // each 3 = ascend one tier (S→SS→SSS→X)
+  killStars: number;       // red stars from killing enemy leader; each 3 = 1 kill-X mark
 }
 
 export interface SubDeck {
@@ -190,7 +190,7 @@ export function deleteSubDeck(profileId: string, deckId: string): void {
 
 /** Returns the visual rarity tier for a collected card based on ascension level */
 export function getAscensionRarity(card: CollectedCard): string {
-  const level = Math.floor(card.duplicateStars / 5);
+  const level = Math.floor(card.duplicateStars / 3);
   if (level >= 3) return "X";
   if (level === 2) return "SSS";
   if (level === 1) return "SS";

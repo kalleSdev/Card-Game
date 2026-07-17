@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useRef, Component } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useAnimationControls } from "framer-motion";
 
 // ── ErrorBoundary — catches render crashes and shows the error ────────────────
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -29,7 +29,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 }
 import type { PlayerId, CardDef } from "@cg/contracts";
 import type { BattleState, BattleCard, BattlePlayer, BattleIntent, SpellCard, PendingDomainAction } from "../battleEngine";
-import { createBattleEngine, createBattleState, DOMAIN_BATTLE_EFFECTS, BATTLE_SYNERGY_RULES } from "../battleEngine";
+import { createBattleEngine, createBattleState, DOMAIN_BATTLE_EFFECTS, BATTLE_SYNERGY_RULES, CARD_PERKS } from "../battleEngine";
 import type { DomainEffect } from "../battleEngine";
 import type { PlayerDraftResult } from "./DraftBattleScreen";
 import CharacterCard from "../components/CharacterCard";
@@ -66,7 +66,7 @@ function HoverTooltip({ x, y, children }: { x: number; y: number; children: Reac
 function buildDomainDesc(defId: string, d: { name: string; effect: DomainEffect; grantSpell?: { name: string; desc: string }; secondEffect?: DomainEffect }) {
   const e = d.effect;
   const grantSuffix = defId === "gojo-base"
-    ? " Grants Hollow Purple (4 dmg). Filling twice grants 2 Hollow Purples."
+    ? " Grants Hollow Purple (5 dmg), +5 energy, and unlimited GET SPELL this turn. Filling twice grants 2 Hollow Purples."
     : d.grantSpell ? ` Also grants "${d.grantSpell.name}" — ${d.grantSpell.desc}.` : "";
   let desc = "Activates a powerful cursed technique.";
   if (e.kind === "STUN_ENEMY_BOARD")       desc = `Fully immobilizes all enemies for ${e.turns} turn${e.turns > 1 ? "s" : ""} — no actions allowed.`;
@@ -187,34 +187,201 @@ interface Props {
 // ── BoardCardView ─────────────────────────────────────────────────────────────
 function BoardCardView({
   card, cardDb, selected, targetable, friendlyTarget, onClick,
+  isHit, isFresh, floatingDmgs, isPinned, isLunging, lungeDir = "up",
 }: {
   card: BattleCard; cardDb: Record<string, CardDef>;
   selected?: boolean; targetable?: boolean; friendlyTarget?: boolean; onClick?: (ev?: React.MouseEvent) => void;
+  isHit?: boolean; isFresh?: boolean; floatingDmgs?: { key: number; amount: number }[];
+  isPinned?: boolean;
+  isLunging?: boolean; lungeDir?: "up" | "down";
 }) {
   const def = cardDb[card.defId];
-  const hpPct   = Math.max(0, Math.min(100, (card.currentHp / card.maxHp) * 100));
-  const hpColor = hpPct > 60 ? "#44ff88" : hpPct > 30 ? "#ffcc00" : "#ff4444";
 
   return (
     <motion.div
       onClick={(ev) => onClick?.(ev)}
       animate={{
-        scale: 1,
+        scale: isLunging ? [1, 1.18, 1] : isHit ? [1, 1.08, 0.95, 1] : 1,
+        y: isLunging ? (lungeDir === "up" ? [0, -26, 0] : [0, 26, 0]) : 0,
+        rotate: isLunging ? (lungeDir === "up" ? [0, -4, 0] : [0, 4, 0]) : 0,
         filter: friendlyTarget
           ? "brightness(1.2) drop-shadow(0 0 8px #4aeecc)"
           : targetable
           ? "brightness(1.2) drop-shadow(0 0 8px #ff4444)"
+          : isLunging
+          ? "brightness(1.5) drop-shadow(0 0 14px #ffcc44)"
+          : isHit
+          ? "brightness(2.2)"
           : "brightness(1)",
       }}
+      transition={isLunging
+        ? { duration: 0.34, times: [0, 0.45, 1], ease: "easeOut" }
+        : isHit
+        ? { duration: 0.28, times: [0, 0.25, 0.7, 1] }
+        : { type: "spring", stiffness: 400, damping: 22 }}
       whileHover={onClick ? { y: -8, scale: selected ? 1.1 : 1.07 } : undefined}
       whileTap={onClick ? { scale: 0.96 } : undefined}
-      transition={{ type: "spring", stiffness: 400, damping: 22 }}
-      style={{ position: "relative", cursor: onClick ? "pointer" : "default", userSelect: "none" }}
+      style={{ position: "relative", cursor: onClick ? "pointer" : "default", userSelect: "none", zIndex: isLunging ? 40 : undefined }}
     >
       <CharacterCard defId={card.defId} def={def} size="xs" noHover hideInfo smallBadges
         dimmed={!friendlyTarget && !targetable && (card.exhausted || !card.canAttack || card.stunTurns > 0)}
         statsOverlay={{ name: def?.name, atk: card.atk, hp: card.currentHp, maxHp: card.maxHp }}
       />
+
+      {/* Hit flash overlay */}
+      {isHit && (
+        <motion.div
+          initial={{ opacity: 0.85 }}
+          animate={{ opacity: 0 }}
+          transition={{ duration: 0.32 }}
+          style={{
+            position: "absolute", inset: 0, borderRadius: 10,
+            background: "radial-gradient(circle at 50% 40%, rgba(255,80,0,0.9), rgba(255,0,0,0.5))",
+            pointerEvents: "none", zIndex: 26, mixBlendMode: "screen",
+          }}
+        />
+      )}
+
+      {/* Impact spark burst — particles fly out when hit */}
+      {isHit && (
+        <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 27 }}>
+          {[0, 1, 2, 3, 4, 5].map(i => {
+            const ang = (i / 6) * Math.PI * 2 + 0.4;
+            return (
+              <motion.div
+                key={i}
+                initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+                animate={{
+                  x: Math.cos(ang) * 34,
+                  y: Math.sin(ang) * 34,
+                  opacity: 0,
+                  scale: 0.2,
+                }}
+                transition={{ duration: 0.42, ease: "easeOut" }}
+                style={{
+                  position: "absolute", top: "42%", left: "46%",
+                  width: 5, height: 5, borderRadius: "50%",
+                  background: i % 2 === 0 ? "#ffcc44" : "#ff6622",
+                  boxShadow: "0 0 6px #ff8800",
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Dynamic shield badge (for cards that gained hasTaunt via GRANT_BOARD_SHIELD, not from def tag) */}
+      {/* Identical styling/position to CharacterCard's shield bubble at smallBadges size (bs=16) */}
+      {card.hasTaunt && !def?.tags?.includes("shield") && (
+        <div style={{
+          position: "absolute",
+          top: -(16 * 0.3) + 16 * 0.62, left: -(16 * 0.3) + 16 * 0.6,
+          width: 10, height: 10, borderRadius: "50%",
+          background: "linear-gradient(135deg, #1a3a6e 0%, #0a1a4a 100%)",
+          border: "1.5px solid rgba(100,180,255,0.85)",
+          boxShadow: "0 1px 6px rgba(0,0,0,0.8), 0 0 8px rgba(80,160,255,0.4)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 28, pointerEvents: "none",
+        }}>
+          <span style={{ fontSize: 6, lineHeight: 1 }}>🛡</span>
+        </div>
+      )}
+
+      {/* Nobara Resonance pin — this card is linked; next damage echoes to its partner */}
+      {isPinned && (
+        <div
+          style={{ position: "absolute", top: -6, right: -6, zIndex: 29 }}
+          onMouseEnter={e => {
+            const tip = (e.currentTarget as HTMLElement).querySelector<HTMLElement>(".pin-tip");
+            if (tip) tip.style.display = "block";
+          }}
+          onMouseLeave={e => {
+            const tip = (e.currentTarget as HTMLElement).querySelector<HTMLElement>(".pin-tip");
+            if (tip) tip.style.display = "none";
+          }}
+        >
+          <motion.div
+            animate={{ scale: [1, 1.15, 1] }}
+            transition={{ duration: 1.4, repeat: Infinity }}
+            style={{
+              width: 16, height: 16, borderRadius: "50%",
+              background: "linear-gradient(135deg, #5a1a2e, #2a0a14)",
+              border: "1.5px solid rgba(255,100,140,0.9)",
+              boxShadow: "0 0 8px rgba(255,80,120,0.6)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 9,
+            }}
+          >📌</motion.div>
+          <div className="pin-tip" style={{
+            display: "none", position: "absolute", bottom: 20, right: 0,
+            background: "rgba(4,4,14,0.97)", border: "1px solid #6a2a3a",
+            borderRadius: 8, padding: "7px 10px",
+            width: 170, zIndex: 999, pointerEvents: "none",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.8)",
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 900, color: "#ff88aa", marginBottom: 3 }}>📌 Resonance</div>
+            <div style={{ fontSize: 9, color: "#fff", lineHeight: 1.5 }}>
+              Pinned by Nobara. The next time this card or its linked partner takes damage, the other takes half that damage. One use.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Entrance glow for newly placed card */}
+      {isFresh && (
+        <motion.div
+          initial={{ opacity: 1, scale: 1.3 }}
+          animate={{ opacity: 0, scale: 1 }}
+          transition={{ duration: 0.55, ease: "easeOut" }}
+          style={{
+            position: "absolute", inset: -5, borderRadius: 16,
+            background: card.cost >= 5
+              ? "radial-gradient(circle, rgba(255,200,50,0.95) 0%, rgba(255,100,0,0.6) 50%, transparent 75%)"
+              : "radial-gradient(circle, rgba(80,200,255,0.7) 0%, rgba(50,100,255,0.3) 50%, transparent 75%)",
+            pointerEvents: "none", zIndex: 27,
+          }}
+        />
+      )}
+
+      {/* Entrance shockwave ring — expands outward on placement */}
+      {isFresh && (
+        <motion.div
+          initial={{ opacity: 0.9, scale: 0.4 }}
+          animate={{ opacity: 0, scale: 1.8 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          style={{
+            position: "absolute", inset: -4, borderRadius: "50%",
+            border: card.cost >= 5 ? "3px solid rgba(255,190,60,0.9)" : "2px solid rgba(120,200,255,0.8)",
+            pointerEvents: "none", zIndex: 27,
+          }}
+        />
+      )}
+
+      {/* Floating damage numbers */}
+      <AnimatePresence>
+        {floatingDmgs?.map(d => (
+          <motion.div
+            key={d.key}
+            initial={{ y: 0, opacity: 1, scale: 1 }}
+            animate={{ y: -48, opacity: 0, scale: 1.3 }}
+            exit={{}}
+            transition={{ duration: 0.65, ease: "easeOut" }}
+            style={{
+              position: "absolute", top: "25%", left: "50%",
+              transform: "translateX(-50%)",
+              fontSize: d.amount >= 5 ? 18 : 14,
+              fontWeight: 900,
+              color: d.amount >= 5 ? "#ff2200" : "#ff6644",
+              textShadow: "0 0 10px #ff0000cc, 0 2px 6px #000",
+              pointerEvents: "none", zIndex: 50,
+              fontFamily: "system-ui, sans-serif",
+              letterSpacing: -1,
+            }}
+          >
+            -{d.amount}
+          </motion.div>
+        ))}
+      </AnimatePresence>
 
       {/* Stun */}
       {card.stunTurns > 0 && (
@@ -314,9 +481,12 @@ function SpellCardView({
   spell: SpellCard; active?: boolean; onClick?: () => void;
 }) {
   const effKind = spell.effect.kind;
-  const needsTarget = effKind === "DAMAGE_TARGET" || effKind === "STUN_ONE" || effKind === "PURPLE" || effKind === "SHEEPIFY_ONE";
-  const needsOwnTarget = effKind === "BUFF_ONE_HP" || effKind === "BUFF_ONE_ATK";
+  const needsTarget = effKind === "DAMAGE_TARGET" || effKind === "STUN_ONE" || effKind === "PURPLE" || effKind === "SHEEPIFY_ONE" || effKind === "DAMAGE_AND_STUN";
+  const needsOwnTarget = effKind === "BUFF_ONE_HP" || effKind === "BUFF_ONE_ATK" || effKind === "BUFF_ONE_BOTH";
   const color = effKind === "DAMAGE_TARGET" ? "#ff6644"
+    : effKind === "DAMAGE_ALL"      ? "#ff4466"
+    : effKind === "DAMAGE_AND_STUN" ? "#cc88ff"
+    : effKind === "BUFF_ONE_BOTH"   ? "#66ffcc"
     : effKind === "BUFF_BOARD_ATK" ? "#ffcc00"
     : effKind === "BUFF_BOARD_HP"  ? "#44ff88"
     : effKind === "BUFF_ONE_ATK"   ? "#ffaa44"
@@ -329,7 +499,7 @@ function SpellCardView({
     : effKind === "COPY_BOARD_CARD"     ? "#44ddff"
     : effKind === "DAMAGE_TARGET_SELF"  ? "#ff6600"
     : "#cc44ff";
-  const icon = effKind === "DAMAGE_TARGET" ? "💥" : effKind === "BUFF_BOARD_ATK" ? "⚔" : effKind === "BUFF_BOARD_HP" ? "💚" : effKind === "BUFF_ONE_ATK" ? "🗡" : effKind === "BUFF_ONE_HP" ? "💉" : effKind === "DRAW" ? "🃏" : effKind === "GAIN_ENERGY" ? "⚡" : effKind === "PURPLE" ? "🌌" : effKind === "DESTROY_ONE" ? "🗑" : effKind === "COPY_BOARD_CARD" ? "📋" : effKind === "DAMAGE_TARGET_SELF" ? "⚡" : effKind === "SHEEPIFY_ONE" ? "🐑" : "❄";
+  const icon = effKind === "DAMAGE_TARGET" ? "💥" : effKind === "DAMAGE_ALL" ? "☄" : effKind === "DAMAGE_AND_STUN" ? "🌀" : effKind === "BUFF_ONE_BOTH" ? "✨" : effKind === "BUFF_BOARD_ATK" ? "⚔" : effKind === "BUFF_BOARD_HP" ? "💚" : effKind === "BUFF_ONE_ATK" ? "🗡" : effKind === "BUFF_ONE_HP" ? "💉" : effKind === "DRAW" ? "🃏" : effKind === "GAIN_ENERGY" ? "⚡" : effKind === "PURPLE" ? "🌌" : effKind === "DESTROY_ONE" ? "🗑" : effKind === "COPY_BOARD_CARD" ? "📋" : effKind === "DAMAGE_TARGET_SELF" ? "⚡" : effKind === "SHEEPIFY_ONE" ? "🐑" : "❄";
 
   return (
     <motion.div
@@ -372,7 +542,7 @@ function CenteredLeader({
   selected, targetable,
   energy, maxEnergy, domainMeter, showDomainBtn,
   onSelect, onDomainActivate,
-  isTop, domainBadgeDefId, isVacant,
+  isTop, domainBadgeDefId, isVacant, isHit,
 }: {
   leader: BattleCard; cardDb: Record<string, CardDef>;
   playerName: string; playerIcon: string;
@@ -380,7 +550,7 @@ function CenteredLeader({
   energy?: number; maxEnergy?: number;
   domainMeter?: number; showDomainBtn?: boolean;
   onSelect?: () => void; onDomainActivate?: () => void;
-  isTop: boolean; domainBadgeDefId?: string; isVacant?: boolean;
+  isTop: boolean; domainBadgeDefId?: string; isVacant?: boolean; isHit?: boolean;
 }) {
   const def = cardDb[leader.defId];
   const hpPct   = Math.max(0, Math.min(100, (leader.currentHp / leader.maxHp) * 100));
@@ -507,11 +677,23 @@ function CenteredLeader({
         ) : (
         <motion.div
           onClick={onSelect}
+          animate={isHit ? { scale: [1, 1.06, 0.97, 1], filter: ["brightness(1)", "brightness(2.4)", "brightness(1)"] } : { scale: 1 }}
+          transition={isHit ? { duration: 0.28, times: [0, 0.2, 0.65, 1] } : { type: "spring", stiffness: 400, damping: 22 }}
           whileHover={onSelect ? { scale: 1.07, y: isTop ? 4 : -4 } : undefined}
           whileTap={onSelect ? { scale: 0.96 } : undefined}
           style={{ position: "relative", cursor: onSelect ? "pointer" : "default", userSelect: "none" }}
         >
           <CharacterCard defId={leader.defId} def={def} size="sm" hideAffinityAndCost />
+
+          {/* Hit flash overlay */}
+          <AnimatePresence>
+            {isHit && (
+              <motion.div key="leader-hit"
+                initial={{ opacity: 0.9 }} animate={{ opacity: 0 }} transition={{ duration: 0.32 }}
+                style={{ position: "absolute", inset: 0, borderRadius: 10, pointerEvents: "none", zIndex: 26, mixBlendMode: "screen",
+                  background: "radial-gradient(circle at 50% 40%, rgba(255,60,0,0.95), rgba(255,0,0,0.55))" }} />
+            )}
+          </AnimatePresence>
 
           {/* LEADER badge */}
           <div style={{
@@ -577,13 +759,13 @@ function CenteredLeader({
 // ── LeaderRightPanel — player's leader shown as a right-column panel ──────────
 function LeaderRightPanel({
   leader, cardDb, playerName, playerIcon,
-  selected, isVacant,
+  selected, isVacant, isHit,
   domainMeter, domainCooldown, onDomainActivate,
   onSelect,
 }: {
   leader: BattleCard; cardDb: Record<string, CardDef>;
   playerName: string; playerIcon: string;
-  selected?: boolean; isVacant?: boolean;
+  selected?: boolean; isVacant?: boolean; isHit?: boolean;
   domainMeter?: number; domainCooldown?: number; onDomainActivate?: () => void;
   onSelect: (ev?: React.MouseEvent) => void;
 }) {
@@ -661,11 +843,24 @@ function LeaderRightPanel({
       ) : (
       <motion.div
         onClick={onSelect}
+        animate={isHit ? { scale: [1, 1.06, 0.97, 1], filter: ["brightness(1)", "brightness(2.4)", "brightness(1)"] } : { scale: 1 }}
+        transition={isHit ? { duration: 0.28, times: [0, 0.2, 0.65, 1] } : { type: "spring", stiffness: 400, damping: 22 }}
         whileHover={{ scale: 1.06, y: -4 }}
         whileTap={{ scale: 0.96 }}
         style={{ position: "relative", cursor: "pointer", userSelect: "none" }}
       >
         <CharacterCard defId={leader.defId} def={def} size="lg" hideAffinityAndCost />
+
+        {/* Hit flash overlay */}
+        <AnimatePresence>
+          {isHit && (
+            <motion.div key="panel-leader-hit"
+              initial={{ opacity: 0.9 }} animate={{ opacity: 0 }} transition={{ duration: 0.32 }}
+              style={{ position: "absolute", inset: 0, borderRadius: 12, pointerEvents: "none", zIndex: 26, mixBlendMode: "screen",
+                background: "radial-gradient(circle at 50% 40%, rgba(255,60,0,0.95), rgba(255,0,0,0.55))" }} />
+          )}
+        </AnimatePresence>
+
         <div style={{
           position: "absolute", top: 5, left: 5,
           fontSize: 8, fontWeight: 900, letterSpacing: 1,
@@ -703,14 +898,24 @@ function LeaderRightPanel({
 function BoardRow({
   board, cardDb, pendingId, targeting, myBoard, cardScale = 1,
   buffTargeting = false,
+  isTargetable,
+  onActivatePerk, perkActiveId, pinnedIds, lungeIds,
   onSelectCard, onTargetCard,
+  hitIds, freshIds, floatingDmgMap,
 }: {
   board: (BattleCard | null)[];
   cardDb: Record<string, CardDef>;
   pendingId: string | null; targeting: boolean; myBoard: boolean;
   buffTargeting?: boolean;
+  isTargetable?: (card: BattleCard) => boolean;
   cardScale?: number;
+  onActivatePerk?: (card: BattleCard) => void;
+  perkActiveId?: string | null;
+  pinnedIds?: Set<string>;
+  lungeIds?: Set<string>;
   onSelectCard?: (id: string, ev: React.MouseEvent) => void; onTargetCard?: (id: string) => void;
+  hitIds?: Set<string>; freshIds?: Set<string>;
+  floatingDmgMap?: Record<string, { key: number; amount: number }[]>;
 }) {
   const slotW = Math.round(72 * cardScale);
   const slotH = Math.round(103 * cardScale);
@@ -720,21 +925,68 @@ function BoardRow({
       flex: 1, minHeight: slotH + 10, padding: "0 8px",
     }}>
       {board.map((card, i) => (
-        <div key={i} style={{ width: slotW, height: slotH, flexShrink: 0 }}>
-          {card ? (
-            <div style={{ transform: `scale(${cardScale})`, transformOrigin: "top left", width: 72, height: 103 }}>
-              <BoardCardView
-                card={card} cardDb={cardDb}
-                selected={pendingId === card.instanceId}
-                targetable={targeting && !myBoard}
-                friendlyTarget={buffTargeting === true && myBoard}
-                onClick={(ev) => {
-                  if (myBoard && onSelectCard) onSelectCard(card.instanceId, ev!);
-                  else if (!myBoard && onTargetCard) onTargetCard(card.instanceId);
-                }}
-              />
-            </div>
-          ) : (
+        <div key={i} style={{ width: slotW, height: slotH, flexShrink: 0, position: "relative" }}>
+          <AnimatePresence>
+            {card && (
+              /* Outer motion.div handles entrance/exit — no CSS transform here so framer owns it */
+              <motion.div
+                key={card.instanceId}
+                initial={{ opacity: 0, scale: 0.72 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 1.45, filter: "brightness(3.5) saturate(0)", transition: { duration: 0.2, ease: "easeOut" } }}
+                transition={{ type: "spring", stiffness: 480, damping: 30 }}
+                style={{ position: "absolute", top: 0, left: 0, width: slotW, height: slotH, transformOrigin: "top left" }}
+              >
+                {/* Inner div applies the cardScale independently of framer animation */}
+                <div style={{ transform: `scale(${cardScale})`, transformOrigin: "top left", width: 72, height: 103 }}>
+                  <BoardCardView
+                    card={card} cardDb={cardDb}
+                    selected={pendingId === card.instanceId}
+                    targetable={targeting && !myBoard && (isTargetable ? isTargetable(card) : true)}
+                    friendlyTarget={buffTargeting === true && myBoard}
+                    isHit={hitIds?.has(card.instanceId)}
+                    isFresh={freshIds?.has(card.instanceId)}
+                    floatingDmgs={floatingDmgMap?.[card.instanceId]}
+                    isPinned={pinnedIds?.has(card.instanceId)}
+                    isLunging={lungeIds?.has(card.instanceId)}
+                    lungeDir={myBoard ? "up" : "down"}
+                    onClick={(ev) => {
+                      if (myBoard && onSelectCard) onSelectCard(card.instanceId, ev!);
+                      else if (!myBoard && onTargetCard) onTargetCard(card.instanceId);
+                    }}
+                  />
+                </div>
+                {/* Perk activation button — centered right under the card */}
+                {myBoard && onActivatePerk && CARD_PERKS[card.defId] && !card.perkUsed && (
+                  <div style={{
+                    position: "absolute", top: slotH + 2, left: 0, width: slotW,
+                    display: "flex", justifyContent: "center", zIndex: 30,
+                  }}>
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.92 }}
+                      onClick={(e) => { e.stopPropagation(); onActivatePerk(card); }}
+                      style={{
+                        padding: "2px 8px", borderRadius: 6,
+                        background: perkActiveId === card.instanceId
+                          ? "linear-gradient(135deg, #ffcc44, #cc8800)"
+                          : "linear-gradient(135deg, rgba(90,60,0,0.9), rgba(40,26,0,0.9))",
+                        border: `1px solid ${perkActiveId === card.instanceId ? "#ffe088" : "#ffcc4466"}`,
+                        color: perkActiveId === card.instanceId ? "#000" : "#ffcc44",
+                        fontSize: 8, fontWeight: 900, letterSpacing: 1,
+                        cursor: "pointer", fontFamily: "inherit",
+                        boxShadow: "0 0 8px rgba(255,190,40,0.3)",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {CARD_PERKS[card.defId].icon} PERK
+                    </motion.button>
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {!card && (
             <div style={{
               width: slotW, height: slotH,
               border: `1px dashed ${myBoard ? "#1a2a1a" : "#1a1a2a"}`,
@@ -924,9 +1176,23 @@ export default function BattleBoardScreen({
   const [pendingSpellId, setPendingSpellId] = useState<string | null>(null); // spell awaiting enemy target
   const [buffOneTargeting, setBuffOneTargeting] = useState<string | null>(null); // spell id for BUFF_ONE (own-card target)
   const [turnBackTargeting, setTurnBackTargeting] = useState(false);
+  const [pendingShieldGrant, setPendingShieldGrant] = useState(false);
+  // Perk activation flow — Mahito needs two targets (enemy first, then same-cost friendly)
+  const [pendingPerk, setPendingPerk] = useState<{ instanceId: string; defId: string; enemyTargetId?: string } | null>(null);
   const [drewCardId, setDrewCardId] = useState<string | null>(null); // card drawn this turn (for animation)
   const [attackLineStart, setAttackLineStart] = useState<{ x: number; y: number } | null>(null);
   const [mousePos, setMousePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // ── Visual effect states ──────────────────────────────────────────────────
+  const [hitIds, setHitIds] = useState<Set<string>>(new Set());
+  const [freshIds, setFreshIds] = useState<Set<string>>(new Set());
+  const [floatingDmgMap, setFloatingDmgMap] = useState<Record<string, { key: number; amount: number }[]>>({});
+  const [leaderHitPid, setLeaderHitPid] = useState<PlayerId | null>(null);
+  const [lungeIds, setLungeIds] = useState<Set<string>>(new Set());
+  const [spellFlash, setSpellFlash] = useState<{ key: number; name: string } | null>(null);
+  const [turnBanner, setTurnBanner] = useState<{ key: number; pid: PlayerId } | null>(null);
+  const shakeControls = useAnimationControls();
+  const dmgKeyRef = useRef(0);
 
   const doReplace = (pid: PlayerId) => {
     if (mulliganReturning.size === 0) return;
@@ -955,12 +1221,64 @@ export default function BattleBoardScreen({
   };
 
   const dispatch = useCallback((intent: BattleIntent) => {
+    // Spell splash — capture the spell's name before the engine consumes it
+    if (intent.type === "CAST_SPELL") {
+      const sp = engine.getState().players[intent.pid].spells.find(s => s.id === intent.spellId);
+      if (sp) {
+        const key = ++dmgKeyRef.current;
+        setSpellFlash({ key, name: sp.name });
+        setTimeout(() => setSpellFlash(prev => prev?.key === key ? null : prev), 950);
+      }
+    }
     const result = engine.apply(intent);
     setBattleState(result.state);
     for (const ev of result.events) {
       if (ev.type === "DOMAIN_ACTIVATED") setDomainFlash(ev.name);
       if (ev.type === "TURN_START" && ev.drew) { setDrewCardId(ev.drew); setTimeout(() => setDrewCardId(null), 700); }
       if (ev.type === "GAME_OVER") { setGameOverShown(true); return; }
+
+      if (ev.type === "ATTACK_CARD") {
+        const addHit = (id: string) => {
+          setHitIds(p => new Set([...p, id]));
+          setTimeout(() => setHitIds(p => { const n = new Set(p); n.delete(id); return n; }), 380);
+        };
+        const addDmg = (id: string, amount: number) => {
+          const key = ++dmgKeyRef.current;
+          setFloatingDmgMap(p => ({ ...p, [id]: [...(p[id] ?? []), { key, amount }] }));
+          setTimeout(() => setFloatingDmgMap(p => ({ ...p, [id]: (p[id] ?? []).filter(d => d.key !== key) })), 750);
+        };
+        // Attacker lunges toward the target before the impact lands
+        setLungeIds(p => new Set([...p, ev.attackerId]));
+        setTimeout(() => setLungeIds(p => { const n = new Set(p); n.delete(ev.attackerId); return n; }), 380);
+        addHit(ev.targetId);
+        addDmg(ev.targetId, ev.damage);
+        if (ev.counterDamage > 0) { addHit(ev.attackerId); addDmg(ev.attackerId, ev.counterDamage); }
+      }
+
+      if (ev.type === "ATTACK_LEADER") {
+        const hitPid: PlayerId = ev.attackerPid === "P1" ? "P2" : "P1";
+        setLeaderHitPid(hitPid);
+        setTimeout(() => setLeaderHitPid(null), 480);
+        // Attacker lunge + screen shake scaled to the blow
+        setLungeIds(p => new Set([...p, ev.attackerId]));
+        setTimeout(() => setLungeIds(p => { const n = new Set(p); n.delete(ev.attackerId); return n; }), 380);
+        const mag = Math.min(14, 5 + ev.damage);
+        shakeControls.start({
+          x: [0, -mag, mag, -mag * 0.6, mag * 0.6, -mag * 0.25, 0],
+          transition: { duration: 0.45, ease: "easeOut" },
+        });
+      }
+
+      if (ev.type === "TURN_START") {
+        const key = ++dmgKeyRef.current;
+        setTurnBanner({ key, pid: ev.pid });
+        setTimeout(() => setTurnBanner(prev => prev?.key === key ? null : prev), 1200);
+      }
+
+      if (ev.type === "CARD_PLAYED") {
+        setFreshIds(p => new Set([...p, ev.instanceId]));
+        setTimeout(() => setFreshIds(p => { const n = new Set(p); n.delete(ev.instanceId); return n; }), 600);
+      }
     }
   }, [engine]);
 
@@ -1044,13 +1362,13 @@ export default function BattleBoardScreen({
       setTurnBackTargeting(prev => !prev);
       return;
     }
-    if (eff.kind === "BUFF_ONE_HP" || eff.kind === "BUFF_ONE_ATK") {
+    if (eff.kind === "BUFF_ONE_HP" || eff.kind === "BUFF_ONE_ATK" || eff.kind === "BUFF_ONE_BOTH") {
       // Needs own-board target
       dispatch({ type: "CANCEL_ATTACK", pid });
       setBuffOneTargeting(prev => prev === spell.id ? null : spell.id);
       return;
     }
-    if (eff.kind === "DAMAGE_TARGET" || eff.kind === "STUN_ONE" || eff.kind === "PURPLE" || eff.kind === "DESTROY_ONE" || eff.kind === "COPY_BOARD_CARD" || eff.kind === "DAMAGE_TARGET_SELF" || eff.kind === "SHEEPIFY_ONE") {
+    if (eff.kind === "DAMAGE_TARGET" || eff.kind === "STUN_ONE" || eff.kind === "PURPLE" || eff.kind === "DESTROY_ONE" || eff.kind === "COPY_BOARD_CARD" || eff.kind === "DAMAGE_TARGET_SELF" || eff.kind === "SHEEPIFY_ONE" || eff.kind === "DAMAGE_AND_STUN") {
       // Needs a target — enter spell targeting mode (deselect any attacker)
       dispatch({ type: "CANCEL_ATTACK", pid });
       setPendingSpellId(prev => prev === spell.id ? null : spell.id);
@@ -1377,21 +1695,75 @@ export default function BattleBoardScreen({
   const oppName = oppId === "P1" ? p1Name : p2Name;
   const oppIcon = oppId === "P1" ? p1Icon : p2Icon;
   // enemyTargeting highlights opponent cards; own-card buff targeting does NOT
-  const enemyTargeting = battleState.pendingAttackerId !== null || pendingSpellId !== null || battleState.pendingDomainAction !== null;
-  const targeting = enemyTargeting || buffOneTargeting !== null;
+  // Perk targeting stages: mahito = enemy→friendly; inumaki = 1 enemy; nobara = 2 enemies; gakuganji = 1 friendly
+  const perkEnemyStage = pendingPerk !== null && (
+    (pendingPerk.defId === "mahito" && !pendingPerk.enemyTargetId) ||
+    pendingPerk.defId === "inumaki" ||
+    pendingPerk.defId === "nobara"
+  );
+  const perkFriendStage = pendingPerk !== null && (
+    (pendingPerk.defId === "mahito" && !!pendingPerk.enemyTargetId) ||
+    pendingPerk.defId === "gakuganji"
+  );
+  const enemyTargeting = battleState.pendingAttackerId !== null || pendingSpellId !== null || battleState.pendingDomainAction !== null || perkEnemyStage;
+  const targeting = enemyTargeting || buffOneTargeting !== null || pendingShieldGrant || perkFriendStage;
 
   // Leader is only a valid target in specific modes
   const oppBoardCards = opp.board.filter(c => c !== null);
   const pendingSpell  = pendingSpellId ? player.spells.find(s => s.id === pendingSpellId) ?? null : null;
+  const oppHasShield = oppBoardCards.some(c => c.hasTaunt);
+  const pendingAttackerCard = battleState.pendingAttackerId
+    ? player.board.find(c => c?.instanceId === battleState.pendingAttackerId) ?? (player.leader.instanceId === battleState.pendingAttackerId ? player.leader : null)
+    : null;
   const leaderTargetable =
-    // Attack: only when enemy board is fully cleared (or Toji berserk)
-    (battleState.pendingAttackerId !== null && (oppBoardCards.length === 0 || player.tojiBerserk)) ||
-    // Damage / stun spells can hit any leader (enemy or own); destroy and purple cannot
-    (pendingSpell !== null && (pendingSpell.effect.kind === "DAMAGE_TARGET" || pendingSpell.effect.kind === "STUN_ONE" || pendingSpell.effect.kind === "DAMAGE_TARGET_SELF")) ||
+    // Attack: when no enemy shields remain, or Toji berserk, or the attacker's Shield Breaker perk is active
+    (battleState.pendingAttackerId !== null && (!oppHasShield || player.tojiBerserk || pendingAttackerCard?.ignoreShields === true)) ||
+    // Damage spells hit the leader only when the enemy board is clear; stun spells can always target
+    (pendingSpell !== null && (
+      pendingSpell.effect.kind === "STUN_ONE" ||
+      ((pendingSpell.effect.kind === "DAMAGE_TARGET" || pendingSpell.effect.kind === "DAMAGE_TARGET_SELF") && oppBoardCards.length === 0)
+    )) ||
     // Domain action targets enemy (sheepify cannot target the leader)
     (battleState.pendingDomainAction !== null && battleState.pendingDomainAction.kind !== "SHEEPIFY_ENEMY_CARDS");
 
+  const handleActivatePerk = (card: BattleCard) => {
+    if (battleState.phase !== "MAIN") return;
+    if (pendingPerk?.instanceId === card.instanceId) { setPendingPerk(null); return; } // toggle off
+    // Perks that need target selection before dispatching
+    if (["mahito", "inumaki", "gakuganji", "nobara"].includes(card.defId)) {
+      setPendingPerk({ instanceId: card.instanceId, defId: card.defId });
+      return;
+    }
+    dispatch({ type: "ACTIVATE_PERK", pid, instanceId: card.instanceId });
+  };
+
   const handleOwnCardClick = (instanceId: string, ev?: React.MouseEvent) => {
+    // Mahito perk stage 2: pick the same-cost friendly card
+    if (pendingPerk?.defId === "mahito" && pendingPerk.enemyTargetId) {
+      dispatch({
+        type: "ACTIVATE_PERK", pid,
+        instanceId: pendingPerk.instanceId,
+        targetInstanceId: pendingPerk.enemyTargetId,
+        friendlyTargetInstanceId: instanceId,
+      });
+      setPendingPerk(null);
+      return;
+    }
+    // Gakuganji perk: pick the friendly card to buff
+    if (pendingPerk?.defId === "gakuganji") {
+      dispatch({
+        type: "ACTIVATE_PERK", pid,
+        instanceId: pendingPerk.instanceId,
+        friendlyTargetInstanceId: instanceId,
+      });
+      setPendingPerk(null);
+      return;
+    }
+    if (pendingShieldGrant) {
+      dispatch({ type: "GRANT_BOARD_SHIELD", pid, targetInstanceId: instanceId });
+      setPendingShieldGrant(false);
+      return;
+    }
     if (turnBackTargeting) {
       const spell = player.spells.find(s => s.effect.kind === "TURN_BACK_SHEEP");
       if (spell) {
@@ -1425,12 +1797,17 @@ export default function BattleBoardScreen({
 
   return (
     <ErrorBoundary>
+    {/* Static outer shell clips the shake so no scrollbars appear */}
     <div style={{
       minHeight: "100vh", maxHeight: "100vh",
       background: "linear-gradient(180deg, #020209 0%, #04021a 50%, #020209 100%)",
+      overflow: "hidden", position: "relative",
+    }}>
+    <motion.div animate={shakeControls} style={{
+      minHeight: "100vh", maxHeight: "100vh",
       display: "flex", flexDirection: "column",
       fontFamily: "'Segoe UI', system-ui, sans-serif",
-      overflowX: "hidden", overflowY: "hidden", position: "relative",
+      overflow: "hidden", position: "relative",
     }}>
       {/* Background image */}
       <div style={{
@@ -1463,6 +1840,7 @@ export default function BattleBoardScreen({
             isTop
             domainBadgeDefId={opp.leader.defId}
             isVacant={opp.sukunaBoardMode || opp.mahoragaBoardMode}
+            isHit={leaderHitPid === oppId}
           />
         </div>
       </div>
@@ -1498,7 +1876,36 @@ export default function BattleBoardScreen({
         <BoardRow
           board={opp.board} cardDb={cardDb} cardScale={1.3}
           pendingId={null} targeting={enemyTargeting} myBoard={false}
-          onTargetCard={pendingSpellId ? handleSpellTargetCard : battleState.pendingDomainAction ? handleDomainTarget : handleTargetCard}
+          pinnedIds={player.resonance ? new Set([player.resonance.a, player.resonance.b]) : undefined}
+          isTargetable={(c) =>
+            // Attacks must respect shields; spells and domain actions can hit anything
+            battleState.pendingAttackerId === null || player.tojiBerserk || !oppHasShield || c.hasTaunt
+          }
+          lungeIds={lungeIds}
+          onTargetCard={(id) => {
+            // Mahito perk stage 1: pick the enemy card
+            if (perkEnemyStage && pendingPerk) {
+              if (pendingPerk.defId === "inumaki") {
+                dispatch({ type: "ACTIVATE_PERK", pid, instanceId: pendingPerk.instanceId, targetInstanceId: id });
+                setPendingPerk(null);
+              } else if (pendingPerk.defId === "nobara") {
+                if (!pendingPerk.enemyTargetId) {
+                  setPendingPerk({ ...pendingPerk, enemyTargetId: id });
+                } else if (pendingPerk.enemyTargetId !== id) {
+                  dispatch({ type: "ACTIVATE_PERK", pid, instanceId: pendingPerk.instanceId, targetInstanceId: pendingPerk.enemyTargetId, secondTargetInstanceId: id });
+                  setPendingPerk(null);
+                }
+              } else {
+                // Mahito stage 1
+                setPendingPerk({ ...pendingPerk, enemyTargetId: id });
+              }
+              return;
+            }
+            if (pendingSpellId) handleSpellTargetCard(id);
+            else if (battleState.pendingDomainAction) handleDomainTarget(id);
+            else handleTargetCard(id);
+          }}
+          hitIds={hitIds} freshIds={freshIds} floatingDmgMap={floatingDmgMap}
         />
       </div>
 
@@ -1576,6 +1983,34 @@ export default function BattleBoardScreen({
               color: "#4a9eff", letterSpacing: 1, fontWeight: 900,
             }}>✦ SELECT YOUR CARD TO BUFF</div>
           )}
+          {pendingShieldGrant && (
+            <div style={{
+              fontSize: 9, padding: "3px 12px", borderRadius: 6,
+              background: "rgba(68,136,255,0.14)", border: "1px solid #4488ff66",
+              color: "#88bbff", letterSpacing: 1, fontWeight: 900,
+            }}>🛡 SELECT YOUR CARD TO GIVE SHIELD</div>
+          )}
+          {perkEnemyStage && pendingPerk && (
+            <div style={{
+              fontSize: 9, padding: "3px 12px", borderRadius: 6,
+              background: "rgba(255,190,40,0.14)", border: "1px solid #ffcc4466",
+              color: "#ffcc44", letterSpacing: 1, fontWeight: 900,
+            }}>
+              {pendingPerk.defId === "mahito" ? "🖐 SELECT AN ENEMY CARD TO TRANSFIGURE"
+                : pendingPerk.defId === "inumaki" ? "🗣 SELECT AN ENEMY CARD TO STUN"
+                : pendingPerk.enemyTargetId ? "📌 SELECT THE SECOND ENEMY CARD TO PIN"
+                : "📌 SELECT THE FIRST ENEMY CARD TO PIN"}
+            </div>
+          )}
+          {perkFriendStage && pendingPerk && (
+            <div style={{
+              fontSize: 9, padding: "3px 12px", borderRadius: 6,
+              background: "rgba(255,190,40,0.14)", border: "1px solid #ffcc4466",
+              color: "#ffcc44", letterSpacing: 1, fontWeight: 900,
+            }}>
+              {pendingPerk.defId === "gakuganji" ? "🎸 SELECT YOUR CARD TO GIVE +1 ATK" : "🖐 SELECT YOUR CARD OF THE SAME COST"}
+            </div>
+          )}
         </div>
 
       </div>
@@ -1617,14 +2052,20 @@ export default function BattleBoardScreen({
               board={player.board} cardDb={cardDb} cardScale={1.5}
               pendingId={battleState.pendingAttackerId}
               targeting={pendingSpellId !== null && (pendingSpell?.effect.kind === "DAMAGE_TARGET" || pendingSpell?.effect.kind === "DAMAGE_TARGET_SELF")}
-              buffTargeting={buffOneTargeting !== null} myBoard
+              buffTargeting={buffOneTargeting !== null || perkFriendStage} myBoard
+              pinnedIds={opp.resonance ? new Set([opp.resonance.a, opp.resonance.b]) : undefined}
+              onActivatePerk={handleActivatePerk}
+              perkActiveId={pendingPerk?.instanceId ?? null}
+              lungeIds={lungeIds}
               onSelectCard={handleOwnCardClick}
+              hitIds={hitIds} freshIds={freshIds} floatingDmgMap={floatingDmgMap}
             />
           </div>
         </div>
         {/* Leader panel (right) — domain meter is now built-in on the left of the panel */}
         <div style={{ marginRight: 40 }}>
           <LeaderRightPanel
+            isHit={leaderHitPid === pid}
             leader={player.leader} cardDb={cardDb}
             playerName={name} playerIcon={icon}
             isVacant={player.mahoragaBoardMode || player.sukunaBoardMode}
@@ -1666,6 +2107,61 @@ export default function BattleBoardScreen({
           flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
           padding: "10px 12px", borderRight: "1px solid #1a1a30", gap: 8,
         }}>
+          {/* Shield charges */}
+          <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+            {Array.from({ length: 3 }).map((_, i) => {
+              const available = i < player.shieldCharges;
+              const isActive = pendingShieldGrant && available;
+              return (
+                <div key={i} style={{ position: "relative" }}
+                  onMouseEnter={e => {
+                    const tip = (e.currentTarget as HTMLElement).querySelector<HTMLElement>(".shield-tip");
+                    if (tip) tip.style.display = "block";
+                  }}
+                  onMouseLeave={e => {
+                    const tip = (e.currentTarget as HTMLElement).querySelector<HTMLElement>(".shield-tip");
+                    if (tip) tip.style.display = "none";
+                  }}
+                >
+                  <motion.button
+                    onClick={() => { if (available && battleState.phase === "MAIN") setPendingShieldGrant(v => !v); }}
+                    whileHover={available && battleState.phase === "MAIN" ? { scale: 1.15 } : {}}
+                    whileTap={available && battleState.phase === "MAIN" ? { scale: 0.9 } : {}}
+                    style={{
+                      width: 28, height: 28, borderRadius: "50%",
+                      background: available
+                        ? isActive
+                          ? "linear-gradient(135deg, #4488ff, #0044cc)"
+                          : "linear-gradient(135deg, #1a3a6e, #0a1a4a)"
+                        : "rgba(255,255,255,0.03)",
+                      border: available
+                        ? `2px solid ${isActive ? "#88bbff" : "rgba(100,180,255,0.6)"}`
+                        : "2px solid #1a1a2a",
+                      cursor: available && battleState.phase === "MAIN" ? "pointer" : "default",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 14,
+                      opacity: available ? 1 : 0.2,
+                      boxShadow: isActive ? "0 0 14px #4488ffaa" : available ? "0 0 6px rgba(80,160,255,0.3)" : "none",
+                      padding: 0,
+                    }}
+                  >
+                    🛡
+                  </motion.button>
+                  <div className="shield-tip" style={{
+                    display: "none", position: "absolute", bottom: 34, left: "50%",
+                    transform: "translateX(-50%)",
+                    background: "rgba(4,4,14,0.97)", border: "1px solid #2a3a6a",
+                    borderRadius: 8, padding: "7px 10px",
+                    width: 180, zIndex: 999,
+                    fontSize: 9, color: "#aac", lineHeight: 1.5, pointerEvents: "none",
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.8)",
+                  }}>
+                    Give Shield to a character. (Shield disallows targeting of other non-Shield Cards.)
+                  </div>
+                </div>
+              );
+            })}
+          </div>
           <div style={{ fontSize: 9, color: "#556", letterSpacing: 3, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
             SPELLS
             {player.spellQueue.length > 0 && (
@@ -1712,7 +2208,8 @@ export default function BattleBoardScreen({
         }}>
           {(() => {
             const canDraw = player.spellPool.length > 0;
-            const disabled = !canDraw || player.synergyDrawUsed || player.energy < 1;
+            // Gojo's domain lifts the once-per-turn limit this turn
+            const disabled = !canDraw || (player.synergyDrawUsed && !player.unlimitedSpellDraw) || player.energy < 1;
             return (
               <motion.button
                 whileHover={!disabled ? { scale: 1.07, y: -3, boxShadow: "0 0 22px #cc44ff88" } : {}}
@@ -1882,11 +2379,74 @@ export default function BattleBoardScreen({
           <DomainFlash key="domain" name={domainFlash} onDone={() => setDomainFlash(null)} />
         )}
       </AnimatePresence>
+
+      {/* Spell cast splash — name sweeps up from the center, Hearthstone style */}
+      <AnimatePresence>
+        {spellFlash && (
+          <motion.div
+            key={`spell-${spellFlash.key}`}
+            initial={{ opacity: 0, scale: 0.6, y: 30 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 1.15, y: -26, transition: { duration: 0.25 } }}
+            transition={{ type: "spring", stiffness: 380, damping: 24 }}
+            style={{
+              position: "fixed", top: "38%", left: 0, right: 0,
+              display: "flex", justifyContent: "center",
+              pointerEvents: "none", zIndex: 90,
+            }}
+          >
+            <div style={{
+              padding: "10px 34px", borderRadius: 14,
+              background: "radial-gradient(ellipse at 50% 50%, rgba(90,20,140,0.92), rgba(30,5,60,0.95))",
+              border: "1px solid #cc66ff88",
+              boxShadow: "0 0 50px #aa44ff66, 0 0 18px #cc66ff44, inset 0 0 24px #7722cc55",
+              fontSize: 17, fontWeight: 900, letterSpacing: 4, color: "#eeccff",
+              textShadow: "0 0 16px #cc66ff",
+            }}>
+              ✦ {spellFlash.name.toUpperCase()} ✦
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Turn banner — sweeps across at every turn change */}
+      <AnimatePresence>
+        {turnBanner && (
+          <motion.div
+            key={`turn-${turnBanner.key}`}
+            initial={{ opacity: 0, scaleX: 0.1 }}
+            animate={{ opacity: 1, scaleX: 1 }}
+            exit={{ opacity: 0, transition: { duration: 0.3 } }}
+            transition={{ type: "spring", stiffness: 260, damping: 26 }}
+            style={{
+              position: "fixed", top: "46%", left: 0, right: 0,
+              pointerEvents: "none", zIndex: 89,
+              display: "flex", justifyContent: "center",
+            }}
+          >
+            <div style={{
+              width: "100%",
+              padding: "10px 0", textAlign: "center",
+              background: turnBanner.pid === "P1"
+                ? "linear-gradient(90deg, transparent, rgba(30,80,180,0.55) 30%, rgba(30,80,180,0.55) 70%, transparent)"
+                : "linear-gradient(90deg, transparent, rgba(180,40,50,0.55) 30%, rgba(180,40,50,0.55) 70%, transparent)",
+              borderTop: `1px solid ${turnBanner.pid === "P1" ? "#4a9eff66" : "#ff666666"}`,
+              borderBottom: `1px solid ${turnBanner.pid === "P1" ? "#4a9eff66" : "#ff666666"}`,
+              fontSize: 19, fontWeight: 900, letterSpacing: 8,
+              color: turnBanner.pid === "P1" ? "#aaccff" : "#ffbbbb",
+              textShadow: `0 0 20px ${turnBanner.pid === "P1" ? "#4a9eff" : "#ff5555"}`,
+            }}>
+              ⚔ {(turnBanner.pid === "P1" ? p1Name : p2Name).toUpperCase()}'S TURN ⚔
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <AnimatePresence>
         {gameOverShown && battleState.winner && (
           <GameOverOverlay key="gameover" winnerName={winnerName} winnerIcon={winnerIcon} onDone={() => onGameOver(battleState.winner!, battleState.turn)} />
         )}
       </AnimatePresence>
+    </motion.div>
     </div>
     </ErrorBoundary>
   );

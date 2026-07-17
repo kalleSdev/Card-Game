@@ -65,7 +65,7 @@ function getDomainDesc(defId: string): { name: string; desc: string; secondDesc?
   const e = d.effect;
   let desc = "";
   const grantSuffix = defId === "gojo-base"
-    ? " Grants Hollow Purple (4 damage). Filling twice grants 2 Hollow Purples."
+    ? " Grants Hollow Purple (5 damage), +5 energy, and unlimited GET SPELL this turn. Filling twice grants 2 Hollow Purples."
     : d.grantSpell ? ` Also grants "${d.grantSpell.name}" — ${d.grantSpell.desc}.` : "";
   switch (e.kind) {
     case "STUN_ENEMY_BOARD":      desc = `Fully immobilizes all enemies for ${e.turns} turn${e.turns > 1 ? "s" : ""} — no actions allowed.`; break;
@@ -113,7 +113,7 @@ const TAG_SYNERGY: Record<string, string> = {
   "kyoto":          "🏯 Kyoto",
   "zenin-clan":     "⚔ Zenin Clan",
   "heavenly-restriction": "⛓ Heavenly Restriction",
-  "six-eyes":       "👁 Six Eyes",
+  "gojo-clan":      "👁 Gojo Clan",
   "culling-game":   "⚔ Culling Game",
   "gojo-student":   "🎓 Gojo's Student",
   "gambler":        "🎰 Gambler",

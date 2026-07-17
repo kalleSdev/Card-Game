@@ -187,7 +187,7 @@ function domainEffectDesc(defId: string): { name: string; desc: string } {
   const e = d.effect;
   let desc = "";
   const bonusSpellSuffix = defId === "gojo-base"
-    ? " Grants Hollow Purple (deal 4 damage to any enemy). Filling meter twice gives 2 Hollow Purples."
+    ? " Grants Hollow Purple (deal 5 damage to any enemy), +5 energy, and unlimited GET SPELL this turn. Filling meter twice gives 2 Hollow Purples."
     : d.grantSpell ? ` Also grants "${d.grantSpell.name}" — ${d.grantSpell.desc}.` : "";
   const secondSuffix = d.secondEffect
     ? (() => {

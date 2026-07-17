@@ -197,7 +197,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "X",
     basePoints: 15000,
     affinity: "LEADER",
-    tags: ["sorcerer", "jujutsu-high", "gojo-clan", "six-eyes", "strongest", "gojo-geto"],
+    tags: ["sorcerer", "jujutsu-high", "gojo-clan", "strongest", "gojo-geto"],
     offRolePenalties: { combat: 0.9, support: 0.7 },
   },
   "yuji": {
@@ -206,7 +206,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "S",
     basePoints: 10000,
     affinity: "COMBAT",
-    tags: ["sorcerer", "curse", "jujutsu-high", "kenjaku", "brother", "gojo-student", "culling-game"],
+    tags: ["sorcerer", "curse", "jujutsu-high", "kenjaku", "brother", "gojo-student", "culling-game", "shield"],
     offRolePenalties: { leader: 0.85, support: 0.75 },
   },
   "toji": {
@@ -263,7 +263,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "B",
     basePoints: 8500,
     affinity: "SUPPORT",
-    tags: ["sorcerer", "ratio"],
+    tags: ["sorcerer", "ratio", "shield"],
     offRolePenalties: { leader: 0.95, combat: 0.85 },
   },
   "geto": {
@@ -299,7 +299,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "SSS",
     basePoints: 13000,
     affinity: "LEADER",
-    tags: ["sorcerer", "jujutsu-high", "six-eyes", "rika", "culling-game", "tokyo-senior"],
+    tags: ["sorcerer", "jujutsu-high", "gojo-clan", "rika", "culling-game", "tokyo-senior"],
     offRolePenalties: { combat: 0.9, support: 0.8 },
   },
   "higuruma": {
@@ -373,7 +373,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "A",
     basePoints: 9000,
     affinity: "SUPPORT",
-    tags: ["sorcerer", "jujutsu-high", "cursed-corpse", "tokyo-senior", "culling-game"],
+    tags: ["sorcerer", "jujutsu-high", "cursed-corpse", "tokyo-senior", "culling-game", "shield"],
     offRolePenalties: { leader: 0.8, combat: 0.8 },
   },
   "inumaki": {
@@ -400,7 +400,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "A",
     basePoints: 9000,
     affinity: "SUPPORT",
-    tags: ["sorcerer", "star-map", "stars", "culling-game"],
+    tags: ["sorcerer", "star-map", "stars", "culling-game", "shield"],
     offRolePenalties: { leader: 0.7, combat: 0.6 },
   },
   "mechamaru": {
@@ -409,7 +409,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "S",
     basePoints: 10000,
     affinity: "SUPPORT",
-    tags: ["sorcerer", "puppet", "heavenly-restriction", "kyoto"],
+    tags: ["sorcerer", "puppet", "heavenly-restriction", "kyoto", "shield"],
     offRolePenalties: { leader: 0.8, combat: 0.9 },
   },
   "miwa": {
@@ -464,7 +464,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "S",
     basePoints: 11000,
     affinity: "COMBAT",
-    tags: ["sorcerer", "culling-game", "granite-blast"],
+    tags: ["sorcerer", "culling-game", "granite-blast", "shield"],
     offRolePenalties: { leader: 0.8, support: 0.7 },
   },
   "uro": {
@@ -482,7 +482,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "S",
     basePoints: 11000,
     affinity: "COMBAT",
-    tags: ["curse", "special-grade", "culling-game"],
+    tags: ["curse", "special-grade", "culling-game", "shield"],
     offRolePenalties: { leader: 0.9, support: 1 },
   },
   "jinichi": {

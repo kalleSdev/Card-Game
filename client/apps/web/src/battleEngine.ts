@@ -37,10 +37,31 @@ const RARITY_STATS: Record<string, { atk: number; hp: number; cost: number }> = 
   X:   { atk: 8, hp: 8,  cost: 7 },
 };
 
+// Per-card stat overrides on top of the rarity table
+const STAT_OVERRIDES: Record<string, Partial<{ atk: number; hp: number; cost: number }>> = {
+  uro:       { atk: 2, hp: 4 },
+  todo:      { atk: 2 },
+  mechamaru: { atk: 1, hp: 4 },
+  jinichi:   { atk: 4, hp: 2 },
+  inumaki:   { atk: 1, hp: 4 },
+  maki:      { atk: 7, hp: 5 },
+  choso:     { atk: 5, hp: 5 },
+  yuji:      { atk: 4, hp: 4 },
+  sukuna:    { atk: 10, hp: 6 },
+  dabura:    { atk: 9, hp: 7 },
+  hakari:    { atk: 5, hp: 6 },
+  kashimo:   { atk: 5, hp: 6 },
+  megumi:    { atk: 2, hp: 3 },
+  naoya:     { atk: 4, hp: 4 },
+  mahito:    { atk: 5, hp: 2 },
+  geto:      { atk: 5, hp: 5 },
+  ryu:       { atk: 5, hp: 6 },
+};
+
 export function deriveStats(def: CardDef): { atk: number; hp: number; cost: number } {
   // All cards use rarity stats — leader battle stats (2/30/free) are applied by buildPlayer
   const base = RARITY_STATS[def.rarity] ?? RARITY_STATS.B;
-  return { atk: base.atk, hp: base.hp, cost: base.cost };
+  return { atk: base.atk, hp: base.hp, cost: base.cost, ...STAT_OVERRIDES[def.id] };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -49,8 +70,11 @@ export function deriveStats(def: CardDef): { atk: number; hp: number; cost: numb
 
 export type SpellEffect =
   | { kind: "DAMAGE_TARGET"; amount: number }              // deal damage to one enemy
+  | { kind: "DAMAGE_ALL"; amount: number }                 // damage every enemy card AND their leader
+  | { kind: "DAMAGE_AND_STUN"; amount: number }            // damage + stun one enemy board card for 1 turn
   | { kind: "BUFF_BOARD_ATK"; amount: number; turns: number } // buff all own cards' ATK
-  | { kind: "BUFF_BOARD_HP"; amount: number }              // heal/buff all own cards' HP
+  | { kind: "BUFF_BOARD_HP"; amount: number; includeLeader?: boolean } // heal/buff all own cards' HP
+  | { kind: "BUFF_ONE_BOTH"; atk: number; hp: number }     // one board card gains ATK + HP permanently
   | { kind: "DRAW"; count: number }                        // draw cards from deck
   | { kind: "STUN_ONE" }                                   // stun one enemy card for 1 turn
   | { kind: "TURN_BACK_SHEEP" }                            // restore one sheepified card
@@ -61,7 +85,7 @@ export type SpellEffect =
   | { kind: "DESTROY_ONE" }                                // destroy any one enemy board card
   | { kind: "COPY_BOARD_CARD" }                            // place a 3/3 copy of any board card
   | { kind: "DAMAGE_TARGET_SELF"; amount: number; selfAmount: number } // damage enemy + hurt self
-  | { kind: "SHEEPIFY_ONE" };                                          // turn one enemy board card into 1/1 sheep
+  | { kind: "SHEEPIFY_ONE"; maxCost?: number };                        // turn one enemy board card into 1/1 sheep (optionally cost-capped)
 
 export interface SpellCard {
   id: string;
@@ -86,18 +110,18 @@ type SynergyRule = {
 };
 
 export const BATTLE_SYNERGY_RULES: SynergyRule[] = [
-  { id: "strongest",     tags: ["strongest"],            minCount: 2, label: "The Strongest",       spellName: "Peak Pressure",     spellDesc: "Deal 4 damage to any enemy",              spell: { kind: "DAMAGE_TARGET", amount: 4 } },
-  { id: "disaster",      tags: ["disaster-curse"],       minCount: 2, label: "Disaster Curses",     spellName: "Calamity Surge",    spellDesc: "All your cards gain +1 ATK for 2 turns",  spell: { kind: "BUFF_BOARD_ATK", amount: 1, turns: 2 } },
+  { id: "strongest",     tags: ["strongest"],            minCount: 2, label: "The Strongest",       spellName: "Peak Pressure",     spellDesc: "Deal 3 damage to any enemy board card",   spell: { kind: "DAMAGE_TARGET", amount: 3 } },
+  { id: "disaster",      tags: ["disaster-curse"],       minCount: 3, label: "Disaster Curses",     spellName: "Calamity Surge",    spellDesc: "Deal 1 damage to every enemy card and their leader", spell: { kind: "DAMAGE_ALL", amount: 1 } },
   { id: "jujutsu_high",  tags: ["jujutsu-high"],         minCount: 3, label: "Jujutsu High",        spellName: "School Spirit",     spellDesc: "All your cards gain +1 HP",               spell: { kind: "BUFF_BOARD_HP", amount: 1 } },
-  { id: "zenin_clan",    tags: ["zenin-clan"],           minCount: 2, label: "Zenin Clan",          spellName: "Clan Mastery",      spellDesc: "Give one of your cards +3 ATK",           spell: { kind: "BUFF_ONE_ATK", amount: 3 } },
+  { id: "zenin_clan",    tags: ["zenin-clan"],           minCount: 2, label: "Zenin Clan",          spellName: "Clan Mastery",      spellDesc: "Give one of your cards +2 ATK",           spell: { kind: "BUFF_ONE_ATK", amount: 2 } },
   { id: "brotherhood",   tags: ["brother"],              minCount: 2, label: "Brotherhood",         spellName: "Sworn Bond",        spellDesc: "All your cards gain +1 ATK for 1 turn",   spell: { kind: "BUFF_BOARD_ATK", amount: 1, turns: 1 } },
-  { id: "heavenly",      tags: ["heavenly-restriction"], minCount: 2, label: "Heavenly Restriction", spellName: "Pure Body",        spellDesc: "All your cards gain +1 HP",               spell: { kind: "BUFF_BOARD_HP", amount: 1 } },
+  { id: "heavenly",      tags: ["heavenly-restriction"], minCount: 2, label: "Heavenly Restriction", spellName: "Pure Body",        spellDesc: "Give one of your cards +1 ATK and +2 HP permanently", spell: { kind: "BUFF_ONE_BOTH", atk: 1, hp: 2 } },
   { id: "culling_game",  tags: ["culling-game"],         minCount: 3, label: "Culling Game",        spellName: "Kill Score",        spellDesc: "Deal 3 damage to any enemy",              spell: { kind: "DAMAGE_TARGET", amount: 3 } },
-  { id: "six_eyes",      tags: ["six-eyes"],             minCount: 2, label: "Six Eyes",            spellName: "Infinity",          spellDesc: "Stun one enemy card for 1 turn",          spell: { kind: "STUN_ONE" } },
-  { id: "gojo_students", tags: ["gojo-student"],         minCount: 2, label: "Gojo's Students",     spellName: "Sensei's Guidance", spellDesc: "Give one of your cards +3 HP",            spell: { kind: "BUFF_ONE_HP", amount: 3 } },
+  { id: "gojo_clan",     tags: ["gojo-clan"],            minCount: 2, label: "Gojo Clan",           spellName: "Infinity",          spellDesc: "Stun one enemy card for 1 turn",          spell: { kind: "STUN_ONE" } },
+  { id: "gojo_students", tags: ["gojo-student"],         minCount: 2, label: "Gojo's Students",     spellName: "Guidance",          spellDesc: "Give one of your cards +2 HP",            spell: { kind: "BUFF_ONE_HP", amount: 2 } },
   { id: "tokyo_senior",  tags: ["tokyo-senior"],         minCount: 3, label: "Tokyo Trio",          spellName: "Senior Formation",  spellDesc: "Deal 3 damage to any enemy",              spell: { kind: "DAMAGE_TARGET", amount: 3 } },
-  { id: "stars",         tags: ["stars"],                minCount: 2, label: "Stars",                spellName: "Starfall",          spellDesc: "All your cards gain +1 HP",               spell: { kind: "BUFF_BOARD_HP", amount: 1 } },
-  { id: "gojo_geto_bond", tags: ["gojo-geto"],           minCount: 2, label: "Destined Rivals",      spellName: "Hollow Purple",     spellDesc: "Deal 6 damage to any enemy",              spell: { kind: "DAMAGE_TARGET", amount: 6 } },
+  { id: "stars",         tags: ["stars"],                minCount: 2, label: "Stars",                spellName: "Starfall",          spellDesc: "All your cards and your leader gain +1 HP", spell: { kind: "BUFF_BOARD_HP", amount: 1, includeLeader: true } },
+  { id: "gojo_geto_bond", tags: ["gojo-geto"],           minCount: 2, label: "Destined Rivals",      spellName: "Memory",            spellDesc: "Deal 1 damage and stun an enemy card for 1 turn", spell: { kind: "DAMAGE_AND_STUN", amount: 1 } },
 ];
 
 export function getSynergyLabel(id: string): string {
@@ -142,7 +166,7 @@ type DomainEntry = {
 };
 
 export const DOMAIN_BATTLE_EFFECTS: Record<string, DomainEntry> = {
-  "gojo-base": { name: "Infinite Void",              effect: { kind: "STUN_ENEMY_BOARD",   turns: 1 } }, // Gojo special-cased to grant Hollow Purple (DAMAGE_TARGET 4); 2nd fill grants 2 purples
+  "gojo-base": { name: "Infinite Void",              effect: { kind: "STUN_ENEMY_BOARD",   turns: 1 } }, // Gojo special-cased: grants Hollow Purple (DAMAGE_TARGET 5), +5 energy, unlimited GET SPELL this turn; 2nd fill grants 2 purples
   "sukuna":    { name: "Malevolent Shrine",           effect: { kind: "SUKUNA_BOARD_MODE" },
     secondEffect: { kind: "GRANT_SPELL", spellName: "Dismantle", spellDesc: "Deal 6 damage to any enemy", spell: { kind: "DAMAGE_TARGET", amount: 6 } } },
   "mahito":    { name: "Self-Embodiment of Perfection", effect: { kind: "BUFF_OWN_BOARD",  atkBonus: 25, hpBonus: 0, turns: 2 },
@@ -176,10 +200,10 @@ export const DOMAIN_BATTLE_EFFECTS: Record<string, DomainEntry> = {
     grantSpell: { name: "Projection Slash", desc: "All your cards gain +3 ATK for 1 turn", effect: { kind: "BUFF_BOARD_ATK", amount: 3, turns: 1 } } },
   "maki":      { name: "Heavenly Restriction Assault", effect: { kind: "GRANT_SPELL", spellName: "Dragon Bone Strike", spellDesc: "Deal 5 damage to any target", spell: { kind: "DAMAGE_TARGET", amount: 5 } },
     secondEffect: { kind: "GRANT_SPELL", spellName: "Dragon Bone Strike", spellDesc: "Deal 5 damage to any target", spell: { kind: "DAMAGE_TARGET", amount: 5 } } },
-  "takaba":    { name: "Comedian",                   effect: { kind: "GRANT_SPELL", spellName: "Comedian's Curse", spellDesc: "Turn an enemy board card into a 1/1 sheep", spell: { kind: "SHEEPIFY_ONE" } },
-    grantSpell: { name: "Comedian's Curse", desc: "Turn an enemy board card into a 1/1 sheep", effect: { kind: "SHEEPIFY_ONE" } },
-    secondEffect: { kind: "GRANT_SPELL", spellName: "Comedian's Curse", spellDesc: "Turn an enemy board card into a 1/1 sheep", spell: { kind: "SHEEPIFY_ONE" } },
-    secondGrantSpell: { name: "Comedian's Curse", desc: "Turn an enemy board card into a 1/1 sheep", effect: { kind: "SHEEPIFY_ONE" } } },
+  // First fill: 2 sheep spells (effect + grantSpell). Second fill: only 1 (no secondGrantSpell).
+  "takaba":    { name: "Comedian",                   effect: { kind: "GRANT_SPELL", spellName: "Comedian's Curse", spellDesc: "Turn an enemy card costing 4 or less into a 1/1 sheep", spell: { kind: "SHEEPIFY_ONE", maxCost: 4 } },
+    grantSpell: { name: "Comedian's Curse", desc: "Turn an enemy card costing 4 or less into a 1/1 sheep", effect: { kind: "SHEEPIFY_ONE", maxCost: 4 } },
+    secondEffect: { kind: "GRANT_SPELL", spellName: "Comedian's Curse", spellDesc: "Turn an enemy card costing 4 or less into a 1/1 sheep", spell: { kind: "SHEEPIFY_ONE", maxCost: 4 } } },
 };
 
 const DEFAULT_DOMAIN_EFFECT: { name: string; effect: DomainEffect } = {
@@ -222,7 +246,47 @@ export interface BattleCard {
   isSheep?: boolean;
   // Board mode: card represents the leader (Sukuna/Mahoraga) — immune to DESTROY_ONE
   isLeaderCard?: boolean;
+  // Perk state (see CARD_PERKS)
+  perkUsed?: boolean;       // each card's perk is once per game
+  redirectNext?: boolean;   // Todo: next attack against this card is redirected to a random enemy card
+  ignoreShields?: boolean;  // Toji: can attack past Shields until end of turn
+  perkAtkTurn?: number;     // Yuji/Choso/Nanami: ATK granted by perk, removed at end of turn
+  splashNext?: boolean;     // Jogo: next attack deals 1 dmg to all other enemy board cards
+  pierceBoardOnly?: boolean;// Maki: permanently ignore shields for board targets (never the leader)
+  reflectTurns?: number;    // Uro: attacks against this card damage the attacker instead
+  silentStrike?: boolean;   // Naoya: this turn attacks take no counter but deal half damage
+  regen?: boolean;          // Mahoraga: +1 HP after surviving damage
+  rebirth?: boolean;        // Kurourushi: respawns as a 2/2 on death
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Card perks — activatable once per game via a button under the board card
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const CARD_PERKS: Record<string, { icon: string; name: string; desc: string }> = {
+  mechamaru:  { icon: "🤖", name: "Ultimate Mechamaru", desc: "Summons a Robot — a 2/2 Shield entity." },
+  todo:       { icon: "👏", name: "Boogie Woogie", desc: "The next time Todo is attacked, the damage is redirected to a random enemy card. The attacker takes no counter damage — only the redirected damage happens." },
+  megumi:     { icon: "🐺", name: "Eight-Handled Sword", desc: "Summons Mahoraga (7/7) — Megumi dies and your leader takes 5 damage. If Mahoraga is in your deck or hand, that card is summoned instead and your leader takes no damage. If your leader is Mahoraga, summons Nue (2/2)." },
+  geto:       { icon: "👿", name: "Cursed Spirit Manipulation", desc: "Summons 2 Cursed Spirits — a 1/2 Shield and a 2/1." },
+  mahito:     { icon: "🖐", name: "Idle Transfiguration", desc: "Choose 1 enemy card and 1 friendly card of the same cost — both are destroyed." },
+  toji:       { icon: "🗡", name: "Shield Breaker", desc: "This turn Toji can attack any target, ignoring Shields — including the enemy leader, who takes half damage." },
+  yuji:       { icon: "⚡", name: "Black Flash", desc: "+2 ATK this turn." },
+  choso:      { icon: "🩸", name: "Piercing Blood", desc: "+2 ATK this turn." },
+  dagon:      { icon: "🐟", name: "Death Swarm", desc: "Spawns two 1/1 Fish entities." },
+  takaba:     { icon: "🐑", name: "Comedy Gold", desc: "Grants a spell that turns any card costing 3 or less into a 1/1 sheep." },
+  inumaki:    { icon: "🗣", name: "Cursed Speech", desc: "Stuns 1 enemy card for 1 turn — Inumaki becomes a 1/1 right after." },
+  jogo:       { icon: "🌋", name: "Maximum Meteor", desc: "His next attack also deals 1 damage to every other enemy board card." },
+  maki:       { icon: "🐉", name: "Dragon Bone", desc: "+2 ATK permanently. Can attack any board card regardless of Shields (but never the leader)." },
+  kashimo:    { icon: "⚡", name: "Lightning Discharge", desc: "+3 ATK permanently, but HP drops to 1." },
+  uro:        { icon: "🌀", name: "Sky Warp", desc: "For 2 turns, attacks aimed at her damage the attacker instead." },
+  gakuganji:  { icon: "🎸", name: "Cursed Riff", desc: "Choose one of your cards to give +1 ATK permanently." },
+  mahoraga:   { icon: "☸", name: "Adaptation", desc: "After surviving damage, Mahoraga recovers 1 HP (effectively takes 1 less from every hit)." },
+  hakari:     { icon: "🎰", name: "Jackpot", desc: "Grants a random spell for free — it can be any spell." },
+  naoya:      { icon: "💨", name: "Projection Rush", desc: "This turn his attack takes no counter damage, but deals half damage." },
+  kurourushi: { icon: "🪳", name: "Cursed Rebirth", desc: "When Kurourushi dies, he respawns with half his highest ATK and HP." },
+  nanami:     { icon: "⏱", name: "Overtime", desc: "+2 ATK this turn." },
+  nobara:     { icon: "📌", name: "Resonance", desc: "Pin 2 enemy board cards. The next time one takes damage, the other takes half that damage. One use." },
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Player state within a battle
@@ -260,6 +324,9 @@ export interface BattlePlayer {
   sukunaBoardMode: boolean;      // true when Sukuna entered board as 4/17
   mahoragaBoardMode: boolean;    // true when Mahoraga entered board as 1/25
   mahoragaAdaptAtk: number;      // accumulated +ATK from Mahoraga adaptation hits
+  shieldCharges: number;         // consumable shield grants (3 per game)
+  unlimitedSpellDraw?: boolean;  // Gojo domain: GET SPELL has no once-per-turn limit this turn
+  resonance?: { a: string; b: string } | null; // Nobara perk: linked enemy instanceIds — next damage to one hits the other for half
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -320,7 +387,9 @@ export type BattleIntent =
   | { type: "END_TURN";        pid: PlayerId }
   | { type: "CANCEL_ATTACK";        pid: PlayerId }
   | { type: "DOMAIN_TARGET";        pid: PlayerId; targetInstanceId: string }
-  | { type: "DRAW_SYNERGY_SPELL";   pid: PlayerId };
+  | { type: "DRAW_SYNERGY_SPELL";   pid: PlayerId }
+  | { type: "GRANT_BOARD_SHIELD";   pid: PlayerId; targetInstanceId: string }
+  | { type: "ACTIVATE_PERK";        pid: PlayerId; instanceId: string; targetInstanceId?: string; friendlyTargetInstanceId?: string; secondTargetInstanceId?: string };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Factory — build BattleCard from CardDef
@@ -343,7 +412,7 @@ export function makeBattleCard(defId: string, def: CardDef): BattleCard {
     atk: stats.atk,
     currentHp: stats.hp,
     maxHp: stats.hp,
-    hasTaunt: def.affinity === "COMBAT",  // COMBAT cards protect the leader
+    hasTaunt: def.tags.includes("shield"), // shield-tagged cards protect the leader
     canAttack: false,
     exhausted: false,
     stunTurns: 0,
@@ -494,6 +563,7 @@ function buildPlayer(
     sukunaBoardMode: false,
     mahoragaBoardMode: false,
     mahoragaAdaptAtk: 0,
+    shieldCharges: 3,
   };
 
   return player;
@@ -597,6 +667,35 @@ function boardCards(player: BattlePlayer): BattleCard[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Generic entity summon helper — spawns into the first empty slot (no-op if board full)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function summonEntity(
+  player: BattlePlayer,
+  defId: string, name: string, atk: number, hp: number, shield: boolean,
+): BattlePlayer {
+  const slot = player.board.findIndex(s => s === null);
+  if (slot === -1) return player;
+  const entity: BattleCard = {
+    instanceId: `${defId}-${++_instanceCounter}`,
+    defId, name,
+    rarity: "B",
+    affinity: "COMBAT",
+    tags: [],
+    baseAtk: atk, baseHp: hp,
+    cost: 0,
+    atk, currentHp: hp, maxHp: hp,
+    hasTaunt: shield,
+    canAttack: false, exhausted: true,
+    stunTurns: 0,
+    tempAtkBonus: 0, tempHpBonus: 0, tempBonusTurns: 0,
+  };
+  const newBoard = [...player.board] as BattlePlayer["board"];
+  newBoard[slot] = entity;
+  return { ...player, board: newBoard };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Geto entity spawning helper
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -616,8 +715,7 @@ function spawnGetoEntities(player: BattlePlayer, atk: number, hp: number): Battl
       cost: 0,
       atk, currentHp: hp, maxHp: hp,
       hasTaunt: true,
-      canAttack: true,
-      exhausted: false,
+      canAttack: false, exhausted: true,
       stunTurns: 0,
       tempAtkBonus: 0, tempHpBonus: 0, tempBonusTurns: 0,
     };
@@ -651,17 +749,18 @@ function applyDomainEffect(
         cardPlayFrozen: effect.turns, // also prevent card placement
         turnFrozen: effect.turns,     // prevent all actions
       };
-      // Gojo's domain grants Hollow Purple spell(s) — DAMAGE_TARGET 4
+      // Gojo's domain grants Hollow Purple spell(s), +5 energy, and unlimited GET SPELL this turn
       if (p.leader.defId === "gojo-base") {
         const makePurple = (): SpellCard => ({
           id: `spell-purple-${++_instanceCounter}`,
           synergyId: "gojo-purple",
           name: "Hollow Purple",
-          description: "Deal 4 damage to any enemy",
-          effect: { kind: "DAMAGE_TARGET", amount: 4 },
+          description: "Deal 5 damage to any enemy",
+          effect: { kind: "DAMAGE_TARGET", amount: 5 },
         });
         const count = activationCount >= 1 ? 2 : 1;
         for (let i = 0; i < count; i++) p = addSpell(p, makePurple());
+        p = { ...p, energy: Math.min(10, p.energy + 5), unlimitedSpellDraw: true };
       }
       break;
     }
@@ -794,7 +893,7 @@ function applyDomainEffect(
         tempAtkBonus: 0, tempHpBonus: 0, tempBonusTurns: 0,
         isLeaderCard: true,
       };
-      const sukunaSlot = p.board.findIndex(s => s === null);
+      const sukunaSlot = p.board[2] === null ? 2 : p.board.findIndex(s => s === null); // prefer center slot
       if (sukunaSlot !== -1) {
         const nb = [...p.board] as BattlePlayer["board"];
         nb[sukunaSlot] = sukunaCard;
@@ -821,7 +920,7 @@ function applyDomainEffect(
         tempAtkBonus: 0, tempHpBonus: 0, tempBonusTurns: 0,
         isLeaderCard: true,
       };
-      const mSlot = p.board.findIndex(s => s === null);
+      const mSlot = p.board[2] === null ? 2 : p.board.findIndex(s => s === null); // prefer center slot
       if (mSlot !== -1) {
         const nb = [...p.board] as BattlePlayer["board"];
         nb[mSlot] = mahoragaCard;
@@ -865,7 +964,7 @@ function applyDomainEffect(
         cost: 0,
         atk: 5, currentHp: 5, maxHp: 5,
         hasTaunt: true,
-        canAttack: true, exhausted: false,
+        canAttack: false, exhausted: true,
         stunTurns: 0,
         tempAtkBonus: 0, tempHpBonus: 0, tempBonusTurns: 0,
       };
@@ -875,8 +974,8 @@ function applyDomainEffect(
         nb[rikaSlot] = rikaCard;
         p = { ...p, board: nb };
       }
-      // Only grant copy spell on first activation
-      if (activationCount === 0) {
+      // Every fill (including refills) grants a Cursed Copy spell
+      {
         const copySpell: SpellCard = {
           id: `spell-rika-copy-${++_instanceCounter}`,
           synergyId: "yuta-copy",
@@ -1016,6 +1115,7 @@ function processTurnStart(state: BattleState): { state: BattleState; drew: strin
     exhausted:  false,
     canAttack:  c.stunTurns <= 0,
     stunTurns:  Math.max(0, c.stunTurns - 1),
+    reflectTurns: Math.max(0, (c.reflectTurns ?? 0) - 1), // Uro perk decay
   });
   p = {
     ...p,
@@ -1128,8 +1228,14 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       const target = findOnBoard(state.players[opp], intent.targetInstanceId);
       if (!target) return illegal("Target not found");
 
-      // Deal damage both ways (counterattack)
-      const damage        = attacker.atk;
+      // Shield cards must be targeted first (Toji perk & Maki perk pierce them for board targets)
+      const oppShieldCards = boardCards(state.players[opp]).filter(c => c.hasTaunt);
+      if (oppShieldCards.length > 0 && !target.hasTaunt && !state.players[pid].tojiBerserk && !attacker.ignoreShields && !attacker.pierceBoardOnly) {
+        return illegal("Must target Shield cards first!");
+      }
+
+      // Deal damage both ways (counterattack). Naoya perk: half damage but no counter.
+      const damage        = attacker.silentStrike ? Math.ceil(attacker.atk / 2) : attacker.atk;
       const counterDamage = target.atk;
 
       let p = { ...state.players[pid] };
@@ -1139,18 +1245,40 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       const isLeaderTarget = target.instanceId === o.leader.instanceId;
       const isLeaderAttacker = attacker.instanceId === p.leader.instanceId;
 
-      // Apply damage to target
-      const updateTarget = (c: BattleCard): BattleCard => ({
-        ...c, currentHp: c.currentHp - damage,
-      });
-      // Apply counter to attacker (Toji never takes counter damage)
+      // Todo perk: redirect the incoming damage to a random card on the attacker's own board
+      const redirect = !isLeaderTarget && target.redirectNext === true;
+      let redirectVictimId: string | null = null;
+      if (redirect) {
+        const pool = boardCards(p);
+        if (pool.length > 0) redirectVictimId = pool[Math.floor(Math.random() * pool.length)].instanceId;
+      }
+
+      // Uro perk: attacks aimed at her damage the attacker instead
+      const reflect = !redirect && !isLeaderTarget && (target.reflectTurns ?? 0) > 0;
+
+      // Apply damage to target (skipped if redirected or reflected).
+      // Mahoraga perk: recovers 1 HP after surviving a hit.
+      const updateTarget = (c: BattleCard): BattleCard => {
+        if (redirect) return { ...c, redirectNext: false };
+        if (reflect)  return c;
+        const hpAfter = c.currentHp - damage;
+        return { ...c, currentHp: hpAfter + ((c.regen && hpAfter > 0 && damage > 0) ? 1 : 0) };
+      };
+      // Apply counter to attacker (Toji never takes counter damage; Naoya's silent strike takes none;
+      // a reflected attack sends the full attack damage back instead of a counter)
       const tojiNoCounter = isLeaderAttacker && p.tojiBerserk;
-      const actualCounter = tojiNoCounter ? 0 : counterDamage;
+      // Todo's redirect fully absorbs the exchange — the attacker takes no counter damage from him
+      const actualCounter = reflect ? damage : (tojiNoCounter || attacker.silentStrike || redirect) ? 0 : counterDamage;
       // Kashimo self-damage: when Kashimo's leader attacks, leader takes kashimoAtk self-damage
       const kashimoSelf = (isLeaderAttacker && p.kashimoPassive) ? p.kashimoAtk : 0;
       const exhaustAttacker = (c: BattleCard): BattleCard => {
-        if (isLeaderAttacker && p.leaderBonusAttack) return { ...c, currentHp: c.currentHp - actualCounter - kashimoSelf };
-        return { ...c, currentHp: c.currentHp - actualCounter - kashimoSelf, exhausted: true };
+        const taken = actualCounter + kashimoSelf;
+        const hpAfter = c.currentHp - taken;
+        const regenBonus = (c.regen && taken > 0 && hpAfter > 0) ? 1 : 0;
+        // Jogo's splash is consumed by this attack
+        const base = { ...c, currentHp: hpAfter + regenBonus, splashNext: false };
+        if (isLeaderAttacker && p.leaderBonusAttack) return base;
+        return { ...base, exhausted: true };
       };
 
       if (isLeaderAttacker) {
@@ -1166,16 +1294,65 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
         o = { ...o, board: o.board.map(c => c?.instanceId === target.instanceId ? updateTarget(c) : c) };
       }
 
+      // Apply redirected damage to the random victim on the attacker's side
+      if (redirect && redirectVictimId) {
+        const victim = p.board.find(c => c?.instanceId === redirectVictimId);
+        p = { ...p, board: p.board.map(c => c?.instanceId === redirectVictimId ? { ...c, currentHp: c.currentHp - damage } : c) };
+        if (victim && victim.currentHp - damage <= 0) events.push({ type: "CARD_DIED", pid, instanceId: redirectVictimId });
+      }
+
+      // Jogo perk: splash 1 damage to every other enemy board card
+      if (attacker.splashNext && !redirect && !reflect) {
+        o = {
+          ...o,
+          board: o.board.map(c => {
+            if (!c || c.instanceId === target.instanceId) return c;
+            const hpA = c.currentHp - 1;
+            if (hpA <= 0) events.push({ type: "CARD_DIED", pid: opp, instanceId: c.instanceId });
+            return { ...c, currentHp: hpA + ((c.regen && hpA > 0) ? 1 : 0) };
+          }),
+        };
+      }
+
+      // Nobara resonance: if the struck card is pinned, its linked partner takes half the damage
+      if (!redirect && !reflect && !isLeaderTarget && p.resonance &&
+          (target.instanceId === p.resonance.a || target.instanceId === p.resonance.b)) {
+        const otherId = target.instanceId === p.resonance.a ? p.resonance.b : p.resonance.a;
+        const echo = Math.ceil(damage / 2);
+        const other = o.board.find(c => c?.instanceId === otherId);
+        if (other) {
+          const hpA = other.currentHp - echo;
+          o = { ...o, board: o.board.map(c => c?.instanceId === otherId ? { ...c, currentHp: hpA + ((c.regen && hpA > 0) ? 1 : 0) } : c) };
+          if (hpA <= 0) events.push({ type: "CARD_DIED", pid: opp, instanceId: otherId });
+        }
+        p = { ...p, resonance: null }; // one use
+      }
+
       // Domain meter boost on damage dealt
       p = { ...p, domainMeter: Math.min(100, p.domainMeter + domainGain(p, 7)) };
       o = { ...o, domainMeter: Math.min(100, o.domainMeter + domainGain(o, Math.ceil(damage / 14))) };
 
-      events.push({ type: "ATTACK_CARD", attackerPid: pid, attackerId: attacker.instanceId, targetId: target.instanceId, damage, counterDamage });
+      events.push({ type: "ATTACK_CARD", attackerPid: pid, attackerId: attacker.instanceId, targetId: redirect && redirectVictimId ? redirectVictimId : target.instanceId, damage, counterDamage });
 
-      // Remove dead non-leader board cards
+      // Remove dead non-leader board cards (Kurourushi perk: respawns as a 2/2)
       const removeDeadBoard = (player: BattlePlayer): BattlePlayer => ({
         ...player,
-        board: player.board.map(c => (c && c.currentHp <= 0) ? null : c),
+        board: player.board.map(c => {
+          if (!c || c.currentHp > 0) return c;
+          if (c.rebirth) {
+            // Respawns with half his highest ATK and HP (min 1)
+            const rAtk = Math.max(1, Math.floor(c.atk / 2));
+            const rHp  = Math.max(1, Math.floor(c.maxHp / 2));
+            return {
+              ...c, rebirth: false,
+              atk: rAtk, baseAtk: rAtk, currentHp: rHp, maxHp: rHp, baseHp: rHp,
+              canAttack: false, exhausted: true, stunTurns: 0,
+              tempAtkBonus: 0, tempHpBonus: 0, tempBonusTurns: 0,
+              perkAtkTurn: 0, ignoreShields: false, silentStrike: false, splashNext: false,
+            };
+          }
+          return null;
+        }),
       });
       p = removeDeadBoard(p);
       o = removeDeadBoard(o);
@@ -1191,7 +1368,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
         p = adaptMahoragaIfHit(p, attacker.instanceId, attacker.currentHp, attacker.currentHp - actualCounter - kashimoSelf);
       }
       if (attacker.currentHp - actualCounter - kashimoSelf <= 0) events.push({ type: "CARD_DIED", pid, instanceId: attacker.instanceId });
-      if (target.currentHp - damage <= 0)          events.push({ type: "CARD_DIED", pid: opp, instanceId: target.instanceId });
+      if (!redirect && target.currentHp - damage <= 0) events.push({ type: "CARD_DIED", pid: opp, instanceId: target.instanceId });
 
       let nextState: BattleState = { ...state, players: { ...state.players, [pid]: p, [opp]: o }, pendingAttackerId: null };
       nextState = checkWin(nextState);
@@ -1205,11 +1382,12 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       const attacker = findOnBoard(state.players[pid], state.pendingAttackerId);
       if (!attacker) return illegal("Attacker not found");
       if (!attacker.canAttack || attacker.exhausted) return illegal("Attacker cannot attack");
-      // Any card on the board protects the leader — clear the board first (unless Toji berserk)
-      const tauntGuards = boardCards(state.players[opp]);
-      if (tauntGuards.length > 0 && !state.players[pid].tojiBerserk) return illegal("Defeat all enemy cards before targeting the leader!");
+      // Only shield cards protect the leader — clear them first (unless Toji berserk)
+      const tauntGuards = boardCards(state.players[opp]).filter(c => c.hasTaunt);
+      if (tauntGuards.length > 0 && !state.players[pid].tojiBerserk && !attacker.ignoreShields) return illegal("Defeat all Shield cards before targeting the leader!");
 
-      const damage = attacker.atk;
+      // Toji's Shield Breaker reaches the leader too, but at half damage
+      const damage = attacker.ignoreShields ? Math.ceil(attacker.atk / 2) : attacker.atk;
       let p = { ...state.players[pid] };
       let o = { ...state.players[opp] };
 
@@ -1228,7 +1406,8 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
 
       o = { ...o, leader: { ...o.leader, currentHp: o.leader.currentHp - damage } };
       p = { ...p, domainMeter: Math.min(100, p.domainMeter + domainGain(p, 11)) };
-      o = { ...o, domainMeter: Math.min(100, o.domainMeter + domainGain(o, Math.ceil(damage / 11))) };
+      // Defender comeback boost — getting your leader hit fills your own domain meter
+      o = { ...o, domainMeter: Math.min(100, o.domainMeter + domainGain(o, 6 + Math.ceil(damage / 2))) };
 
       events.push({ type: "ATTACK_LEADER", attackerPid: pid, attackerId: attacker.instanceId, damage, leaderHpLeft: o.leader.currentHp });
 
@@ -1292,6 +1471,8 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
           if (!tgt) return illegal("Target not found");
           if (tgtOpp) {
             if (tgt.instanceId === o.leader.instanceId) {
+              // Damage spells hit the leader only when the board is clear
+              if (boardCards(o).length > 0) return illegal("Damage spells must target board cards first!");
               o = { ...o, leader: { ...o.leader, currentHp: o.leader.currentHp - eff.amount } };
             } else {
               const hpBefore = tgt.currentHp;
@@ -1301,6 +1482,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
             }
           } else {
             if (tgt.instanceId === p.leader.instanceId) {
+              if (boardCards(p).length > 0) return illegal("Damage spells must target board cards first!");
               p = { ...p, leader: { ...p.leader, currentHp: p.leader.currentHp - eff.amount } };
             } else {
               p = { ...p, board: p.board.map(c => c?.instanceId === tgt.instanceId ? { ...c, currentHp: c.currentHp - eff.amount } : c) };
@@ -1323,6 +1505,45 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
             tempHpBonus: c.tempHpBonus + eff.amount, tempBonusTurns: Math.max(c.tempBonusTurns, 2),
           });
           p = { ...p, board: p.board.map(c => c ? buffHp(c) : null) };
+          if (eff.includeLeader) {
+            p = { ...p, leader: { ...p.leader, maxHp: p.leader.maxHp + eff.amount, currentHp: p.leader.currentHp + eff.amount } };
+          }
+          break;
+        }
+        case "BUFF_ONE_BOTH": {
+          if (!intent.targetInstanceId) return illegal("Select one of your cards to buff");
+          if (p.leader.instanceId === intent.targetInstanceId) return illegal("Buff spells cannot target the leader — board cards only");
+          const bothCard = p.board.find(c => c?.instanceId === intent.targetInstanceId);
+          if (!bothCard) return illegal("Target not found on your board");
+          p = { ...p, board: p.board.map(c => c?.instanceId === intent.targetInstanceId
+            ? { ...c, atk: c.atk + eff.atk, currentHp: c.currentHp + eff.hp, maxHp: c.maxHp + eff.hp }
+            : c) };
+          break;
+        }
+        case "DAMAGE_ALL": {
+          // Hits every enemy board card AND the enemy leader
+          o = {
+            ...o,
+            leader: { ...o.leader, currentHp: o.leader.currentHp - eff.amount },
+            board: o.board.map(c => {
+              if (!c) return c;
+              const hpA = c.currentHp - eff.amount;
+              return { ...c, currentHp: hpA + ((c.regen && hpA > 0) ? 1 : 0) };
+            }),
+          };
+          o = { ...o, board: o.board.map(c => (c && c.currentHp <= 0) ? null : c) };
+          break;
+        }
+        case "DAMAGE_AND_STUN": {
+          if (!intent.targetInstanceId) return illegal("Select an enemy board card");
+          const dsTgt = o.board.find(c => c?.instanceId === intent.targetInstanceId);
+          if (!dsTgt) return illegal("Target not on enemy board");
+          const hpBeforeDS = dsTgt.currentHp;
+          o = { ...o, board: o.board.map(c => c?.instanceId === intent.targetInstanceId
+            ? { ...c, currentHp: c.currentHp - eff.amount, stunTurns: Math.max(1, c.stunTurns), canAttack: false }
+            : c) };
+          o = adaptMahoragaIfHit(o, intent.targetInstanceId, hpBeforeDS, hpBeforeDS - eff.amount);
+          o = { ...o, board: o.board.map(c => (c && c.currentHp <= 0) ? null : c) };
           break;
         }
         case "DRAW": {
@@ -1389,6 +1610,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
           const sheepTgt = o.board.find(c => c?.instanceId === intent.targetInstanceId);
           if (!sheepTgt) return illegal("Target not on enemy board");
           if (sheepTgt.isLeaderCard) return illegal("Cannot sheepify the enemy leader");
+          if (eff.maxCost !== undefined && sheepTgt.cost > eff.maxCost) return illegal(`Can only sheepify cards costing ${eff.maxCost} or less`);
           const sheepified: BattleCard = {
             ...sheepTgt,
             preSheepAtk: sheepTgt.atk, preSheepHp: sheepTgt.currentHp,
@@ -1399,26 +1621,22 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
         }
         case "BUFF_ONE_HP": {
           if (!intent.targetInstanceId) return illegal("Select one of your cards to buff HP");
-          const isLeader = p.leader.instanceId === intent.targetInstanceId;
-          const boardCard = p.board.find(c => c?.instanceId === intent.targetInstanceId);
-          if (!isLeader && !boardCard) return illegal("Target not found on your side");
-          if (isLeader) {
+          // HP buffs may target the leader; ATK buffs may not
+          if (p.leader.instanceId === intent.targetInstanceId) {
             p = { ...p, leader: { ...p.leader, currentHp: p.leader.currentHp + eff.amount, maxHp: p.leader.maxHp + eff.amount } };
-          } else {
-            p = { ...p, board: p.board.map(c => c?.instanceId === intent.targetInstanceId ? { ...c, currentHp: c.currentHp + eff.amount, maxHp: c.maxHp + eff.amount } : c) };
+            break;
           }
+          const boardCard = p.board.find(c => c?.instanceId === intent.targetInstanceId);
+          if (!boardCard) return illegal("Target not found on your board");
+          p = { ...p, board: p.board.map(c => c?.instanceId === intent.targetInstanceId ? { ...c, currentHp: c.currentHp + eff.amount, maxHp: c.maxHp + eff.amount } : c) };
           break;
         }
         case "BUFF_ONE_ATK": {
           if (!intent.targetInstanceId) return illegal("Select one of your cards to buff ATK");
-          const isLeader2 = p.leader.instanceId === intent.targetInstanceId;
+          if (p.leader.instanceId === intent.targetInstanceId) return illegal("Buff spells cannot target the leader — board cards only");
           const boardCard2 = p.board.find(c => c?.instanceId === intent.targetInstanceId);
-          if (!isLeader2 && !boardCard2) return illegal("Target not found on your side");
-          if (isLeader2) {
-            p = { ...p, leader: { ...p.leader, atk: p.leader.atk + eff.amount } };
-          } else {
-            p = { ...p, board: p.board.map(c => c?.instanceId === intent.targetInstanceId ? { ...c, atk: c.atk + eff.amount } : c) };
-          }
+          if (!boardCard2) return illegal("Target not found on your board");
+          p = { ...p, board: p.board.map(c => c?.instanceId === intent.targetInstanceId ? { ...c, atk: c.atk + eff.amount } : c) };
           break;
         }
         case "DAMAGE_TARGET_SELF": {
@@ -1429,6 +1647,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
           if (!tgtS) return illegal("Target not found");
           if (tgtOppS) {
             if (tgtS.instanceId === o.leader.instanceId) {
+              if (boardCards(o).length > 0) return illegal("Damage spells must target board cards first!");
               o = { ...o, leader: { ...o.leader, currentHp: o.leader.currentHp - eff.amount } };
             } else {
               const hpBefore = tgtS.currentHp;
@@ -1438,6 +1657,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
             }
           } else {
             if (tgtS.instanceId === p.leader.instanceId) {
+              if (boardCards(p).length > 0) return illegal("Damage spells must target board cards first!");
               p = { ...p, leader: { ...p.leader, currentHp: p.leader.currentHp - eff.amount } };
             } else {
               p = { ...p, board: p.board.map(c => c?.instanceId === tgtS.instanceId ? { ...c, currentHp: c.currentHp - eff.amount } : c) };
@@ -1462,9 +1682,14 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
             instanceId: `copy3-${srcCard.instanceId}-${++_instanceCounter}`,
             atk: 3, baseAtk: 3,
             currentHp: 3, maxHp: 3, baseHp: 3,
-            canAttack: false, exhausted: false,
+            canAttack: false, exhausted: true,
             tempAtkBonus: 0, tempHpBonus: 0, tempBonusTurns: 0,
             isLeaderCard: false,
+            // Copies behave like the real unit — fresh perk, no leftover perk state
+            perkUsed: false,
+            redirectNext: false, ignoreShields: false, perkAtkTurn: 0,
+            splashNext: false, pierceBoardOnly: false, reflectTurns: 0,
+            silentStrike: false, regen: false, rebirth: false,
           };
           const nb = [...p.board] as BattlePlayer["board"];
           nb[copySlot] = copy3;
@@ -1516,7 +1741,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
     // ── DRAW_SYNERGY_SPELL ────────────────────────────────────────────────
     case "DRAW_SYNERGY_SPELL": {
       let p = { ...state.players[pid] };
-      if (p.synergyDrawUsed) return illegal("Synergy draw already used this turn");
+      if (p.synergyDrawUsed && !p.unlimitedSpellDraw) return illegal("Synergy draw already used this turn");
       if (p.energy < 1) return illegal("Not enough energy (need 1)");
       if (p.spellPool.length === 0) return illegal("No spells left in pool");
       // Pick random spell from pool and remove it
@@ -1528,15 +1753,230 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       return { state: { ...state, players: { ...state.players, [pid]: p } }, events };
     }
 
+    // ── GRANT_BOARD_SHIELD ────────────────────────────────────────────────
+    case "GRANT_BOARD_SHIELD": {
+      let p = { ...state.players[pid] };
+      if (p.shieldCharges <= 0) return illegal("No shield charges remaining");
+      const cardIdx = p.board.findIndex(c => c?.instanceId === intent.targetInstanceId);
+      if (cardIdx === -1) return illegal("Card not found on board");
+      const card = p.board[cardIdx]!;
+      const newBoard = [...p.board] as BattlePlayer["board"];
+      newBoard[cardIdx] = { ...card, hasTaunt: true };
+      p = { ...p, board: newBoard, shieldCharges: p.shieldCharges - 1 };
+      return { state: { ...state, players: { ...state.players, [pid]: p } }, events };
+    }
+
+    // ── ACTIVATE_PERK ─────────────────────────────────────────────────────
+    case "ACTIVATE_PERK": {
+      let p = { ...state.players[pid] };
+      let o = { ...state.players[opp] };
+      const cardIdx = p.board.findIndex(c => c?.instanceId === intent.instanceId);
+      if (cardIdx === -1) return illegal("Card not on board");
+      const card = p.board[cardIdx]!;
+      if (card.perkUsed) return illegal("Perk already used");
+      if (!CARD_PERKS[card.defId]) return illegal("Card has no perk");
+
+      const setCard = (player: BattlePlayer, idx: number, patch: Partial<BattleCard>): BattlePlayer => {
+        const nb = [...player.board] as BattlePlayer["board"];
+        nb[idx] = { ...nb[idx]!, ...patch };
+        return { ...player, board: nb };
+      };
+
+      switch (card.defId) {
+        case "mechamaru": {
+          p = setCard(p, cardIdx, { perkUsed: true });
+          p = summonEntity(p, "robot-entity", "Robot", 2, 2, true);
+          break;
+        }
+        case "geto": {
+          p = setCard(p, cardIdx, { perkUsed: true });
+          p = summonEntity(p, "geto-entity", "Cursed Spirit", 1, 2, true);  // Shield spirit 1/2
+          p = summonEntity(p, "geto-entity", "Cursed Spirit", 2, 1, false); // normal spirit 2/1
+          break;
+        }
+        case "todo": {
+          p = setCard(p, cardIdx, { perkUsed: true, redirectNext: true });
+          break;
+        }
+        case "toji": {
+          p = setCard(p, cardIdx, { perkUsed: true, ignoreShields: true });
+          break;
+        }
+        case "yuji":
+        case "choso": {
+          p = setCard(p, cardIdx, { perkUsed: true, atk: card.atk + 2, perkAtkTurn: (card.perkAtkTurn ?? 0) + 2 });
+          break;
+        }
+        case "mahito": {
+          if (!intent.targetInstanceId || !intent.friendlyTargetInstanceId) return illegal("Perk needs targets");
+          const enemyIdx = o.board.findIndex(c => c?.instanceId === intent.targetInstanceId);
+          if (enemyIdx === -1) return illegal("Enemy target not found");
+          const friendIdx = p.board.findIndex(c => c?.instanceId === intent.friendlyTargetInstanceId);
+          if (friendIdx === -1) return illegal("Friendly target not found");
+          const enemyCard = o.board[enemyIdx]!;
+          const friendCard = p.board[friendIdx]!;
+          if (enemyCard.cost !== friendCard.cost) return illegal("Cards must have the same cost");
+          events.push({ type: "CARD_DIED", pid: opp, instanceId: enemyCard.instanceId });
+          events.push({ type: "CARD_DIED", pid, instanceId: friendCard.instanceId });
+          const ob = [...o.board] as BattlePlayer["board"]; ob[enemyIdx] = null;
+          o = { ...o, board: ob };
+          const pb = [...p.board] as BattlePlayer["board"]; pb[friendIdx] = null;
+          p = { ...p, board: pb };
+          // Mark Mahito used (his slot may have shifted only if he was the destroyed friendly card)
+          const mIdx = p.board.findIndex(c => c?.instanceId === intent.instanceId);
+          if (mIdx !== -1) p = setCard(p, mIdx, { perkUsed: true });
+          break;
+        }
+        case "megumi": {
+          if (p.leader.defId === "mahoraga") {
+            p = setCard(p, cardIdx, { perkUsed: true });
+            p = summonEntity(p, "nue-entity", "Nue", 2, 2, false);
+            break;
+          }
+          // Megumi dies in both branches
+          events.push({ type: "CARD_DIED", pid, instanceId: card.instanceId });
+          // If the real Mahoraga card is in hand or deck, summon it — no leader damage
+          const handIdx = p.hand.findIndex(c => c.defId === "mahoraga");
+          const deckIdx = handIdx === -1 ? p.deck.findIndex(c => c.defId === "mahoraga") : -1;
+          if (handIdx !== -1 || deckIdx !== -1) {
+            const mahoCard = handIdx !== -1 ? p.hand[handIdx] : p.deck[deckIdx];
+            if (handIdx !== -1) p = { ...p, hand: p.hand.filter((_, i) => i !== handIdx) };
+            else                p = { ...p, deck: p.deck.filter((_, i) => i !== deckIdx) };
+            const nbM = [...p.board] as BattlePlayer["board"];
+            nbM[cardIdx] = { ...mahoCard, canAttack: false, exhausted: true };
+            p = { ...p, board: nbM };
+          } else {
+            // No Mahoraga card owned — summon the entity; Megumi dies and the leader takes 5
+            p = { ...p, leader: { ...p.leader, currentHp: p.leader.currentHp - 5 } };
+            const nbM = [...p.board] as BattlePlayer["board"];
+            nbM[cardIdx] = null;
+            p = { ...p, board: nbM };
+            p = summonEntity(p, "mahoraga-entity", "Mahoraga", 7, 7, false);
+          }
+          break;
+        }
+        case "dagon": {
+          p = setCard(p, cardIdx, { perkUsed: true });
+          p = summonEntity(p, "fish-entity", "Fish", 1, 1, false);
+          p = summonEntity(p, "fish-entity", "Fish", 1, 1, false);
+          break;
+        }
+        case "takaba": {
+          p = setCard(p, cardIdx, { perkUsed: true });
+          p = addSpell(p, {
+            id: `spell-takaba-perk-${++_instanceCounter}`,
+            synergyId: "takaba-perk",
+            name: "Comedy Gold",
+            description: "Turn an enemy card costing 3 or less into a 1/1 sheep",
+            effect: { kind: "SHEEPIFY_ONE", maxCost: 3 },
+          });
+          break;
+        }
+        case "inumaki": {
+          if (!intent.targetInstanceId) return illegal("Perk needs an enemy target");
+          const stunIdx = o.board.findIndex(c => c?.instanceId === intent.targetInstanceId);
+          if (stunIdx === -1) return illegal("Enemy target not found");
+          const ob2 = [...o.board] as BattlePlayer["board"];
+          ob2[stunIdx] = { ...ob2[stunIdx]!, stunTurns: Math.max(1, ob2[stunIdx]!.stunTurns), canAttack: false };
+          o = { ...o, board: ob2 };
+          // Inumaki's throat gives out — he becomes a 1/1
+          p = setCard(p, cardIdx, { perkUsed: true, atk: 1, baseAtk: 1, currentHp: 1, maxHp: 1, baseHp: 1 });
+          break;
+        }
+        case "jogo": {
+          p = setCard(p, cardIdx, { perkUsed: true, splashNext: true });
+          break;
+        }
+        case "maki": {
+          p = setCard(p, cardIdx, { perkUsed: true, atk: card.atk + 2, pierceBoardOnly: true });
+          break;
+        }
+        case "kashimo": {
+          p = setCard(p, cardIdx, { perkUsed: true, atk: card.atk + 3, currentHp: 1 });
+          break;
+        }
+        case "uro": {
+          p = setCard(p, cardIdx, { perkUsed: true, reflectTurns: 2 });
+          break;
+        }
+        case "gakuganji": {
+          if (!intent.friendlyTargetInstanceId) return illegal("Perk needs a friendly target");
+          const buffIdx = p.board.findIndex(c => c?.instanceId === intent.friendlyTargetInstanceId);
+          if (buffIdx === -1) return illegal("Friendly target not found");
+          p = setCard(p, buffIdx, { atk: p.board[buffIdx]!.atk + 1 });
+          const gIdx = p.board.findIndex(c => c?.instanceId === intent.instanceId);
+          if (gIdx !== -1) p = setCard(p, gIdx, { perkUsed: true });
+          break;
+        }
+        case "mahoraga": {
+          p = setCard(p, cardIdx, { perkUsed: true, regen: true });
+          break;
+        }
+        case "hakari": {
+          p = setCard(p, cardIdx, { perkUsed: true });
+          const rule = BATTLE_SYNERGY_RULES[Math.floor(Math.random() * BATTLE_SYNERGY_RULES.length)];
+          p = addSpell(p, {
+            id: `spell-hakari-perk-${++_instanceCounter}`,
+            synergyId: rule.id,
+            name: rule.spellName,
+            description: rule.spellDesc,
+            effect: rule.spell,
+          });
+          break;
+        }
+        case "naoya": {
+          p = setCard(p, cardIdx, { perkUsed: true, silentStrike: true });
+          break;
+        }
+        case "kurourushi": {
+          p = setCard(p, cardIdx, { perkUsed: true, rebirth: true });
+          break;
+        }
+        case "nanami": {
+          p = setCard(p, cardIdx, { perkUsed: true, atk: card.atk + 2, perkAtkTurn: (card.perkAtkTurn ?? 0) + 2 });
+          break;
+        }
+        case "nobara": {
+          if (!intent.targetInstanceId || !intent.secondTargetInstanceId) return illegal("Perk needs two enemy targets");
+          if (intent.targetInstanceId === intent.secondTargetInstanceId) return illegal("Pick two different enemy cards");
+          const aCard = o.board.find(c => c?.instanceId === intent.targetInstanceId);
+          const bCard = o.board.find(c => c?.instanceId === intent.secondTargetInstanceId);
+          if (!aCard || !bCard) return illegal("Enemy targets not found");
+          p = setCard(p, cardIdx, { perkUsed: true });
+          p = { ...p, resonance: { a: aCard.instanceId, b: bCard.instanceId } };
+          break;
+        }
+        default:
+          return illegal("Perk not implemented");
+      }
+
+      let nextState: BattleState = { ...state, players: { ...state.players, [pid]: p, [opp]: o } };
+      nextState = checkWin(nextState);
+      if (nextState.winner) events.push({ type: "GAME_OVER", winner: nextState.winner });
+      return { state: nextState, events };
+    }
+
     // ── END_TURN ──────────────────────────────────────────────────────────
     case "END_TURN": {
       events.push({ type: "TURN_END", pid });
+
+      // Expire this-turn perk effects (Toji shield pierce, Yuji/Choso/Nanami +2 ATK, Naoya silent strike)
+      const endingPlayer: BattlePlayer = {
+        ...state.players[pid],
+        unlimitedSpellDraw: false,
+        board: state.players[pid].board.map(c => {
+          if (!c) return c;
+          if (!c.ignoreShields && !(c.perkAtkTurn && c.perkAtkTurn > 0) && !c.silentStrike) return c;
+          return { ...c, ignoreShields: false, silentStrike: false, atk: c.atk - (c.perkAtkTurn ?? 0), perkAtkTurn: 0 };
+        }) as BattlePlayer["board"],
+      };
 
       const nextPid = opp;
       const nextTurn = pid === "P2" ? state.turn + 1 : state.turn;
 
       const midState: BattleState = {
         ...state,
+        players: { ...state.players, [pid]: endingPlayer },
         phase: "DRAW",
         turn: nextTurn,
         activePlayer: nextPid,

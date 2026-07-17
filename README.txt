@@ -4,6 +4,16 @@ How to start:
 npm run dev
 
 
+
+multiple game modes. 
+
+
+
+
+
+
+Main ideas.
+
 NEXT TIME: 
 
 in the starting hand screen in the quick draft please make sure to implement everything we have done there as well, the new card design with the attack and hp and cost top right of the cards, the leaders hp and attack numbers, everything of that sort. 

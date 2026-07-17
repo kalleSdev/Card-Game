@@ -16,51 +16,6 @@ interface Props {
   onBack: () => void;
 }
 
-// ── Star overlays ─────────────────────────────────────────────────────────────
-function DuplicateStars({ stars }: { stars: number }) {
-  const level = Math.floor(stars / 5);
-  const visible = stars % 5;
-  if (stars === 0) return null;
-
-  const starColor = level >= 3 ? "#ff4444" : level >= 2 ? "#44ff88" : level >= 1 ? "#ff22cc" : "#ffd700";
-
-  return (
-    <div style={{
-      position: "absolute", top: -3, left: 0, right: 0,
-      display: "flex", justifyContent: "center", gap: 3, pointerEvents: "none", zIndex: 30,
-    }}>
-      {/* X marks for past ascensions */}
-      {Array.from({ length: level }).map((_, i) => (
-        <span key={`x${i}`} style={{ fontSize: 7, color: starColor, fontWeight: 900, lineHeight: 1 }}>✕</span>
-      ))}
-      {/* Stars in current level */}
-      {Array.from({ length: visible }).map((_, i) => (
-        <span key={`s${i}`} style={{ fontSize: 7, color: "#ffd700", lineHeight: 1 }}>★</span>
-      ))}
-    </div>
-  );
-}
-
-function KillStars({ kills }: { kills: number }) {
-  if (kills === 0) return null;
-  const xMarks = Math.floor(kills / 5);
-  const remaining = kills % 5;
-
-  return (
-    <div style={{
-      position: "absolute", bottom: 18, left: 0, right: 0,
-      display: "flex", justifyContent: "center", gap: 3, pointerEvents: "none", zIndex: 30,
-    }}>
-      {Array.from({ length: xMarks }).map((_, i) => (
-        <span key={`x${i}`} style={{ fontSize: 7, color: "#ff4444", fontWeight: 900, lineHeight: 1 }}>✕</span>
-      ))}
-      {Array.from({ length: remaining }).map((_, i) => (
-        <span key={`r${i}`} style={{ fontSize: 7, color: "#ff4444", lineHeight: 1 }}>★</span>
-      ))}
-    </div>
-  );
-}
-
 // ── Single collection card ────────────────────────────────────────────────────
 function CollectionCardSlot({
   defId, def, collected, onDevClick,
@@ -101,15 +56,10 @@ function CollectionCardSlot({
         defId={defId} def={def} size="sm"
         rarityOverride={collected ? (rarityOverride ?? "S") : "S"}
         costOverride={cost}
+        dupeStars={collected?.duplicateStars ?? 0}
+        killStars={collected?.killStars ?? 0}
         noHover
       />
-
-      {collected && (
-        <>
-          <DuplicateStars stars={collected.duplicateStars} />
-          <KillStars kills={collected.killStars} />
-        </>
-      )}
 
       {/* Tooltip on hover */}
       <AnimatePresence>
@@ -127,7 +77,7 @@ function CollectionCardSlot({
             }}
           >
             <div style={{ color: "#fff", fontWeight: 700, marginBottom: 2 }}>{def.name}</div>
-            <div>⭐ {collected.duplicateStars} dupe stars · Ascension {Math.floor(collected.duplicateStars / 5)}</div>
+            <div>⭐ {collected.duplicateStars} dupe stars · Ascension {Math.floor(collected.duplicateStars / 3)}</div>
             <div style={{ color: "#ff6666" }}>☠ {collected.killStars} kill stars</div>
           </motion.div>
         )}
@@ -284,8 +234,8 @@ export default function CardCollectionScreen({ profile, cardDb, onBack }: Props)
           display: "flex", gap: 24, alignItems: "center",
           fontSize: 8, color: "#334", letterSpacing: 2,
         }}>
-          <span>⭐ <span style={{ color: "#ffd700" }}>Gold stars</span> = duplicates · every 5 ascends card</span>
-          <span>★ <span style={{ color: "#ff4444" }}>Red stars</span> = kills with card · every 5 = ✕ mark</span>
+          <span>⭐ <span style={{ color: "#ffd700" }}>Gold stars</span> = duplicates · every 3 ascends card</span>
+          <span>★ <span style={{ color: "#ff4444" }}>Red stars</span> = kills with card · every 3 = ✕ mark</span>
           <span style={{ color: "#445" }}>Cards unlock at S-tier visuals in your collection</span>
         </div>
       </div>

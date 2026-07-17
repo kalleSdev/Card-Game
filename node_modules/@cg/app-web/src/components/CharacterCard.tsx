@@ -1,8 +1,9 @@
 import React, { useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import type { CardDef } from "@cg/contracts";
 import { rc, rg } from "../helpers";
-import { deriveStats } from "../battleEngine";
+import { deriveStats, CARD_PERKS } from "../battleEngine";
 import "../card-effects.css";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -288,16 +289,24 @@ interface CharacterCardProps {
   hpBar?: { current: number; max: number };
   /** Render name + ATK/HP + HP bar as an overlay inside the card (art stays full height) */
   statsOverlay?: { name?: string; atk: number; hp: number; maxHp: number };
+  /** Duplicate stars from the profile collection — shown along the left border (3 per ascension) */
+  dupeStars?: number;
+  /** Kill stars from the profile collection — shown along the left border (3 per ✕ mark) */
+  killStars?: number;
 }
 
 export default function CharacterCard({
   defId, def, size = "md", selected = false, dimmed = false,
   equippedBonus, overlay, noHover = false, costOverride, rarityOverride, starLevel = 0,
   hideInfo = false, hideAffinityAndCost = false, smallBadges = false, showStats, hpBar, statsOverlay,
+  dupeStars = 0, killStars = 0,
 }: CharacterCardProps) {
   const [imgFailed, setImgFailed] = useState(false);
   const [sheenPos, setSheenPos] = useState({ x: 50, y: 50 });
   const [isHovered, setIsHovered] = useState(false);
+  // Viewport-anchored tooltip positions (portaled to body so they never move with card tilt)
+  const [perkTipPos, setPerkTipPos] = useState<{ x: number; y: number } | null>(null);
+  const [shieldTipPos, setShieldTipPos] = useState<{ x: number; y: number } | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
   // Stable random phase offset so each card floats out-of-sync with neighbours
@@ -715,28 +724,171 @@ export default function CharacterCard({
         const bs = smallBadges ? 16 : Math.round(d.w * 0.28);
         const fs = smallBadges ? 7 : Math.round(d.w * 0.14);
         const cost = costOverride !== undefined ? costOverride : (def ? deriveStats(def).cost : "?");
+        const isShield = def?.tags?.includes("shield") ?? false;
+        const sbs = Math.round(bs * 0.62); // shield icon bubble size
+        const sfs = Math.round(fs * 0.85);
         return (
-          <motion.div
-            style={{
-              position: "absolute",
-              top: -(bs * 0.3), left: -(bs * 0.3),
-              width: bs, height: bs, borderRadius: "50%",
-              background: "linear-gradient(135deg, #1a1a2e 0%, #0d0d1a 100%)",
-              border: "2px solid rgba(255,255,255,0.5)",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.7), 0 0 6px rgba(255,255,255,0.15)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              zIndex: 10,
-              x: !noHover && !dimmed ? badgeX : 0,
-              y: !noHover && !dimmed ? badgeY : 0,
-            }}
-          >
-            <span style={{
-              fontSize: fs, fontWeight: 900, color: "#fff",
-              lineHeight: 1, textShadow: "0 1px 4px rgba(0,0,0,0.9)",
-            }}>{cost}</span>
-          </motion.div>
+          <>
+            <motion.div
+              style={{
+                position: "absolute",
+                top: -(bs * 0.3), left: -(bs * 0.3),
+                width: bs, height: bs, borderRadius: "50%",
+                background: "linear-gradient(135deg, #1a1a2e 0%, #0d0d1a 100%)",
+                border: "2px solid rgba(255,255,255,0.5)",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.7), 0 0 6px rgba(255,255,255,0.15)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                zIndex: 10,
+                x: !noHover && !dimmed ? badgeX : 0,
+                y: !noHover && !dimmed ? badgeY : 0,
+              }}
+            >
+              <span style={{
+                fontSize: fs, fontWeight: 900, color: "#fff",
+                lineHeight: 1, textShadow: "0 1px 4px rgba(0,0,0,0.9)",
+              }}>{cost}</span>
+            </motion.div>
+            {isShield && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: -(bs * 0.3) + bs * 0.62, left: -(bs * 0.3) + bs * 0.6,
+                  zIndex: 11,
+                }}
+                onMouseEnter={e => {
+                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  setShieldTipPos({ x: rect.left + rect.width / 2, y: rect.top });
+                }}
+                onMouseLeave={() => setShieldTipPos(null)}
+              >
+                <motion.div
+                  style={{
+                    width: sbs, height: sbs, borderRadius: "50%",
+                    background: "linear-gradient(135deg, #1a3a6e 0%, #0a1a4a 100%)",
+                    border: "1.5px solid rgba(100,180,255,0.85)",
+                    boxShadow: "0 1px 6px rgba(0,0,0,0.8), 0 0 8px rgba(80,160,255,0.4)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    x: !noHover && !dimmed ? badgeX : 0,
+                    y: !noHover && !dimmed ? badgeY : 0,
+                  }}
+                >
+                  <span style={{ fontSize: sfs, lineHeight: 1 }}>🛡</span>
+                </motion.div>
+              </div>
+            )}
+          </>
         );
       })()}
+
+      {/* Perk badge — always shown for cards with a perk, in every phase */}
+      {def && CARD_PERKS[def.id] && (() => {
+        const perk = CARD_PERKS[def.id];
+        const bs = smallBadges ? 14 : Math.round(d.w * 0.22);
+        return (
+          <div
+            style={{ position: "absolute", top: -(bs * 0.25), right: -(bs * 0.25), zIndex: 12 }}
+            onMouseEnter={e => {
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              setPerkTipPos({ x: rect.right, y: rect.top });
+            }}
+            onMouseLeave={() => setPerkTipPos(null)}
+          >
+            <motion.div
+              style={{
+                width: bs, height: bs, borderRadius: "50%",
+                background: "linear-gradient(135deg, #4a3200 0%, #241800 100%)",
+                border: "1.5px solid rgba(255,200,60,0.85)",
+                boxShadow: "0 1px 6px rgba(0,0,0,0.8), 0 0 8px rgba(255,190,40,0.45)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                x: !noHover && !dimmed ? badgeX : 0,
+                y: !noHover && !dimmed ? badgeY : 0,
+              }}
+            >
+              <span style={{ fontSize: Math.round(bs * 0.55), lineHeight: 1 }}>{perk.icon}</span>
+            </motion.div>
+          </div>
+        );
+      })()}
+
+      {/* Collection marks — subtle vertical column hugging the left border: gold dupe stars, red kill marks */}
+      {(dupeStars > 0 || killStars > 0) && (() => {
+        const ascLevel = Math.floor(dupeStars / 3);
+        const dupeProg = dupeStars % 3;
+        const killMarks = Math.floor(killStars / 3);
+        const killProg = killStars % 3;
+        const ascColor = ascLevel >= 3 ? "#ff4444" : ascLevel === 2 ? "#44ff88" : "#cc66ff";
+        return (
+          <div style={{
+            position: "absolute", top: "16%", left: 1.5,
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 1.5,
+            pointerEvents: "none", zIndex: 13,
+          }}>
+            {Array.from({ length: ascLevel }).map((_, i) => (
+              <span key={`a${i}`} style={{
+                fontSize: 7, lineHeight: 1, color: ascColor, fontWeight: 900,
+                textShadow: `0 0 5px ${ascColor}, 0 1px 2px #000`,
+              }}>◆</span>
+            ))}
+            {Array.from({ length: dupeProg }).map((_, i) => (
+              <span key={`d${i}`} style={{
+                fontSize: 7, lineHeight: 1, color: "#ffd700",
+                textShadow: "0 0 5px #ffd700cc, 0 1px 2px #000",
+              }}>★</span>
+            ))}
+            {(killMarks > 0 || killProg > 0) && (dupeStars > 0) && (
+              <span style={{ height: 2 }} />
+            )}
+            {Array.from({ length: killMarks }).map((_, i) => (
+              <span key={`k${i}`} style={{
+                fontSize: 7, lineHeight: 1, color: "#ff4444", fontWeight: 900,
+                textShadow: "0 0 5px #ff4444cc, 0 1px 2px #000",
+              }}>✕</span>
+            ))}
+            {Array.from({ length: killProg }).map((_, i) => (
+              <span key={`kp${i}`} style={{
+                fontSize: 5, lineHeight: 1, color: "#ff6666cc",
+                textShadow: "0 0 4px #ff444488",
+              }}>●</span>
+            ))}
+          </div>
+        );
+      })()}
+
+      {/* Portaled tooltips — anchored to the viewport so they stay perfectly still while the card animates */}
+      {perkTipPos && def && CARD_PERKS[def.id] && createPortal(
+        <div style={{
+          position: "fixed", left: Math.max(8, perkTipPos.x - 190), top: perkTipPos.y - 8,
+          transform: "translateY(-100%)",
+          background: "rgba(4,4,14,0.98)", border: "1px solid #6a5a2a",
+          borderRadius: 8, padding: "8px 11px",
+          width: 190, zIndex: 9999, pointerEvents: "none",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.8)",
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 900, color: "#ffcc44", letterSpacing: 0.5, marginBottom: 3 }}>
+            {CARD_PERKS[def.id].icon} {CARD_PERKS[def.id].name}
+          </div>
+          <div style={{ fontSize: 10, color: "#fff", lineHeight: 1.55 }}>{CARD_PERKS[def.id].desc}</div>
+        </div>,
+        document.body
+      )}
+      {shieldTipPos && createPortal(
+        <div style={{
+          position: "fixed", left: Math.max(8, shieldTipPos.x - 90), top: shieldTipPos.y - 8,
+          transform: "translateY(-100%)",
+          background: "rgba(4,4,14,0.98)", border: "1px solid #2a3a6a",
+          borderRadius: 8, padding: "8px 11px",
+          width: 180, zIndex: 9999, pointerEvents: "none",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.8)",
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 900, color: "#88bbff", letterSpacing: 0.5, marginBottom: 3 }}>
+            🛡 Shield
+          </div>
+          <div style={{ fontSize: 10, color: "#fff", lineHeight: 1.55 }}>
+            While a Shield card is on the board, the enemy can only target Shield cards — everything else, including the leader, is protected.
+          </div>
+        </div>,
+        document.body
+      )}
     </motion.div>
   );
 }

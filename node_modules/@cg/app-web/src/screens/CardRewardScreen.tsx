@@ -102,7 +102,7 @@ export default function CardRewardScreen({ profile, options, cardDb, isWinner, o
           const isDisabled = !isSelected && selected.size >= pickCount;
 
           const isNew = !profile.collection.some(c => c.defId === id);
-          const aboutToAscend = profile.collection.find(c => c.defId === id)?.duplicateStars === 4;
+          const aboutToAscend = profile.collection.find(c => c.defId === id)?.duplicateStars === 2;
 
           // Glow colours: selection > new (gold) > about-to-ascend (purple)
           const glowColor = isSelected
@@ -206,8 +206,8 @@ export default function CardRewardScreen({ profile, options, cardDb, isWinner, o
                   }}>
                     <div style={{ fontSize: 13, fontWeight: 900, color: "#cc88ff", letterSpacing: 1 }}>★ READY TO ASCEND</div>
                     <div style={{ display: "flex", justifyContent: "center", gap: 3, marginTop: 5 }}>
-                      {Array.from({ length: 5 }).map((_, s) => (
-                        <span key={s} style={{ fontSize: 12, color: s < dupeStars % 5 ? "#aa44ff" : "#333" }}>★</span>
+                      {Array.from({ length: 3 }).map((_, s) => (
+                        <span key={s} style={{ fontSize: 12, color: s < dupeStars % 3 ? "#aa44ff" : "#333" }}>★</span>
                       ))}
                     </div>
                     <div style={{ fontSize: 9, color: "#aa44ffaa", marginTop: 4 }}>Collecting will ascend this card</div>
@@ -220,11 +220,11 @@ export default function CardRewardScreen({ profile, options, cardDb, isWinner, o
                   }}>
                     <div style={{ fontSize: 12, fontWeight: 800, color: "#aabbff", letterSpacing: 1 }}>DUPLICATE</div>
                     <div style={{ display: "flex", justifyContent: "center", gap: 3, marginTop: 5 }}>
-                      {Array.from({ length: 5 }).map((_, s) => (
-                        <span key={s} style={{ fontSize: 12, color: s < dupeStars % 5 ? "#6688ff" : "#222" }}>★</span>
+                      {Array.from({ length: 3 }).map((_, s) => (
+                        <span key={s} style={{ fontSize: 12, color: s < dupeStars % 3 ? "#6688ff" : "#222" }}>★</span>
                       ))}
                     </div>
-                    <div style={{ fontSize: 9, color: "#6688ffaa", marginTop: 4 }}>{dupeStars % 5 + 1}/5 — +1 star on collect</div>
+                    <div style={{ fontSize: 9, color: "#6688ffaa", marginTop: 4 }}>{dupeStars % 3 + 1}/3 — +1 star on collect</div>
                   </div>
                 );
               })()}
