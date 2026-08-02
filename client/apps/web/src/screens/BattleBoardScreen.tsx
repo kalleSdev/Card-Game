@@ -206,8 +206,6 @@ function BoardCardView({
         rotate: isLunging ? (lungeDir === "up" ? [0, -4, 0] : [0, 4, 0]) : 0,
         filter: friendlyTarget
           ? "brightness(1.2) drop-shadow(0 0 8px #4aeecc)"
-          : targetable
-          ? "brightness(1.2) drop-shadow(0 0 8px #ff4444)"
           : isLunging
           ? "brightness(1.5) drop-shadow(0 0 14px #ffcc44)"
           : isHit
@@ -401,13 +399,35 @@ function BoardCardView({
         }}>👑</div>
       )}
 
-      {/* Enemy target ring */}
-      {targetable && !selected && !friendlyTarget && (
+      {/* Targeting marks — big shield on Shield cards (must be cleared first), subtle ✕ on other legal targets */}
+      {targetable && !selected && !friendlyTarget && card.hasTaunt && (
         <motion.div
-          animate={{ boxShadow: ["0 0 0 3px #ff4444, 0 0 12px #ff444477", "0 0 0 3px #ff6666, 0 0 20px #ff4444aa"] }}
-          transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
-          style={{ position: "absolute", inset: -2, borderRadius: 12, pointerEvents: "none" }}
-        />
+          initial={{ scale: 0.6, opacity: 0 }}
+          animate={{ scale: [1, 1.1, 1], opacity: 1 }}
+          transition={{ scale: { duration: 1.2, repeat: Infinity }, opacity: { duration: 0.2 } }}
+          style={{
+            position: "absolute", inset: 0, borderRadius: 10,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: "rgba(20,40,90,0.35)",
+            pointerEvents: "none", zIndex: 25,
+            fontSize: 34,
+            filter: "drop-shadow(0 0 10px rgba(100,180,255,0.9))",
+          }}
+        >🛡</motion.div>
+      )}
+      {targetable && !selected && !friendlyTarget && !card.hasTaunt && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: [0.55, 0.8, 0.55] }}
+          transition={{ duration: 1.4, repeat: Infinity }}
+          style={{
+            position: "absolute", inset: 0, borderRadius: 10,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            pointerEvents: "none", zIndex: 25,
+            fontSize: 26, fontWeight: 900, color: "rgba(255,120,120,0.85)",
+            textShadow: "0 0 8px rgba(255,60,60,0.5), 0 1px 3px #000",
+          }}
+        >✕</motion.div>
       )}
 
       {/* Friendly buff target ring */}
@@ -899,7 +919,7 @@ function BoardRow({
   board, cardDb, pendingId, targeting, myBoard, cardScale = 1,
   buffTargeting = false,
   isTargetable,
-  onActivatePerk, perkActiveId, pinnedIds, lungeIds,
+  onActivatePerk, onAttackRandom, perkActiveId, pinnedIds, lungeIds,
   onSelectCard, onTargetCard,
   hitIds, freshIds, floatingDmgMap,
 }: {
@@ -910,6 +930,7 @@ function BoardRow({
   isTargetable?: (card: BattleCard) => boolean;
   cardScale?: number;
   onActivatePerk?: (card: BattleCard) => void;
+  onAttackRandom?: (card: BattleCard) => void;
   perkActiveId?: string | null;
   pinnedIds?: Set<string>;
   lungeIds?: Set<string>;
@@ -983,6 +1004,55 @@ function BoardRow({
                     </motion.button>
                   </div>
                 )}
+                {/* Mahoraga ATTACK button — replaces the perk button once his perk is used */}
+                {myBoard && onAttackRandom
+                  && (card.defId === "mahoraga" || card.defId === "mahoraga-entity")
+                  && (card.defId === "mahoraga-entity" || card.perkUsed)
+                  && card.canAttack && !card.exhausted && (
+                  <div
+                    style={{
+                      position: "absolute", top: slotH + 2, left: 0, width: slotW,
+                      display: "flex", justifyContent: "center", zIndex: 30,
+                    }}
+                    onMouseEnter={e => {
+                      const tip = (e.currentTarget as HTMLElement).querySelector<HTMLElement>(".maho-atk-tip");
+                      if (tip) tip.style.display = "block";
+                    }}
+                    onMouseLeave={e => {
+                      const tip = (e.currentTarget as HTMLElement).querySelector<HTMLElement>(".maho-atk-tip");
+                      if (tip) tip.style.display = "none";
+                    }}
+                  >
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.92 }}
+                      onClick={(e) => { e.stopPropagation(); onAttackRandom(card); }}
+                      style={{
+                        padding: "2px 10px", borderRadius: 6,
+                        background: "linear-gradient(135deg, rgba(120,20,20,0.92), rgba(60,8,8,0.92))",
+                        border: "1px solid #ff555577",
+                        color: "#ff7766", fontSize: 8, fontWeight: 900, letterSpacing: 1,
+                        cursor: "pointer", fontFamily: "inherit",
+                        boxShadow: "0 0 8px rgba(255,60,60,0.3)",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      ⚔ ATTACK
+                    </motion.button>
+                    <div className="maho-atk-tip" style={{
+                      display: "none", position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)",
+                      background: "rgba(4,4,14,0.98)", border: "1px solid #6a2a2a",
+                      borderRadius: 8, padding: "7px 10px",
+                      width: 180, zIndex: 999, pointerEvents: "none",
+                      boxShadow: "0 4px 20px rgba(0,0,0,0.8)",
+                    }}>
+                      <div style={{ fontSize: 10, fontWeight: 900, color: "#ff7766", marginBottom: 3 }}>☸ Wild Strike</div>
+                      <div style={{ fontSize: 9, color: "#fff", lineHeight: 1.5 }}>
+                        Mahoraga attacks a RANDOM target on the board — friend or foe, card or leader. The wheel decides.
+                      </div>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -995,6 +1065,125 @@ function BoardRow({
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── DomainOrb — big status circle between board and leader; click to activate ──
+function DomainOrb({
+  meter, cooldown, onActivate,
+}: {
+  meter: number; cooldown: number; onActivate: () => void;
+}) {
+  const ready = meter >= 100 && cooldown === 0;
+  const pct = Math.min(100, Math.round(meter));
+  const size = 104;
+  return (
+    <div style={{
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      width: size + 26, flexShrink: 0, position: "relative", zIndex: 3,
+    }}>
+      <motion.div
+        onClick={ready ? onActivate : undefined}
+        whileHover={ready ? { scale: 1.08 } : {}}
+        whileTap={ready ? { scale: 0.94 } : {}}
+        animate={ready
+          ? { boxShadow: [
+              "0 0 24px #aa44ff88, 0 0 60px #aa44ff33, inset 0 0 26px #aa44ff44",
+              "0 0 44px #cc66ffcc, 0 0 90px #aa44ff55, inset 0 0 34px #cc66ff66",
+              "0 0 24px #aa44ff88, 0 0 60px #aa44ff33, inset 0 0 26px #aa44ff44",
+            ] }
+          : {}}
+        transition={ready ? { duration: 1.4, repeat: Infinity } : {}}
+        style={{
+          width: size, height: size, borderRadius: "50%",
+          cursor: ready ? "pointer" : "default",
+          position: "relative",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: ready
+            ? "radial-gradient(circle at 50% 38%, #3a1060, #14042a 70%)"
+            : cooldown > 0
+            ? "radial-gradient(circle at 50% 38%, #16161f, #0a0a12 70%)"
+            : "radial-gradient(circle at 50% 38%, #1d1030, #0c0618 70%)",
+          border: ready ? "2px solid #cc66ffcc" : "2px solid rgba(140,110,200,0.25)",
+          boxShadow: ready ? undefined : "0 4px 18px rgba(0,0,0,0.6), inset 0 0 18px rgba(90,50,160,0.15)",
+          userSelect: "none",
+        }}
+      >
+        {/* Charging progress ring */}
+        {!ready && cooldown === 0 && (
+          <div style={{
+            position: "absolute", inset: -2, borderRadius: "50%",
+            background: `conic-gradient(#8a44dd ${pct * 3.6}deg, rgba(255,255,255,0.05) 0deg)`,
+            WebkitMask: "radial-gradient(circle, transparent 62%, #000 64%)",
+            mask: "radial-gradient(circle, transparent 62%, #000 64%)",
+            pointerEvents: "none",
+          }} />
+        )}
+        {/* Ready: slow rotating outer ring */}
+        {ready && (
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+            style={{
+              position: "absolute", inset: -8, borderRadius: "50%",
+              border: "2px dashed rgba(204,102,255,0.5)",
+              pointerEvents: "none",
+            }}
+          />
+        )}
+        {/* Ready: floating particles */}
+        {ready && [0, 1, 2, 3].map(i => (
+          <motion.div
+            key={i}
+            animate={{
+              y: [0, -14, 0], opacity: [0.3, 0.9, 0.3],
+            }}
+            transition={{ duration: 1.8, repeat: Infinity, delay: i * 0.45 }}
+            style={{
+              position: "absolute",
+              left: `${18 + i * 20}%`, bottom: "12%",
+              width: 4, height: 4, borderRadius: "50%",
+              background: "#dd99ff", boxShadow: "0 0 8px #cc66ff",
+              pointerEvents: "none",
+            }}
+          />
+        ))}
+        <div style={{ textAlign: "center", lineHeight: 1.25, pointerEvents: "none" }}>
+          {ready ? (
+            <>
+              <motion.div
+                animate={{ scale: [1, 1.18, 1] }}
+                transition={{ duration: 1.4, repeat: Infinity }}
+                style={{ fontSize: 24, marginBottom: 2 }}
+              >🌀</motion.div>
+              <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: 1.5, color: "#eeccff", textShadow: "0 0 12px #cc66ff" }}>
+                DOMAIN<br/>READY
+              </div>
+            </>
+          ) : cooldown > 0 ? (
+            <>
+              <div style={{ fontSize: 20, marginBottom: 2, opacity: 0.45 }}>⏳</div>
+              <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: "#555a70" }}>
+                COOLDOWN<br/>{cooldown} TURN{cooldown > 1 ? "S" : ""}
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 18, marginBottom: 2, opacity: 0.7 }}>🌀</div>
+              <div style={{ fontSize: 13, fontWeight: 900, color: "#a98ad4" }}>{pct}%</div>
+              <div style={{ fontSize: 7.5, fontWeight: 800, letterSpacing: 2, color: "#6a5a8a" }}>DOMAIN</div>
+            </>
+          )}
+        </div>
+      </motion.div>
+      {ready && (
+        <motion.div
+          animate={{ opacity: [0.6, 1, 0.6] }}
+          transition={{ duration: 1.4, repeat: Infinity }}
+          style={{ marginTop: 6, fontSize: 8, fontWeight: 900, letterSpacing: 2, color: "#cc88ff" }}
+        >CLICK TO UNLEASH</motion.div>
+      )}
     </div>
   );
 }
@@ -1299,6 +1488,24 @@ export default function BattleBoardScreen({
     const pid = battleState.activePlayer;
     dispatch({ type: "END_TURN", pid });
   };
+
+  // ── Turn timer: 60s per turn, auto-ends the turn at 0 ─────────────────────
+  const TURN_SECONDS = 60;
+  const [turnTimeLeft, setTurnTimeLeft] = useState(TURN_SECONDS);
+  useEffect(() => {
+    if (mulliganStep !== "BATTLE" || battleState.winner || gameOverShown) return;
+    setTurnTimeLeft(TURN_SECONDS);
+    const iv = setInterval(() => setTurnTimeLeft(t => Math.max(0, t - 1)), 1000);
+    return () => clearInterval(iv);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [battleState.activePlayer, battleState.turn, mulliganStep, battleState.winner, gameOverShown]);
+
+  useEffect(() => {
+    if (turnTimeLeft > 0) return;
+    if (mulliganStep !== "BATTLE" || battleState.winner || gameOverShown) return;
+    dispatch({ type: "END_TURN", pid: battleState.activePlayer });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turnTimeLeft]);
 
   const handlePlayCard = (instanceId: string) => {
     const pid = battleState.activePlayer;
@@ -1814,14 +2021,24 @@ export default function BattleBoardScreen({
         position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0,
         backgroundImage: "url('https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?w=1920&q=80')",
         backgroundSize: "cover", backgroundPosition: "center",
-        filter: "blur(6px) brightness(0.18) saturate(1.4)",
+        filter: "blur(6px) brightness(0.3) saturate(1.6)",
         transform: "scale(1.05)",
+      }} />
+      {/* Arena center glow — the battlefield "table" */}
+      <div style={{
+        position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0,
+        background: "radial-gradient(ellipse 75% 55% at 50% 46%, rgba(80,50,150,0.16), rgba(20,12,40,0.05) 55%, transparent 75%)",
+      }} />
+      {/* Vignette to focus the board */}
+      <div style={{
+        position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0,
+        background: "radial-gradient(ellipse 90% 80% at 50% 50%, transparent 55%, rgba(0,0,5,0.65) 100%)",
       }} />
       {/* Subtle grid */}
       <div style={{
         position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0,
         background: "repeating-linear-gradient(0deg,transparent,transparent 47px,#080818 48px)",
-        opacity: 0.25,
+        opacity: 0.2,
       }} />
 
       {/* ── OPPONENT LEADER (top, centered) ──────────────────────────────── */}
@@ -1849,7 +2066,10 @@ export default function BattleBoardScreen({
       <div style={{
         flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
         position: "relative", zIndex: 20,
-        background: "rgba(0,0,0,0.1)",
+        background: "linear-gradient(180deg, rgba(120,30,40,0.09), rgba(60,10,20,0.04))",
+        border: "1px solid rgba(255,90,110,0.09)",
+        borderRadius: 14, margin: "4px 14px 2px",
+        boxShadow: "inset 0 0 40px rgba(160,40,60,0.07)",
         minHeight: 130,
       }}>
         <motion.div
@@ -1858,8 +2078,8 @@ export default function BattleBoardScreen({
           style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0, background: "radial-gradient(ellipse at 50% 50%, #6600aa22, transparent 70%)" }}
         />
         <BoardParticles />
-        <div style={{ position: "absolute", top: 4, left: 14, fontSize: 8, letterSpacing: 4, color: "#1a1a2a", zIndex: 1, display: "flex", gap: 8, alignItems: "center" }}>
-          OPPONENT
+        <div style={{ position: "absolute", top: 5, left: 16, fontSize: 8, letterSpacing: 4, color: "#7a4a55", fontWeight: 800, zIndex: 1, display: "flex", gap: 8, alignItems: "center" }}>
+          ⚔ OPPONENT
           {opp.turnFrozen > 0 && (
             <motion.div animate={{ opacity: [0.7, 1, 0.7] }} transition={{ duration: 0.8, repeat: Infinity }}
               style={{ fontSize: 7, letterSpacing: 2, color: "#cc44ff", background: "rgba(204,68,255,0.12)", border: "1px solid #cc44ff44", borderRadius: 4, padding: "1px 5px" }}>
@@ -1943,6 +2163,43 @@ export default function BattleBoardScreen({
               letterSpacing: 2, cursor: "pointer", fontFamily: "inherit",
             }}
           >END TURN →</motion.button>
+
+          {/* Turn timer — countdown + draining bar */}
+          {(() => {
+            const frac = turnTimeLeft / TURN_SECONDS;
+            const urgent = turnTimeLeft <= 10;
+            const tColor = urgent ? "#ff5544" : frac <= 0.5 ? "#ffcc44" : "#4aeecc";
+            return (
+              <motion.div
+                animate={urgent ? { scale: [1, 1.06, 1] } : { scale: 1 }}
+                transition={urgent ? { duration: 0.5, repeat: Infinity } : {}}
+                style={{
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                  minWidth: 64,
+                }}
+              >
+                <div style={{
+                  fontSize: 13, fontWeight: 900, color: tColor, letterSpacing: 1,
+                  textShadow: urgent ? "0 0 10px #ff4433" : "none",
+                  fontVariantNumeric: "tabular-nums", lineHeight: 1,
+                }}>
+                  ⏱ {turnTimeLeft}s
+                </div>
+                <div style={{
+                  width: 64, height: 4, borderRadius: 3,
+                  background: "rgba(255,255,255,0.07)", overflow: "hidden",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                }}>
+                  <div style={{
+                    height: "100%", width: `${frac * 100}%`,
+                    background: `linear-gradient(90deg, ${tColor}, ${tColor}cc)`,
+                    boxShadow: `0 0 6px ${tColor}88`,
+                    transition: "width 1s linear, background 0.4s",
+                  }} />
+                </div>
+              </motion.div>
+            );
+          })()}
         </div>
 
         {/* Right: targeting / action badges */}
@@ -2019,6 +2276,10 @@ export default function BattleBoardScreen({
       <div style={{
         flex: 1.5, display: "flex", flexDirection: "row",
         position: "relative", zIndex: 20, minHeight: 200, overflow: "visible",
+        background: "linear-gradient(180deg, rgba(30,90,110,0.07), rgba(15,45,70,0.04))",
+        border: "1px solid rgba(80,200,230,0.09)",
+        borderRadius: 14, margin: "2px 14px 4px",
+        boxShadow: "inset 0 0 40px rgba(40,130,160,0.06)",
       }}>
         <motion.div
           animate={{ opacity: [0.03, 0.07, 0.03] }}
@@ -2028,7 +2289,7 @@ export default function BattleBoardScreen({
         <BoardParticles />
         {/* Board area */}
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", zIndex: 1 }}>
-          <div style={{ position: "absolute", top: 4, left: 14, fontSize: 8, letterSpacing: 4, color: "#1a1a2a", zIndex: 1 }}>YOUR BOARD</div>
+          <div style={{ position: "absolute", top: 5, left: 16, fontSize: 8, letterSpacing: 4, color: "#4a7a80", fontWeight: 800, zIndex: 1 }}>🛡 YOUR BOARD</div>
           {player.activeSynergies.length > 0 && (() => {
             const obtainedSpellNames = new Set([
               ...player.spells.map(s => s.name),
@@ -2062,6 +2323,14 @@ export default function BattleBoardScreen({
             />
           </div>
         </div>
+
+        {/* Domain status orb — between board cards and leader panel */}
+        <DomainOrb
+          meter={player.domainMeter}
+          cooldown={player.domainCooldown}
+          onActivate={() => dispatch({ type: "ACTIVATE_DOMAIN", pid })}
+        />
+
         {/* Leader panel (right) — domain meter is now built-in on the left of the panel */}
         <div style={{ marginRight: 40 }}>
           <LeaderRightPanel
@@ -2358,18 +2627,57 @@ export default function BattleBoardScreen({
           pointerEvents: "none", zIndex: 8000,
         }}>
           <defs>
-            <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-              <path d="M0,0 L0,6 L8,3 z" fill="#ff2222" />
+            <marker id="arrowhead" markerWidth="11" markerHeight="11" refX="7.5" refY="4" orient="auto">
+              <path d="M0,0 L0,8 L10,4 z" fill="#ffffff" stroke="#ffffffcc" strokeWidth="0.6" />
             </marker>
+            <linearGradient id="attackGrad" gradientUnits="userSpaceOnUse"
+              x1={attackLineStart.x} y1={attackLineStart.y} x2={arrowEnd.x} y2={arrowEnd.y}>
+              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.35" />
+              <stop offset="70%" stopColor="#f2f6ff" stopOpacity="0.9" />
+              <stop offset="100%" stopColor="#ffffff" stopOpacity="1" />
+            </linearGradient>
+            <filter id="attackGlow" x="-40%" y="-40%" width="180%" height="180%">
+              <feGaussianBlur stdDeviation="3.2" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
           </defs>
+          {/* Soft white under-glow */}
           <line
             x1={attackLineStart.x} y1={attackLineStart.y}
-            x2={mousePos.x} y2={mousePos.y}
-            stroke="#ff2222" strokeWidth="2.5" strokeDasharray="8 5"
-            markerEnd="url(#arrowhead)"
-            style={{ filter: "drop-shadow(0 0 6px #ff2222aa)" }}
+            x2={arrowEnd.x} y2={arrowEnd.y}
+            stroke="rgba(255,255,255,0.3)" strokeWidth="8" strokeLinecap="round"
+            style={{ filter: "blur(5px)" }}
           />
-          <circle cx={attackLineStart.x} cy={attackLineStart.y} r="5" fill="#ff2222" opacity="0.8" />
+          {/* Main white line with marching stripe dashes */}
+          <line
+            x1={attackLineStart.x} y1={attackLineStart.y}
+            x2={arrowEnd.x} y2={arrowEnd.y}
+            stroke="url(#attackGrad)" strokeWidth="3.5" strokeLinecap="round"
+            strokeDasharray="14 9"
+            markerEnd="url(#arrowhead)"
+            filter="url(#attackGlow)"
+          >
+            <animate attributeName="stroke-dashoffset" from="46" to="0" dur="0.45s" repeatCount="indefinite" />
+          </line>
+          {/* Thin bright core streak */}
+          <line
+            x1={attackLineStart.x} y1={attackLineStart.y}
+            x2={arrowEnd.x} y2={arrowEnd.y}
+            stroke="rgba(255,255,255,0.9)" strokeWidth="1"
+            strokeDasharray="3 26"
+          >
+            <animate attributeName="stroke-dashoffset" from="58" to="0" dur="0.35s" repeatCount="indefinite" />
+          </line>
+          {/* Origin: pulsing double-ring */}
+          <circle cx={attackLineStart.x} cy={attackLineStart.y} r="6" fill="#ffffff" opacity="0.95"
+            style={{ filter: "drop-shadow(0 0 8px #ffffff)" }} />
+          <circle cx={attackLineStart.x} cy={attackLineStart.y} fill="none" stroke="#ffffff99" strokeWidth="1.5">
+            <animate attributeName="r" from="6" to="16" dur="1s" repeatCount="indefinite" />
+            <animate attributeName="opacity" from="0.7" to="0" dur="1s" repeatCount="indefinite" />
+          </circle>
         </svg>
       )}
 

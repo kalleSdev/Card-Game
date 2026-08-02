@@ -299,7 +299,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "SSS",
     basePoints: 13000,
     affinity: "LEADER",
-    tags: ["sorcerer", "jujutsu-high", "gojo-clan", "rika", "culling-game", "tokyo-senior"],
+    tags: ["sorcerer", "jujutsu-high", "gojo-clan", "rika", "culling-game", "tokyo-senior", "dance"],
     offRolePenalties: { combat: 0.9, support: 0.8 },
   },
   "higuruma": {
@@ -326,7 +326,7 @@ const CARD_DB: GameState["cardDb"] = {
     rarity: "A",
     basePoints: 9500,
     affinity: "COMBAT",
-    tags: ["sorcerer", "miguel-rope"],
+    tags: ["sorcerer", "miguel-rope", "dance"],
     offRolePenalties: { leader: 0.8, support: 0.8 },
   },
   "mahito": {

@@ -82,16 +82,16 @@ function SpellTooltip({ rule, active, mouseX, mouseY }: { rule: typeof BATTLE_SY
   const accentColor = active ? "#44ff88" : "#ffcc00";
   return createPortal(
     <div style={{
-      position: "fixed", left: mouseX - 220, top: mouseY - 70,
-      width: 200, padding: "10px 12px", borderRadius: 10, zIndex: 9999, pointerEvents: "none",
-      background: "rgba(6,6,18,0.97)", border: `1px solid ${accentColor}55`,
-      boxShadow: `0 4px 24px rgba(0,0,0,0.7), 0 0 12px ${accentColor}22`,
+      position: "fixed", left: Math.max(8, mouseX - 262), top: Math.max(8, mouseY - 76),
+      width: 240, padding: "12px 14px", borderRadius: 12, zIndex: 9999, pointerEvents: "none",
+      background: "rgba(6,6,18,0.98)", border: `1px solid ${accentColor}66`,
+      boxShadow: `0 6px 28px rgba(0,0,0,0.75), 0 0 16px ${accentColor}33`,
     }}>
-      <div style={{ fontSize: 7, color: accentColor, letterSpacing: 3, fontWeight: 900, marginBottom: 5 }}>
+      <div style={{ fontSize: 9, color: accentColor, letterSpacing: 3, fontWeight: 900, marginBottom: 6 }}>
         {active ? "✦ SPELL UNLOCKED" : "◆ SPELL REWARD"}
       </div>
-      <div style={{ fontSize: 12, fontWeight: 900, color: "#fff", marginBottom: 4 }}>{rule.spellName}</div>
-      <div style={{ fontSize: 10, color: "#bbb", lineHeight: 1.5 }}>{rule.spellDesc}</div>
+      <div style={{ fontSize: 14, fontWeight: 900, color: "#fff", marginBottom: 5 }}>{rule.spellName}</div>
+      <div style={{ fontSize: 11, color: "#ccd", lineHeight: 1.55 }}>{rule.spellDesc}</div>
     </div>,
     document.body
   );
@@ -126,8 +126,8 @@ function SynergyTracker({ pickedIds, cardDb }: { pickedIds: string[]; cardDb: Re
           onMouseLeave={() => setHoveredId(null)}
         >
           {hoveredId === rule.id && <SpellTooltip rule={rule} active={true} mouseX={mouseX} mouseY={mouseY} />}
-          <div style={{ fontSize: 12, fontWeight: 900, color: "#44ff88", letterSpacing: 0.5 }}>✦ {rule.label}</div>
-          <div style={{ fontSize: 10, color: "#44ff8899", marginTop: 3 }}>→ {rule.spellName}</div>
+          <div style={{ fontSize: 13, fontWeight: 900, color: "#44ff88", letterSpacing: 0.5 }}>✦ {rule.label}</div>
+          <div style={{ fontSize: 11, color: "#44ff88aa", marginTop: 4 }}>→ {rule.spellName}</div>
         </div>
       ))}
       {progressSynergies.map(rule => {
@@ -140,20 +140,20 @@ function SynergyTracker({ pickedIds, cardDb }: { pickedIds: string[]; cardDb: Re
               border: `1px solid ${hoveredId === rule.id ? "#ffcc0088" : "#ffcc0044"}`,
               transition: "background 0.15s, border-color 0.15s",
             }}
-            onMouseEnter={(e) => { setHoveredId(rule.id); setMouseY(e.clientY); }}
-            onMouseMove={(e) => setMouseY(e.clientY)}
+            onMouseEnter={(e) => { setHoveredId(rule.id); setMouseX(e.clientX); setMouseY(e.clientY); }}
+            onMouseMove={(e) => { setMouseX(e.clientX); setMouseY(e.clientY); }}
             onMouseLeave={() => setHoveredId(null)}
           >
             {hoveredId === rule.id && <SpellTooltip rule={rule} active={false} mouseX={mouseX} mouseY={mouseY} />}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
-              <div style={{ fontSize: 11, fontWeight: 900, color: "#ffcc00bb", letterSpacing: 0.5 }}>{rule.label}</div>
+              <div style={{ fontSize: 12, fontWeight: 900, color: "#ffcc00cc", letterSpacing: 0.5 }}>{rule.label}</div>
               <div style={{
                 fontSize: 13, fontWeight: 900, color: "#ffcc00",
                 background: "rgba(255,200,50,0.15)", borderRadius: 6,
-                padding: "1px 7px", letterSpacing: 0,
+                padding: "1px 8px", letterSpacing: 0,
               }}>{count}/{rule.minCount}</div>
             </div>
-            <div style={{ fontSize: 10, color: "#ffcc0066", marginTop: 3 }}>→ {rule.spellName}</div>
+            <div style={{ fontSize: 11, color: "#ffcc0077", marginTop: 4 }}>→ {rule.spellName}</div>
           </div>
         );
       })}
@@ -311,11 +311,11 @@ function LeaderPickPhase({ pid, profile, color, options, cardDb, onPick }: {
                   background: "rgba(102,0,170,0.2)", border: "1px solid #9933cc55",
                   textAlign: "left", boxShadow: "0 2px 14px rgba(102,0,170,0.18)",
                 }}>
-                  <div style={{ fontSize: 8, color: "#cc44ff", letterSpacing: 2, fontWeight: 900, marginBottom: 5 }}>
+                  <div style={{ fontSize: 9, color: "#cc44ff", letterSpacing: 2, fontWeight: 900, marginBottom: 5 }}>
                     ✦ DOMAIN
                   </div>
-                  <div style={{ fontSize: 12, color: "#fff", fontWeight: 800, marginBottom: 6, lineHeight: 1.2 }}>{domain.name}</div>
-                  <div style={{ fontSize: 10, color: "#ddd", lineHeight: 1.5 }}>{domain.desc}</div>
+                  <div style={{ fontSize: 13, color: "#fff", fontWeight: 800, marginBottom: 6, lineHeight: 1.25 }}>{domain.name}</div>
+                  <div style={{ fontSize: 11, color: "#ddd", lineHeight: 1.55 }}>{domain.desc}</div>
                 </div>
               </div>
             </motion.div>
@@ -692,9 +692,9 @@ export default function DraftBattleScreen({
                     width: "100%", padding: "10px 10px", borderRadius: 10,
                     background: "rgba(102,0,170,0.18)", border: "1px solid #9933cc44",
                   }}>
-                    <div style={{ fontSize: 7, color: "#cc44ff", letterSpacing: 2, fontWeight: 900, marginBottom: 4 }}>✦ DOMAIN</div>
-                    <div style={{ fontSize: 11, color: "#fff", fontWeight: 800, marginBottom: 5, lineHeight: 1.2 }}>{leaderDomain.name}</div>
-                    <div style={{ fontSize: 9, color: "#ddd", lineHeight: 1.5, fontWeight: 500 }}>{leaderDomain.desc}</div>
+                    <div style={{ fontSize: 9, color: "#cc44ff", letterSpacing: 2, fontWeight: 900, marginBottom: 5 }}>✦ DOMAIN</div>
+                    <div style={{ fontSize: 13, color: "#fff", fontWeight: 800, marginBottom: 6, lineHeight: 1.25 }}>{leaderDomain.name}</div>
+                    <div style={{ fontSize: 11, color: "#ddd", lineHeight: 1.55, fontWeight: 500 }}>{leaderDomain.desc}</div>
                   </div>
                   <div style={{ height: 1, background: "rgba(255,255,255,0.05)", margin: "2px 0" }} />
                 </>
@@ -745,7 +745,7 @@ export default function DraftBattleScreen({
                 overflowY: "auto",
               }}
             >
-              <div style={{ fontSize: 7, color: "#334", letterSpacing: 3, fontWeight: 700, textAlign: "center" }}>SYNERGIES</div>
+              <div style={{ fontSize: 10, color: "#667", letterSpacing: 4, fontWeight: 800, textAlign: "center", paddingBottom: 2, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>SYNERGIES</div>
               <SynergyTracker pickedIds={pickedSoFar} cardDb={cardDb} />
             </motion.div>
           );

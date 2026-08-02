@@ -4,7 +4,7 @@ How to start:
 npm run dev
 
 
-
+Turn based local Cardgame with drag and drop, placement, working game engine with real time events
 multiple game modes. 
 
 

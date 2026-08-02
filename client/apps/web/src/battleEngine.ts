@@ -85,7 +85,8 @@ export type SpellEffect =
   | { kind: "DESTROY_ONE" }                                // destroy any one enemy board card
   | { kind: "COPY_BOARD_CARD" }                            // place a 3/3 copy of any board card
   | { kind: "DAMAGE_TARGET_SELF"; amount: number; selfAmount: number } // damage enemy + hurt self
-  | { kind: "SHEEPIFY_ONE"; maxCost?: number };                        // turn one enemy board card into 1/1 sheep (optionally cost-capped)
+  | { kind: "SHEEPIFY_ONE"; maxCost?: number }                         // turn one enemy board card into 1/1 sheep (optionally cost-capped)
+  | { kind: "BEASTIFY_ONE" };                                          // turn any board card into an 8/8 Beast that loses 1 HP each turn
 
 export interface SpellCard {
   id: string;
@@ -122,6 +123,7 @@ export const BATTLE_SYNERGY_RULES: SynergyRule[] = [
   { id: "tokyo_senior",  tags: ["tokyo-senior"],         minCount: 3, label: "Tokyo Trio",          spellName: "Senior Formation",  spellDesc: "Deal 3 damage to any enemy",              spell: { kind: "DAMAGE_TARGET", amount: 3 } },
   { id: "stars",         tags: ["stars"],                minCount: 2, label: "Stars",                spellName: "Starfall",          spellDesc: "All your cards and your leader gain +1 HP", spell: { kind: "BUFF_BOARD_HP", amount: 1, includeLeader: true } },
   { id: "gojo_geto_bond", tags: ["gojo-geto"],           minCount: 2, label: "Destined Rivals",      spellName: "Memory",            spellDesc: "Deal 1 damage and stun an enemy card for 1 turn", spell: { kind: "DAMAGE_AND_STUN", amount: 1 } },
+  { id: "dance",          tags: ["dance"],               minCount: 2, label: "Dance",                spellName: "Dance",             spellDesc: "Give a board card +2 ATK and +1 HP",      spell: { kind: "BUFF_ONE_BOTH", atk: 2, hp: 1 } },
 ];
 
 export function getSynergyLabel(id: string): string {
@@ -153,6 +155,7 @@ export type DomainEffect =
   | { kind: "GRANT_SPELL"; spellName: string; spellDesc: string; spell: SpellEffect } // grants a spell to caster
   | { kind: "SUKUNA_BOARD_MODE" }                        // wipe board + Sukuna enters as 4/17 board card
   | { kind: "MAHORAGA_BOARD_MODE" }                      // Mahoraga enters board as 1/25 adaptive card
+  | { kind: "TAKABA_BOARD_MODE" }                        // all cards on both boards become 1/1 sheep; Takaba enters board as 1/20
   | { kind: "BUFF_LEADER_PERMANENT"; atk: number; hp: number } // permanent stat buff to leader
   | { kind: "SHEEPIFY_ENEMY_LEADER" }                    // Takaba: turn enemy leader into 1/7 sheep
   | { kind: "SUMMON_RIKA_AND_COPY" };                    // Yuta: summon Rika 5/5 + grant copy spell
@@ -193,17 +196,18 @@ export const DOMAIN_BATTLE_EFFECTS: Record<string, DomainEntry> = {
   "mahoraga":  { name: "Adaptation",                 effect: { kind: "MAHORAGA_BOARD_MODE" },
     secondEffect: { kind: "GRANT_SPELL", spellName: "Adaptation Strike", spellDesc: "Give one of your cards +4 HP", spell: { kind: "BUFF_ONE_HP", amount: 4 } } },
   "uro":       { name: "Shattered Heaven",           effect: { kind: "REDUCE_COSTS",        amount: 2, turns: 2 } },
-  "dabura":    { name: "Demon Realm",                effect: { kind: "GRANT_SPELL", spellName: "Demon King's Curse", spellDesc: "Destroy any 1 enemy board card", spell: { kind: "DESTROY_ONE" } },
+  // First fill: leader gains +1 ATK / +5 HP and ONE Demon King's Curse (via grantSpell)
+  "dabura":    { name: "Demon Realm",                effect: { kind: "BUFF_LEADER_PERMANENT", atk: 1, hp: 5 },
     grantSpell: { name: "Demon King's Curse", desc: "Destroy any 1 enemy board card", effect: { kind: "DESTROY_ONE" } },
     secondEffect: { kind: "BUFF_LEADER_PERMANENT", atk: 3, hp: 6 } },
   "naoya":     { name: "Projection Strike",          effect: { kind: "BUFF_OWN_BOARD",      atkBonus: 30, hpBonus: 0, turns: 1 },
     grantSpell: { name: "Projection Slash", desc: "All your cards gain +3 ATK for 1 turn", effect: { kind: "BUFF_BOARD_ATK", amount: 3, turns: 1 } } },
   "maki":      { name: "Heavenly Restriction Assault", effect: { kind: "GRANT_SPELL", spellName: "Dragon Bone Strike", spellDesc: "Deal 5 damage to any target", spell: { kind: "DAMAGE_TARGET", amount: 5 } },
     secondEffect: { kind: "GRANT_SPELL", spellName: "Dragon Bone Strike", spellDesc: "Deal 5 damage to any target", spell: { kind: "DAMAGE_TARGET", amount: 5 } } },
-  // First fill: 2 sheep spells (effect + grantSpell). Second fill: only 1 (no secondGrantSpell).
+  // First fill: 1 sheep spell + 1 Turn Beast spell. Second fill: sheepify everything, Takaba enters the board as a 1/20.
   "takaba":    { name: "Comedian",                   effect: { kind: "GRANT_SPELL", spellName: "Comedian's Curse", spellDesc: "Turn an enemy card costing 4 or less into a 1/1 sheep", spell: { kind: "SHEEPIFY_ONE", maxCost: 4 } },
-    grantSpell: { name: "Comedian's Curse", desc: "Turn an enemy card costing 4 or less into a 1/1 sheep", effect: { kind: "SHEEPIFY_ONE", maxCost: 4 } },
-    secondEffect: { kind: "GRANT_SPELL", spellName: "Comedian's Curse", spellDesc: "Turn an enemy card costing 4 or less into a 1/1 sheep", spell: { kind: "SHEEPIFY_ONE", maxCost: 4 } } },
+    grantSpell: { name: "Turn Beast", desc: "Turn any board card into an 8/8 Beast — it loses 1 HP each turn", effect: { kind: "BEASTIFY_ONE" } },
+    secondEffect: { kind: "TAKABA_BOARD_MODE" } },
 };
 
 const DEFAULT_DOMAIN_EFFECT: { name: string; effect: DomainEffect } = {
@@ -257,6 +261,7 @@ export interface BattleCard {
   silentStrike?: boolean;   // Naoya: this turn attacks take no counter but deal half damage
   regen?: boolean;          // Mahoraga: +1 HP after surviving damage
   rebirth?: boolean;        // Kurourushi: respawns as a 2/2 on death
+  beastDecay?: boolean;     // Takaba's Turn Beast: loses 1 HP at its owner's turn start
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -323,6 +328,7 @@ export interface BattlePlayer {
   spellQueue: SpellCard[];       // overflow queue when spell slots (4) are full
   sukunaBoardMode: boolean;      // true when Sukuna entered board as 4/17
   mahoragaBoardMode: boolean;    // true when Mahoraga entered board as 1/25
+  takabaBoardMode: boolean;      // true when Takaba entered board as 1/20
   mahoragaAdaptAtk: number;      // accumulated +ATK from Mahoraga adaptation hits
   shieldCharges: number;         // consumable shield grants (3 per game)
   unlimitedSpellDraw?: boolean;  // Gojo domain: GET SPELL has no once-per-turn limit this turn
@@ -389,7 +395,8 @@ export type BattleIntent =
   | { type: "DOMAIN_TARGET";        pid: PlayerId; targetInstanceId: string }
   | { type: "DRAW_SYNERGY_SPELL";   pid: PlayerId }
   | { type: "GRANT_BOARD_SHIELD";   pid: PlayerId; targetInstanceId: string }
-  | { type: "ACTIVATE_PERK";        pid: PlayerId; instanceId: string; targetInstanceId?: string; friendlyTargetInstanceId?: string; secondTargetInstanceId?: string };
+  | { type: "ACTIVATE_PERK";        pid: PlayerId; instanceId: string; targetInstanceId?: string; friendlyTargetInstanceId?: string; secondTargetInstanceId?: string }
+  | { type: "ATTACK_RANDOM";        pid: PlayerId; instanceId: string }; // Mahoraga: strikes a random target anywhere on the board
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Factory — build BattleCard from CardDef
@@ -562,6 +569,7 @@ function buildPlayer(
     spellQueue: [],
     sukunaBoardMode: false,
     mahoragaBoardMode: false,
+    takabaBoardMode: false,
     mahoragaAdaptAtk: 0,
     shieldCharges: 3,
   };
@@ -929,6 +937,41 @@ function applyDomainEffect(
       p = { ...p, mahoragaBoardMode: true };
       break;
     }
+    case "TAKABA_BOARD_MODE": {
+      // Comedy apocalypse: every card on BOTH boards becomes a 1/1 sheep (leader-cards immune)
+      const sheepAll = (c: BattleCard): BattleCard => c.isLeaderCard ? c : ({
+        ...c,
+        preSheepAtk: c.atk, preSheepHp: c.currentHp,
+        isSheep: true, atk: 1, baseAtk: 1, currentHp: 1, maxHp: 1,
+      });
+      o = { ...o, board: o.board.map(c => c ? sheepAll(c) : null) };
+      p = { ...p, board: p.board.map(c => c ? sheepAll(c) : null) };
+      // Takaba himself walks onto the board as a 1/20
+      const takabaCard: BattleCard = {
+        instanceId: `takaba-board-${++_instanceCounter}`,
+        defId: "takaba",
+        name: "Takaba Fumihiko",
+        rarity: "X",
+        affinity: "LEADER",
+        tags: p.leader.tags,
+        baseAtk: 1, baseHp: 20,
+        cost: 0,
+        atk: 1, currentHp: 20, maxHp: 20,
+        hasTaunt: false,
+        canAttack: true, exhausted: false,
+        stunTurns: 0,
+        tempAtkBonus: 0, tempHpBonus: 0, tempBonusTurns: 0,
+        isLeaderCard: true,
+      };
+      const tSlot = p.board[2] === null ? 2 : p.board.findIndex(s => s === null); // prefer center slot
+      if (tSlot !== -1) {
+        const nb = [...p.board] as BattlePlayer["board"];
+        nb[tSlot] = takabaCard;
+        p = { ...p, board: nb };
+      }
+      p = { ...p, takabaBoardMode: true };
+      break;
+    }
     case "BUFF_LEADER_PERMANENT": {
       p = { ...p, leader: {
         ...p.leader,
@@ -963,7 +1006,7 @@ function applyDomainEffect(
         baseAtk: 5, baseHp: 5,
         cost: 0,
         atk: 5, currentHp: 5, maxHp: 5,
-        hasTaunt: true,
+        hasTaunt: activationCount >= 1, // second-fill Rika arrives with a Shield
         canAttack: false, exhausted: true,
         stunTurns: 0,
         tempAtkBonus: 0, tempHpBonus: 0, tempBonusTurns: 0,
@@ -1124,6 +1167,10 @@ function processTurnStart(state: BattleState): { state: BattleState; drew: strin
     // Newly played cards become able to attack next turn — handled at play time
   };
 
+  // Takaba's Turn Beast decay — beasts lose 1 HP at their owner's turn start (and can die from it)
+  p = { ...p, board: p.board.map(c => c?.beastDecay ? { ...c, currentHp: c.currentHp - 1 } : c) };
+  p = { ...p, board: p.board.map(c => (c && c.currentHp <= 0) ? null : c) };
+
   // Domain cooldown
   if (p.domainCooldown > 0) p = { ...p, domainCooldown: p.domainCooldown - 1 };
 
@@ -1160,6 +1207,7 @@ function isPlayerDead(player: BattlePlayer): boolean {
   // In board mode the leader card IS the leader — dying ends the game
   if (player.sukunaBoardMode && !player.board.some(c => c?.isLeaderCard)) return true;
   if (player.mahoragaBoardMode && !player.board.some(c => c?.isLeaderCard)) return true;
+  if (player.takabaBoardMode && !player.board.some(c => c?.isLeaderCard)) return true;
   return false;
 }
 
@@ -1218,12 +1266,75 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       return { state: { ...state, pendingAttackerId: null }, events };
     }
 
+    // ── ATTACK_RANDOM (Mahoraga) — strikes a random target anywhere ───────
+    case "ATTACK_RANDOM": {
+      const attacker = findOnBoard(state.players[pid], intent.instanceId);
+      if (!attacker) return illegal("Attacker not found");
+      if (!attacker.canAttack || attacker.exhausted) return illegal("Attacker cannot attack");
+
+      let p = { ...state.players[pid] };
+      let o = { ...state.players[opp] };
+
+      // Pool: every card on both boards (except the attacker) + both leaders
+      type RTarget = { side: "own" | "opp"; card: BattleCard; isLeader: boolean };
+      const pool: RTarget[] = [
+        ...boardCards(o).map(c => ({ side: "opp" as const, card: c, isLeader: false })),
+        ...boardCards(p).filter(c => c.instanceId !== attacker.instanceId).map(c => ({ side: "own" as const, card: c, isLeader: false })),
+        { side: "opp", card: o.leader, isLeader: true },
+        { side: "own", card: p.leader, isLeader: true },
+      ];
+      if (pool.length === 0) return illegal("No targets");
+      const picked = pool[Math.floor(Math.random() * pool.length)];
+
+      const damage = attacker.atk;
+      const counter = picked.isLeader ? 0 : picked.card.atk;
+
+      // Exhaust attacker + apply counter (regen applies)
+      const hurtAttacker = (c: BattleCard): BattleCard => {
+        const hpA = c.currentHp - counter;
+        return { ...c, currentHp: hpA + ((c.regen && counter > 0 && hpA > 0) ? 1 : 0), exhausted: true };
+      };
+      p = { ...p, board: p.board.map(c => c?.instanceId === attacker.instanceId ? hurtAttacker(c) : c) };
+      if (p.leader.instanceId === attacker.instanceId) p = { ...p, leader: hurtAttacker(p.leader) };
+
+      // Apply damage to the random victim
+      const hurtTarget = (c: BattleCard): BattleCard => {
+        const hpA = c.currentHp - damage;
+        return { ...c, currentHp: hpA + ((c.regen && hpA > 0) ? 1 : 0) };
+      };
+      if (picked.isLeader) {
+        if (picked.side === "opp") o = { ...o, leader: { ...o.leader, currentHp: o.leader.currentHp - damage } };
+        else                       p = { ...p, leader: { ...p.leader, currentHp: p.leader.currentHp - damage } };
+        events.push({ type: "ATTACK_LEADER", attackerPid: picked.side === "opp" ? pid : opp, attackerId: attacker.instanceId, damage, leaderHpLeft: (picked.side === "opp" ? o : p).leader.currentHp });
+      } else {
+        if (picked.side === "opp") o = { ...o, board: o.board.map(c => c?.instanceId === picked.card.instanceId ? hurtTarget(c) : c) };
+        else                       p = { ...p, board: p.board.map(c => c?.instanceId === picked.card.instanceId ? hurtTarget(c) : c) };
+        events.push({ type: "ATTACK_CARD", attackerPid: pid, attackerId: attacker.instanceId, targetId: picked.card.instanceId, damage, counterDamage: counter });
+        if (picked.card.currentHp - damage <= 0) events.push({ type: "CARD_DIED", pid: picked.side === "opp" ? opp : pid, instanceId: picked.card.instanceId });
+      }
+      if (attacker.currentHp - counter <= 0) events.push({ type: "CARD_DIED", pid, instanceId: attacker.instanceId });
+
+      // Clean the dead + domain meter tick
+      const clean = (pl: BattlePlayer): BattlePlayer => ({ ...pl, board: pl.board.map(c => (c && c.currentHp <= 0) ? null : c) });
+      p = clean(p); o = clean(o);
+      p = { ...p, domainMeter: Math.min(100, p.domainMeter + domainGain(p, 7)) };
+
+      let nextState: BattleState = { ...state, players: { ...state.players, [pid]: p, [opp]: o }, pendingAttackerId: null };
+      nextState = checkWin(nextState);
+      if (nextState.winner) events.push({ type: "GAME_OVER", winner: nextState.winner });
+      return { state: nextState, events };
+    }
+
     // ── ATTACK_CARD ───────────────────────────────────────────────────────
     case "ATTACK_CARD": {
       if (!state.pendingAttackerId) return illegal("No attacker selected");
       const attacker = findOnBoard(state.players[pid], state.pendingAttackerId);
       if (!attacker) return illegal("Attacker not found");
       if (!attacker.canAttack || attacker.exhausted) return illegal("Attacker cannot attack");
+      // Mahoraga strikes wherever the wheel turns — his attacks are always random
+      if (attacker.defId === "mahoraga" || attacker.defId === "mahoraga-entity") {
+        return applyBattleIntent({ ...state, pendingAttackerId: null }, { type: "ATTACK_RANDOM", pid, instanceId: attacker.instanceId });
+      }
 
       const target = findOnBoard(state.players[opp], intent.targetInstanceId);
       if (!target) return illegal("Target not found");
@@ -1382,6 +1493,10 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       const attacker = findOnBoard(state.players[pid], state.pendingAttackerId);
       if (!attacker) return illegal("Attacker not found");
       if (!attacker.canAttack || attacker.exhausted) return illegal("Attacker cannot attack");
+      // Mahoraga's attacks are always random
+      if (attacker.defId === "mahoraga" || attacker.defId === "mahoraga-entity") {
+        return applyBattleIntent({ ...state, pendingAttackerId: null }, { type: "ATTACK_RANDOM", pid, instanceId: attacker.instanceId });
+      }
       // Only shield cards protect the leader — clear them first (unless Toji berserk)
       const tauntGuards = boardCards(state.players[opp]).filter(c => c.hasTaunt);
       if (tauntGuards.length > 0 && !state.players[pid].tojiBerserk && !attacker.ignoreShields) return illegal("Defeat all Shield cards before targeting the leader!");
@@ -1617,6 +1732,23 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
             isSheep: true, atk: 1, baseAtk: 1, currentHp: 1, maxHp: 1,
           };
           o = { ...o, board: o.board.map(c => c?.instanceId === intent.targetInstanceId ? sheepified : c) };
+          break;
+        }
+        case "BEASTIFY_ONE": {
+          if (!intent.targetInstanceId) return illegal("Select a board card to beastify");
+          const beastOwn = p.board.find(c => c?.instanceId === intent.targetInstanceId);
+          const beastOpp = o.board.find(c => c?.instanceId === intent.targetInstanceId);
+          const beastTgt = beastOwn ?? beastOpp;
+          if (!beastTgt) return illegal("Target not found on any board");
+          if (beastTgt.isLeaderCard) return illegal("Cannot beastify a leader card");
+          const beastified: BattleCard = {
+            ...beastTgt,
+            atk: 8, baseAtk: 8, currentHp: 8, maxHp: 8, baseHp: 8,
+            beastDecay: true, isSheep: false,
+            tempAtkBonus: 0, tempHpBonus: 0, tempBonusTurns: 0,
+          };
+          if (beastOwn) p = { ...p, board: p.board.map(c => c?.instanceId === intent.targetInstanceId ? beastified : c) };
+          else          o = { ...o, board: o.board.map(c => c?.instanceId === intent.targetInstanceId ? beastified : c) };
           break;
         }
         case "BUFF_ONE_HP": {
