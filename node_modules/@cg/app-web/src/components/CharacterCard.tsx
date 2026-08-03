@@ -289,6 +289,8 @@ interface CharacterCardProps {
   hpBar?: { current: number; max: number };
   /** Render name + ATK/HP + HP bar as an overlay inside the card (art stays full height) */
   statsOverlay?: { name?: string; atk: number; hp: number; maxHp: number };
+  /** Gentle 3D tilt on hover even when noHover is set (used for board cards) */
+  softTilt?: boolean;
   /** Duplicate stars from the profile collection — shown along the left border (3 per ascension) */
   dupeStars?: number;
   /** Kill stars from the profile collection — shown along the left border (3 per ✕ mark) */
@@ -299,7 +301,7 @@ export default function CharacterCard({
   defId, def, size = "md", selected = false, dimmed = false,
   equippedBonus, overlay, noHover = false, costOverride, rarityOverride, starLevel = 0,
   hideInfo = false, hideAffinityAndCost = false, smallBadges = false, showStats, hpBar, statsOverlay,
-  dupeStars = 0, killStars = 0,
+  dupeStars = 0, killStars = 0, softTilt = false,
 }: CharacterCardProps) {
   const [imgFailed, setImgFailed] = useState(false);
   const [sheenPos, setSheenPos] = useState({ x: 50, y: 50 });
@@ -331,9 +333,11 @@ export default function CharacterCard({
     const nx = (e.clientX - rect.left) / rect.width;
     const ny = (e.clientY - rect.top)  / rect.height;
     setSheenPos({ x: nx * 100, y: ny * 100 });
-    if (!noHover && !dimmed) {
-      rawRotY.set((nx - 0.5) * 16);
-      rawRotX.set(-(ny - 0.5) * 12);
+    if ((!noHover || softTilt) && !dimmed) {
+      const ampY = noHover ? 7 : 16; // softTilt path is gentler
+      const ampX = noHover ? 5 : 12;
+      rawRotY.set((nx - 0.5) * ampY);
+      rawRotX.set(-(ny - 0.5) * ampX);
     }
   };
 
@@ -375,8 +379,8 @@ export default function CharacterCard({
         cursor: "inherit",
         transformPerspective: 700,
         willChange: "transform",
-        rotateX: !noHover && !dimmed ? rotX : undefined,
-        rotateY: !noHover && !dimmed ? rotY : undefined,
+        rotateX: (!noHover || softTilt) && !dimmed ? rotX : undefined,
+        rotateY: (!noHover || softTilt) && !dimmed ? rotY : undefined,
       }}
       animate={
         selected

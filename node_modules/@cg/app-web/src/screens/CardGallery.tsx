@@ -83,8 +83,9 @@ function getDomainDesc(defId: string): { name: string; desc: string; secondDesc?
     case "SHEEPIFY_BOARD":        desc = "All board cards become 1/1 sheep."; break;
     case "SHEEPIFY_ENEMY_CARDS":  desc = `Choose ${e.count} enemy board cards to turn into 1/1 sheep.`; break;
     case "SNEAK_ATTACK_DOMAIN":   desc = `Deal ${e.amount} damage to any target — no counter damage.`; break;
-    case "SUKUNA_BOARD_MODE":     desc = "Wipes all board cards. Sukuna enters as a 4/17 playing card — always targetable. His death ends the match."; break;
+    case "SUKUNA_BOARD_MODE":     desc = "Wipes all board cards. Sukuna enters as a 3/15 playing card — always targetable. His death ends the match."; break;
     case "MAHORAGA_BOARD_MODE":   desc = "Mahoraga enters the board as a 1/25 card. Gains +1 ATK each time he's hit. His death ends the match."; break;
+    case "TAKABA_BOARD_MODE":     desc = "Every card on both boards becomes a 1/1 sheep. Takaba enters the board as a 1/15 card — his death ends the match."; break;
     case "SUMMON_RIKA_AND_COPY":  desc = "Summons Rika (5/5 Cursed Spirit). Grants Cursed Copy spell — place a 3/3 copy of any board card."; break;
     default:                      desc = "Activates a powerful cursed technique.";
   }
@@ -94,7 +95,8 @@ function getDomainDesc(defId: string): { name: string; desc: string; secondDesc?
     if (s.kind === "GRANT_SPELL") secondDesc = `2nd fill: grants "${s.spellName}" — ${s.spellDesc}.`;
     else if (s.kind === "BUFF_LEADER_PERMANENT") secondDesc = `2nd fill: leader gains +${s.atk} ATK / +${s.hp} HP permanently.`;
     else if (s.kind === "SHEEPIFY_ENEMY_LEADER") secondDesc = "2nd fill: enemy leader becomes a 1/7 sheep.";
-    else if (s.kind === "SUMMON_RIKA_AND_COPY") secondDesc = "2nd fill: summon Rika (5/5) again.";
+    else if (s.kind === "SUMMON_RIKA_AND_COPY") secondDesc = "2nd fill: summon Rika (5/5) again — this time she arrives with a Shield.";
+    else if (s.kind === "TAKABA_BOARD_MODE") secondDesc = "2nd fill: every card on both boards becomes a 1/1 sheep, and Takaba enters the board as a 1/15 card.";
     else if (s.kind === "SPAWN_ENTITIES") secondDesc = `2nd fill: spawns ${s.count}× ${s.atk}/${s.hp} entity.`;
     else if (s.kind === "GRANT_RANDOM_SPELLS") secondDesc = `2nd fill: grants ${s.count} more random spells.`;
     else if (s.kind === "SHEEPIFY_ENEMY_CARDS") secondDesc = `2nd fill: choose ${s.count} more enemy cards to sheepify.`;

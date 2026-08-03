@@ -183,7 +183,9 @@ export default function CardRewardScreen({ profile, options, cardDb, isWinner, o
               )}
 
               <div style={{ transform: "scale(1.1)", transformOrigin: "center top" }}>
-                <CharacterCard defId={id} def={def} size="lg" costOverride={cost} />
+                {/* Collection cards all start at S tier (the ascension ladder climbs from here),
+                    so every reward card shows the golden S aura */}
+                <CharacterCard defId={id} def={def} size="lg" costOverride={cost} rarityOverride="S" />
               </div>
 
               {/* Status info block below card */}

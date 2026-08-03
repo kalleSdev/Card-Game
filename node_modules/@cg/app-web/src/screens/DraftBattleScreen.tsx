@@ -71,8 +71,9 @@ function getTypedOptions(cardDb: Record<string, CardDef>, affinity: "COMBAT" | "
 function getRandomOptions(cardDb: Record<string, CardDef>, exclude: string[]): string[] {
   return shuffle(
     Object.entries(cardDb)
-      // Include X rarity regardless of affinity (they're normally LEADER affinity, but appear in random picks)
-      .filter(([id, def]) => (def.affinity !== "LEADER" || def.rarity === "X") && !exclude.includes(id))
+      // Every card can appear as a free pick — LEADER-affinity cards (Yuta, Higuruma, Gojo…)
+      // simply play with their normal rarity stats when drafted as a board card.
+      .filter(([id]) => !exclude.includes(id))
       .map(([id]) => id)
   ).slice(0, 3);
 }
@@ -195,7 +196,8 @@ function domainEffectDesc(defId: string): { name: string; desc: string } {
         if (s.kind === "GRANT_SPELL") return ` 2nd fill: gains "${s.spellName}" — ${s.spellDesc}.`;
         if (s.kind === "BUFF_LEADER_PERMANENT") return ` 2nd fill: leader gains +${s.atk} ATK / +${s.hp} HP permanently.`;
         if (s.kind === "SHEEPIFY_ENEMY_LEADER") return " 2nd fill: enemy leader becomes a 1/7 sheep.";
-        if (s.kind === "SUMMON_RIKA_AND_COPY") return " 2nd fill: summon Rika (5/5) again.";
+        if (s.kind === "SUMMON_RIKA_AND_COPY") return " 2nd fill: summon Rika (5/5) again — this time she arrives with a Shield.";
+        if (s.kind === "TAKABA_BOARD_MODE") return " 2nd fill: every card on both boards becomes a 1/1 sheep, and Takaba enters the board as a 1/15 card.";
         if (s.kind === "STUN_ENEMY_BOARD") return ` 2nd fill: stun enemy board again.`;
         if (s.kind === "SPAWN_ENTITIES") return ` 2nd fill: spawns ${s.count}× ${s.atk}/${s.hp} entity.`;
         if (s.kind === "GRANT_RANDOM_SPELLS") return ` 2nd fill: grants ${s.count} more random spells.`;
@@ -225,8 +227,9 @@ function domainEffectDesc(defId: string): { name: string; desc: string } {
       ? `Leader gains +${e.atk} ATK / +${e.hp} HP permanently.`
       : e.atk > 0 ? `Leader gains +${e.atk} ATK permanently.`
       : `Leader gains +${e.hp} HP permanently.`; break;
-    case "SUKUNA_BOARD_MODE":      desc = "Wipes all board cards. Sukuna enters the board as a 4/17 playing card — always targetable. Leader death ends the match."; break;
+    case "SUKUNA_BOARD_MODE":      desc = "Wipes all board cards. Sukuna enters the board as a 3/15 playing card — always targetable. Leader death ends the match."; break;
     case "MAHORAGA_BOARD_MODE":    desc = "Mahoraga enters the board as a 1/25 card. Each hit he receives gives him +1 ATK (adaptation). Leader card death ends the match."; break;
+    case "TAKABA_BOARD_MODE":      desc = "Every card on both boards becomes a 1/1 sheep. Takaba enters the board as a 1/15 card — leader card death ends the match."; break;
     case "BUFF_LEADER_PERMANENT":  desc = `Permanently grants your leader +${e.atk} ATK / +${e.hp} HP.`; break;
     case "SHEEPIFY_ENEMY_LEADER":  desc = "Transforms the enemy leader into a 1/7 sheep."; break;
     case "SUMMON_RIKA_AND_COPY":   desc = "Summons Rika Orimoto (5/5 Cursed Spirit) onto your board. Grants Cursed Copy spell — place a 3/3 copy of any board card."; break;
