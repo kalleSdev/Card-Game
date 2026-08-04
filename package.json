@@ -10,13 +10,27 @@
   "scripts": {
     "dev": "npm -w @cg/app-web run dev",
     "build": "npm -w @cg/app-web run build",
-    "typecheck": "npm -w @cg/app-web run typecheck"
+    "typecheck": "npm -w @cg/app-web run typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify": "npm run typecheck && npm run lint && npm run test"
   },
   "dependencies": {
     "framer-motion": "^12.40.0",
     "howler": "^2.2.4"
   },
   "devDependencies": {
-    "@types/howler": "^2.2.13"
+    "@eslint/js": "^9.39.5",
+    "@types/howler": "^2.2.13",
+    "@types/node": "^26.1.2",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "prettier": "^3.9.6",
+    "typescript-eslint": "^8.66.0",
+    "vitest": "^4.1.10"
   }
 }
