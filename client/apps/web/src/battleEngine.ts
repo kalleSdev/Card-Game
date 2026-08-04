@@ -639,7 +639,6 @@ export function createBattleState(
 
   // Coin flip: random first player
   const firstPlayer: PlayerId = Math.random() < 0.5 ? "P1" : "P2";
-  const secondPlayer: PlayerId = firstPlayer === "P1" ? "P2" : "P1";
 
   // Second player gets a bonus energy spell to compensate going second
   const goSecondSpell: SpellCard = {
@@ -1730,7 +1729,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
           const bothCard = p.board.find(c => c?.instanceId === intent.targetInstanceId);
           if (!bothCard) return illegal("Target not found on your board");
           if (bothCard.isLeaderCard) return illegal("ATK buffs cannot target leader cards");
-          p = { ...p, board: p.board.map(c => c?.instanceId === intent.targetInstanceId
+          p = { ...p, board: p.board.map(c => (c && c.instanceId === intent.targetInstanceId)
             ? { ...c, atk: c.atk + eff.atk, currentHp: c.currentHp + eff.hp, maxHp: c.maxHp + eff.hp }
             : c) };
           break;
@@ -1754,7 +1753,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
           const dsTgt = o.board.find(c => c?.instanceId === intent.targetInstanceId);
           if (!dsTgt) return illegal("Target not on enemy board");
           const hpBeforeDS = dsTgt.currentHp;
-          o = { ...o, board: o.board.map(c => c?.instanceId === intent.targetInstanceId
+          o = { ...o, board: o.board.map(c => (c && c.instanceId === intent.targetInstanceId)
             ? { ...c, currentHp: c.currentHp - eff.amount, stunTurns: Math.max(1, c.stunTurns), canAttack: false }
             : c) };
           o = adaptMahoragaIfHit(o, intent.targetInstanceId, hpBeforeDS, hpBeforeDS - eff.amount);
@@ -1860,7 +1859,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
           }
           const boardCard = p.board.find(c => c?.instanceId === intent.targetInstanceId);
           if (!boardCard) return illegal("Target not found on your board");
-          p = { ...p, board: p.board.map(c => c?.instanceId === intent.targetInstanceId ? { ...c, currentHp: c.currentHp + eff.amount, maxHp: c.maxHp + eff.amount } : c) };
+          p = { ...p, board: p.board.map(c => (c && c.instanceId === intent.targetInstanceId) ? { ...c, currentHp: c.currentHp + eff.amount, maxHp: c.maxHp + eff.amount } : c) };
           break;
         }
         case "BUFF_ONE_ATK": {
@@ -1869,7 +1868,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
           const boardCard2 = p.board.find(c => c?.instanceId === intent.targetInstanceId);
           if (!boardCard2) return illegal("Target not found on your board");
           if (boardCard2.isLeaderCard) return illegal("ATK buffs cannot target leader cards");
-          p = { ...p, board: p.board.map(c => c?.instanceId === intent.targetInstanceId ? { ...c, atk: c.atk + eff.amount } : c) };
+          p = { ...p, board: p.board.map(c => (c && c.instanceId === intent.targetInstanceId) ? { ...c, atk: c.atk + eff.amount } : c) };
           break;
         }
         case "DAMAGE_TARGET_SELF": {

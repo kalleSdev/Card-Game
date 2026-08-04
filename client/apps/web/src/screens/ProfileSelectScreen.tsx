@@ -311,7 +311,6 @@ export default function ProfileSelectScreen({
     return null;
   };
 
-  const formColor = formSlot ? PLAYER_COLOR[formSlot] : "#9933ff";
 
   return (
     <div style={{

@@ -74,7 +74,7 @@ const SLOT_ICONS: Record<string, string> = {
   LEADER: "👑", COMBAT: "💥", SUPPORT: "✨",
 };
 
-export function SlotCell({ slot, instance, defId, def, canPlace, canReturn, onClick, dragActive, draggedAffinity }: {
+export function SlotCell({ slot, defId, def, canPlace, canReturn, onClick, dragActive, draggedAffinity }: {
   slot: SlotRef; instance?: CardInstance | null; defId?: string; def: CardDef | undefined;
   canPlace: boolean; canReturn: boolean; onClick: () => void;
   /** A card is currently being dragged from hand */
@@ -448,7 +448,7 @@ export default function PlacementScreen({ state, onSend, playerNames, playerIcon
     const index = parseInt(slotEl.getAttribute("data-slot-index") ?? "0", 10);
     if (!type || type === "UNLEASH") { setSelectedCard(null); return; }
 
-    const slot: SlotRef = { type, index };
+    const slot = { type, index } as SlotRef;
 
     // If slot is occupied, return the existing card first (swap behaviour)
     const existing = getBoardCard(myZones, slot);

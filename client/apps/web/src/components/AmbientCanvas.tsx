@@ -244,7 +244,7 @@ const THEMES: Record<AmbientTheme, ThemeConfig> = {
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function AmbientCanvas({ theme }: { theme: AmbientTheme }) {
+export default function AmbientCanvas({ theme = "wisps" }: { theme?: AmbientTheme }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {

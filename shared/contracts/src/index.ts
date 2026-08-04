@@ -45,6 +45,7 @@ export type SynergyId =
   | "ZENIN_ELDERS"         // Naoya + Jinichi → +4%
   | "UNPREDICTABLE_DUO"    // Takaba + Hakari → +5%
   | "SIX_EYES"             // Gojo + Yuta (both six-eyes users) → +6%
+  | "CULLING_GAME_2"       // 2 culling-game characters → +3%
   | "CULLING_GAME_3"       // 3+ culling-game characters → +5%
   | "CULLING_GAME_4"       // 4 culling-game characters → +7%
   | "AFROBEAT"             // Yuta + Miguel → +5%

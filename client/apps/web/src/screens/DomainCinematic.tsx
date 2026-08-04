@@ -366,7 +366,8 @@ function DomainCanvas({ kind, primary, secondary, accent }: {
         for (let i = 0; i < 300; i++) {
           const a = i * 0.08 + t, r2 = i * 2.2;
           const x = cx + Math.cos(a) * r2, y = cy + Math.sin(a) * r2;
-          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
         }
         ctx.stroke();
         ctx.globalAlpha = 1;

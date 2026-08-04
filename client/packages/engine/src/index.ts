@@ -1,4 +1,5 @@
-import {
+import { otherPlayer } from "@cg/contracts";
+import type {
   BindingVowId,
   CardDef,
   DomainOutcomeEntry,
@@ -10,7 +11,6 @@ import {
   PlayerId,
   PlayerZones,
   SynergyId,
-  otherPlayer,
 } from "@cg/contracts";
 
 // ===== Vow definitions (exported for UI) =====
@@ -786,11 +786,6 @@ const drawOne = (state: GameState, p: PlayerId): { state: GameState; events: Gam
 
 // ===== Vow scoring =====
 
-const isBoardFull = (zones: PlayerZones): boolean =>
-  zones.board.leader !== null &&
-  zones.board.combat.every(c => c !== null) &&
-  zones.board.support.every(s => s !== null);
-
 type VowResult = { score: number; outcome: { met: boolean; pct: number } };
 
 const applyVowToScore = (state: GameState, p: PlayerId, base: number): VowResult => {
@@ -825,7 +820,8 @@ const applyVowToScore = (state: GameState, p: PlayerId, base: number): VowResult
       const cards = listBoardCards(state, p);
       let curses = 0, nonCurses = 0;
       for (const c of cards) {
-        state.cardDb[c.defId]?.tags?.includes("curse") ? curses++ : nonCurses++;
+        if (state.cardDb[c.defId]?.tags?.includes("curse")) curses++;
+        else nonCurses++;
       }
       const pct = Math.round((curses * 1.7 - nonCurses * 0.9) * 10) / 10;
       const met = pct > 0;

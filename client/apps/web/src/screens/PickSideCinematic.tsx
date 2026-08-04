@@ -93,7 +93,6 @@ function RarityLabel({ rarity, color, show, isLeft }: { rarity: string; color: s
             position: "absolute",
             bottom: -36,
             left: "50%",
-            transform: "translateX(-50%)",
             background: color,
             padding: "3px 20px",
             transform: "translateX(-50%) skewX(-12deg)",

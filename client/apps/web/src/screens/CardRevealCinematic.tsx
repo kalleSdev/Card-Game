@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { CardDef } from "@cg/contracts";
 import CharacterCard from "../components/CharacterCard";

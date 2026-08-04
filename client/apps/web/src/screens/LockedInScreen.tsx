@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { BG } from "../backgrounds";
 import DomainCinematic from "./DomainCinematic";
-import type { CardInstance, GameState, Intent, PlayerId } from "@cg/contracts";
+import type { GameState, Intent, PlayerId } from "@cg/contracts";
 import { DOMAIN_EFFECTS, DEFAULT_DOMAIN } from "@cg/engine";
 import type { DomainEffectDef } from "@cg/engine";
 import { domainDesc } from "../helpers";
@@ -16,14 +16,6 @@ function MiniBoard({ pid, state, playerNames, getEffect, lip }: {
 }) {
   const zones = state.players[pid];
   const pColor = pid === "P1" ? "#4a9eff" : "#ff6666";
-  const slots: Array<{ label: string; card: CardInstance | null }> = [
-    { label: "Leader",    card: zones.board.leader },
-    { label: "Combat 1",  card: zones.board.combat[0] },
-    { label: "Combat 2",  card: zones.board.combat[1] },
-    { label: "Support 1", card: zones.board.support[0] },
-    { label: "Support 2", card: zones.board.support[1] },
-    { label: "Support 3", card: zones.board.support[2] },
-  ];
   const effect = getEffect(pid);
   const decided = lip.decisions[pid];
 

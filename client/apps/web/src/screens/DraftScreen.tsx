@@ -57,7 +57,7 @@ function PoolCard({
   }, [card.identityRevealed]);
   useEffect(() => {
     if (!prevShownRarity.current && card.shownRarity) {
-      onRevealEffect?.(card.shownRarity, rc(card.shownRarity));
+      onRevealEffect?.(card.shownRarity, rc(card.shownRarity), card.defId);
       if (["SS", "SSS", "X"].includes(card.shownRarity))
         onRateHighRarity?.(card.shownRarity);
     }
