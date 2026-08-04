@@ -1,10 +1,9 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import type { CardDef } from "@cg/contracts";
 import { ROULETTE_ITEM_MAP } from "@cg/engine";
 import { rc } from "../helpers";
-import { SYNERGY_LABEL } from "../constants";
-import { DOMAIN_BATTLE_EFFECTS } from "../battleEngine";
+import { describeDomain } from "../domainText";
 import CharacterCard from "../components/CharacterCard";
 import AmbientOverlay from "../components/AmbientOverlay";
 import AmbientCanvas from "../components/AmbientCanvas";
@@ -58,52 +57,6 @@ function weaponBonusesForCard(defId: string, cardDef: CardDef): WeaponEntry[] {
 
 const DOMAIN_ELIGIBLE = new Set(["SS", "SSS", "X"]);
 
-function getDomainDesc(defId: string): { name: string; desc: string; secondDesc?: string } | null {
-  if (!DOMAIN_ELIGIBLE) return null; // guard for tree-shaking
-  const d = DOMAIN_BATTLE_EFFECTS[defId];
-  if (!d) return null;
-  const e = d.effect;
-  let desc = "";
-  const grantSuffix = defId === "gojo-base"
-    ? " Grants Hollow Purple (5 damage), +5 energy, and unlimited GET SPELL this turn. Filling twice grants 2 Hollow Purples."
-    : d.grantSpell ? ` Also grants "${d.grantSpell.name}" — ${d.grantSpell.desc}.` : "";
-  switch (e.kind) {
-    case "STUN_ENEMY_BOARD":      desc = `Fully immobilizes all enemies for ${e.turns} turn${e.turns > 1 ? "s" : ""} — no actions allowed.`; break;
-    case "DAMAGE_ALL_ENEMIES":    desc = `Deals ${e.amount} damage split across all enemies.`; break;
-    case "BUFF_OWN_BOARD":        desc = `Gives own board +${e.atkBonus} ATK / +${e.hpBonus} HP for ${e.turns} turn${e.turns > 1 ? "s" : ""}.`; break;
-    case "KILL_ALL_BOARD":        desc = "Destroys all non-leader cards on both sides."; break;
-    case "SPAWN_ENTITIES":        desc = `Spawns ${e.count}× ${e.atk}/${e.hp} Cursed Spirits on your board.`; break;
-    case "GRANT_RANDOM_SPELLS":   desc = `Grants ${e.count} random synergy spells.`; break;
-    case "REDUCE_COSTS":          desc = `All cards cost ${e.amount} less for ${e.turns} turn${e.turns > 1 ? "s" : ""}.`; break;
-    case "GRANT_SPELL":           desc = `Grants spell: "${e.spellName}" — ${e.spellDesc}.`; break;
-    case "BUFF_LEADER_PERMANENT": desc = e.atk > 0 && e.hp > 0
-      ? `Leader gains +${e.atk} ATK / +${e.hp} HP permanently.`
-      : e.atk > 0 ? `Leader gains +${e.atk} ATK permanently.`
-      : `Leader gains +${e.hp} HP permanently.`; break;
-    case "SHEEPIFY_BOARD":        desc = "All board cards become 1/1 sheep."; break;
-    case "SHEEPIFY_ENEMY_CARDS":  desc = `Choose ${e.count} enemy board cards to turn into 1/1 sheep.`; break;
-    case "SNEAK_ATTACK_DOMAIN":   desc = `Deal ${e.amount} damage to any target — no counter damage.`; break;
-    case "SUKUNA_BOARD_MODE":     desc = "Wipes all board cards. Sukuna enters as a 3/15 playing card — always targetable. His death ends the match."; break;
-    case "MAHORAGA_BOARD_MODE":   desc = "Mahoraga enters the board as a 1/25 card. Gains +1 ATK each time he's hit. His death ends the match."; break;
-    case "TAKABA_BOARD_MODE":     desc = "Every card on both boards becomes a 1/1 sheep. Takaba enters the board as a 1/15 card — his death ends the match."; break;
-    case "SUMMON_RIKA_AND_COPY":  desc = "Summons Rika (5/5 Cursed Spirit). Grants Cursed Copy spell — place a 3/3 copy of any board card."; break;
-    default:                      desc = "Activates a powerful cursed technique.";
-  }
-  let secondDesc: string | undefined;
-  if (d.secondEffect) {
-    const s = d.secondEffect;
-    if (s.kind === "GRANT_SPELL") secondDesc = `2nd fill: grants "${s.spellName}" — ${s.spellDesc}.`;
-    else if (s.kind === "BUFF_LEADER_PERMANENT") secondDesc = `2nd fill: leader gains +${s.atk} ATK / +${s.hp} HP permanently.`;
-    else if (s.kind === "SHEEPIFY_ENEMY_LEADER") secondDesc = "2nd fill: enemy leader becomes a 1/7 sheep.";
-    else if (s.kind === "SUMMON_RIKA_AND_COPY") secondDesc = "2nd fill: summon Rika (5/5) again — this time she arrives with a Shield.";
-    else if (s.kind === "TAKABA_BOARD_MODE") secondDesc = "2nd fill: every card on both boards becomes a 1/1 sheep, and Takaba enters the board as a 1/15 card.";
-    else if (s.kind === "SPAWN_ENTITIES") secondDesc = `2nd fill: spawns ${s.count}× ${s.atk}/${s.hp} entity.`;
-    else if (s.kind === "GRANT_RANDOM_SPELLS") secondDesc = `2nd fill: grants ${s.count} more random spells.`;
-    else if (s.kind === "SHEEPIFY_ENEMY_CARDS") secondDesc = `2nd fill: choose ${s.count} more enemy cards to sheepify.`;
-    else secondDesc = "2nd fill: activates a secondary effect.";
-  }
-  return { name: d.name, desc: desc + grantSuffix, secondDesc };
-}
 
 // Synergy tags → display labels
 const TAG_SYNERGY: Record<string, string> = {
@@ -178,7 +131,7 @@ function CardDetail({ defId, def, onClose }: { defId: string; def: CardDef; onCl
   if (MEMORY_RESONANCE_IDS.has(defId)) {
     cardSynergies.push({ tag: "memory-resonance", label: "👁 Memory Resonance +3% (w/ Gojo or Geto)" });
   }
-  const domainInfo = DOMAIN_ELIGIBLE.has(def.rarity) ? getDomainDesc(defId) : null;
+  const domainInfo = DOMAIN_ELIGIBLE.has(def.rarity) ? describeDomain(defId) : null;
 
   return (
     <div
@@ -377,7 +330,7 @@ export default function CardGallery({
       if (ri !== 0) return ri;
       return b.basePoints - a.basePoints;
     })
-    .filter(([id, def]) => {
+    .filter(([, def]) => {
       if (rarityFilter !== "ALL" && def.rarity !== rarityFilter) return false;
       if (roleFilter !== "ALL" && def.affinity !== roleFilter) return false;
       if (search && !def.name.toLowerCase().includes(search.toLowerCase())) return false;

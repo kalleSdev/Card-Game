@@ -28,10 +28,10 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   }
 }
 import type { PlayerId, CardDef } from "@cg/contracts";
-import type { BattleState, BattleCard, BattlePlayer, BattleIntent, SpellCard, PendingDomainAction } from "../battleEngine";
+import type { BattleState, BattleCard, BattlePlayer, BattleIntent, SpellCard } from "../battleEngine";
 import { createBattleEngine, createBattleState, DOMAIN_BATTLE_EFFECTS, BATTLE_SYNERGY_RULES, CARD_PERKS } from "../battleEngine";
-import type { DomainEffect } from "../battleEngine";
 import BattleArena from "../components/BattleArena";
+import { describeDomain } from "../domainText";
 import type { PlayerDraftResult } from "./DraftBattleScreen";
 import CharacterCard from "../components/CharacterCard";
 import PlayerIcon from "../components/PlayerIcon";
@@ -64,46 +64,13 @@ function HoverTooltip({ x, y, children }: { x: number; y: number; children: Reac
   );
 }
 
-function buildDomainDesc(defId: string, d: { name: string; effect: DomainEffect; grantSpell?: { name: string; desc: string }; secondEffect?: DomainEffect }) {
-  const e = d.effect;
-  const grantSuffix = defId === "gojo-base"
-    ? " Grants Hollow Purple (5 dmg), +5 energy, and unlimited GET SPELL this turn. Filling twice grants 2 Hollow Purples."
-    : d.grantSpell ? ` Also grants "${d.grantSpell.name}" — ${d.grantSpell.desc}.` : "";
-  let desc = "Activates a powerful cursed technique.";
-  if (e.kind === "STUN_ENEMY_BOARD")       desc = `Fully immobilizes all enemies for ${e.turns} turn${e.turns > 1 ? "s" : ""} — no actions allowed.`;
-  else if (e.kind === "DAMAGE_ALL_ENEMIES") desc = `Deals ${e.amount} damage split across all enemies.`;
-  else if (e.kind === "BUFF_OWN_BOARD")     desc = `Gives own board +${e.atkBonus} ATK / +${e.hpBonus} HP for ${e.turns} turn${e.turns > 1 ? "s" : ""}.`;
-  else if (e.kind === "SPAWN_ENTITIES")     desc = `Spawns ${e.count}× ${e.atk}/${e.hp} Cursed Spirits on your board.`;
-  else if (e.kind === "GRANT_RANDOM_SPELLS") desc = `Grants ${e.count} random synergy spells.`;
-  else if (e.kind === "REDUCE_COSTS")       desc = `All cards cost ${e.amount} less for ${e.turns} turn${e.turns > 1 ? "s" : ""}.`;
-  else if (e.kind === "GRANT_SPELL")        desc = `Grants spell: "${e.spellName}" — ${e.spellDesc}.`;
-  else if (e.kind === "BUFF_LEADER_PERMANENT") desc = e.atk > 0 && e.hp > 0 ? `Leader gains +${e.atk} ATK / +${e.hp} HP permanently.` : e.atk > 0 ? `Leader gains +${e.atk} ATK permanently.` : `Leader gains +${e.hp} HP permanently.`;
-  else if (e.kind === "SHEEPIFY_ENEMY_CARDS") desc = `Choose ${e.count} enemy board cards to turn into 1/1 sheep.`;
-  else if (e.kind === "SUKUNA_BOARD_MODE")  desc = "Wipes all board cards. Sukuna enters as a 3/15 playing card — always targetable. His death ends the match.";
-  else if (e.kind === "MAHORAGA_BOARD_MODE") desc = "Mahoraga enters as a 1/25 board card. Gains +1 ATK each time he's hit. His death ends the match.";
-  else if (e.kind === "TAKABA_BOARD_MODE") desc = "Every card on BOTH boards becomes a 1/1 sheep. Takaba enters the board as a 1/15 card — his death ends the match.";
-  else if (e.kind === "SUMMON_RIKA_AND_COPY") desc = "Summons Rika (5/5 Cursed Spirit). Grants Cursed Copy — place a 3/3 copy of any board card.";
-  else if (e.kind === "KILL_ALL_BOARD")     desc = "Destroys all non-leader cards on both sides.";
-  let secondDesc: string | undefined;
-  if (d.secondEffect) {
-    const s = d.secondEffect;
-    if (s.kind === "GRANT_SPELL") secondDesc = `2nd fill: grants "${s.spellName}" — ${s.spellDesc}.`;
-    else if (s.kind === "BUFF_LEADER_PERMANENT") secondDesc = `2nd fill: leader gains +${s.atk} ATK / +${s.hp} HP permanently.`;
-    else if (s.kind === "SUMMON_RIKA_AND_COPY") secondDesc = "2nd fill: summon Rika (5/5) again — this time she arrives with a Shield.";
-    else if (s.kind === "TAKABA_BOARD_MODE") secondDesc = "2nd fill: every card on both boards becomes a 1/1 sheep, and Takaba enters the board as a 1/15 card.";
-    else if (s.kind === "SPAWN_ENTITIES") secondDesc = `2nd fill: spawns ${s.count}× ${s.atk}/${s.hp} entity.`;
-    else if (s.kind === "GRANT_RANDOM_SPELLS") secondDesc = `2nd fill: grants ${s.count} more random spells.`;
-    else if (s.kind === "SHEEPIFY_ENEMY_CARDS") secondDesc = `2nd fill: choose ${s.count} more enemy cards to sheepify.`;
-  }
-  return { desc: desc + grantSuffix, secondDesc };
-}
 
 // ── DomainBadge — hoverable 🌀 DOMAIN tag ────────────────────────────────────
 function DomainBadge({ defId }: { defId: string }) {
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
   const d = DOMAIN_BATTLE_EFFECTS[defId];
   if (!d) return null;
-  const { desc, secondDesc } = buildDomainDesc(defId, d);
+  const { desc, secondDesc } = describeDomain(defId) ?? { desc: "", secondDesc: undefined };
   return (
     <>
       <div
@@ -577,8 +544,6 @@ function HandCardView({
   const def = cardDb[card.defId];
   const cost = Math.max(0, card.cost - costReduction);
   const canAfford = energy >= cost;
-  const hpPct   = Math.max(0, Math.min(100, (card.currentHp / card.maxHp) * 100));
-  const hpColor = hpPct > 60 ? "#44ff88" : hpPct > 30 ? "#ffcc00" : "#ff4444";
 
   return (
     <motion.div
@@ -883,7 +848,7 @@ function CenteredLeader({
 // ── LeaderRightPanel — player's leader shown as a right-column panel ──────────
 function LeaderRightPanel({
   leader, cardDb, playerName, playerIcon,
-  selected, isVacant, isHit, leaderShields = 0,
+  isVacant, isHit, leaderShields = 0,
   domainMeter, domainCooldown, onDomainActivate,
   onSelect,
 }: {
@@ -1363,47 +1328,6 @@ function BoardParticles() {
 }
 
 // ── Handoff overlay ───────────────────────────────────────────────────────────
-function HandoffOverlay({ name, icon, onReady }: { name: string; icon: string; onReady: () => void }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      style={{
-        position: "fixed", inset: 0, zIndex: 100,
-        background: "rgba(2,2,10,0.97)",
-        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 24,
-      }}
-    >
-      <motion.div
-        initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.15 }}
-        style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}
-      >
-        <div style={{ fontSize: 11, letterSpacing: 6, color: "#334" }}>TURN END</div>
-        <motion.div
-          animate={{ boxShadow: ["0 0 24px #ffcc0033", "0 0 48px #ffcc0077", "0 0 24px #ffcc0033"] }}
-          transition={{ duration: 1.4, repeat: Infinity }}
-          style={{ borderRadius: "50%", overflow: "hidden", border: "3px solid #ffcc0055" }}
-        >
-          <PlayerIcon icon={icon} size={80} style={{ display: "block" }} />
-        </motion.div>
-        <div style={{ fontSize: 34, fontWeight: 900, letterSpacing: 4, color: "#fff" }}>PASS TO</div>
-        <div style={{ fontSize: 40, fontWeight: 900, color: "#ffcc00", letterSpacing: 2 }}>{name}</div>
-        <div style={{ fontSize: 9, color: "#334", letterSpacing: 4 }}>COVER YOUR SCREEN, THEN CONTINUE</div>
-      </motion.div>
-      <motion.button
-        initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.6 }}
-        whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-        onClick={onReady}
-        style={{
-          padding: "14px 52px",
-          background: "linear-gradient(135deg, #1a1a3a, #2a1a4a)",
-          border: "2px solid #4a4a7a", borderRadius: 12,
-          color: "#aaa", fontSize: 13, fontWeight: 900, letterSpacing: 4,
-          cursor: "pointer", fontFamily: "inherit",
-        }}
-      >I'M READY →</motion.button>
-    </motion.div>
-  );
-}
 
 // ── Domain flash ──────────────────────────────────────────────────────────────
 function DomainFlash({ name, onDone }: { name: string; onDone: () => void }) {
@@ -2084,7 +2008,6 @@ export default function BattleBoardScreen({
     pendingPerk.defId === "hanami"
   );
   const enemyTargeting = battleState.pendingAttackerId !== null || pendingSpellId !== null || battleState.pendingDomainAction !== null || perkEnemyStage;
-  const targeting = enemyTargeting || buffOneTargeting !== null || pendingShieldGrant || perkFriendStage;
 
   // Leader is only a valid target in specific modes
   const oppBoardCards = opp.board.filter(c => c !== null);

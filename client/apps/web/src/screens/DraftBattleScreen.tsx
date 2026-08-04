@@ -8,7 +8,8 @@ import { BG } from "../backgrounds";
 import AmbientCanvas from "../components/AmbientCanvas";
 import AmbientOverlay from "../components/AmbientOverlay";
 import type { Profile } from "../profiles";
-import { BATTLE_SYNERGY_RULES, DOMAIN_BATTLE_EFFECTS, deriveStats } from "../battleEngine";
+import { BATTLE_SYNERGY_RULES, deriveStats } from "../battleEngine";
+import { describeDomain } from "../domainText";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface PlayerDraftResult {
@@ -177,66 +178,6 @@ function getSynergyBadges(def: CardDef, pickedIds: string[], cardDb: Record<stri
 }
 
 // ── Domain effect human-readable description ─────────────────────────────────
-function domainEffectDesc(defId: string): { name: string; desc: string } {
-  // Toji has no traditional domain — describe his passive
-  if (defId === "toji") return {
-    name: "Heavenly Restriction",
-    desc: "Passive: 1 ATK. Can attack any card on the board, never takes counter damage. Domain meter fills → grants Toji Strike (4 damage). Fills again → another Toji Strike.",
-  };
-  const d = DOMAIN_BATTLE_EFFECTS[defId];
-  if (!d) return { name: "Cursed Technique", desc: "Buffs own board cards." };
-  const e = d.effect;
-  let desc = "";
-  const bonusSpellSuffix = defId === "gojo-base"
-    ? " Grants Hollow Purple (deal 5 damage to any enemy), +5 energy, and unlimited GET SPELL this turn. Filling meter twice gives 2 Hollow Purples."
-    : d.grantSpell ? ` Also grants "${d.grantSpell.name}" — ${d.grantSpell.desc}.` : "";
-  const secondSuffix = d.secondEffect
-    ? (() => {
-        const s = d.secondEffect;
-        if (s.kind === "GRANT_SPELL") return ` 2nd fill: gains "${s.spellName}" — ${s.spellDesc}.`;
-        if (s.kind === "BUFF_LEADER_PERMANENT") return ` 2nd fill: leader gains +${s.atk} ATK / +${s.hp} HP permanently.`;
-        if (s.kind === "SHEEPIFY_ENEMY_LEADER") return " 2nd fill: enemy leader becomes a 1/7 sheep.";
-        if (s.kind === "SUMMON_RIKA_AND_COPY") return " 2nd fill: summon Rika (5/5) again — this time she arrives with a Shield.";
-        if (s.kind === "TAKABA_BOARD_MODE") return " 2nd fill: every card on both boards becomes a 1/1 sheep, and Takaba enters the board as a 1/15 card.";
-        if (s.kind === "STUN_ENEMY_BOARD") return ` 2nd fill: stun enemy board again.`;
-        if (s.kind === "SPAWN_ENTITIES") return ` 2nd fill: spawns ${s.count}× ${s.atk}/${s.hp} entity.`;
-        if (s.kind === "GRANT_RANDOM_SPELLS") return ` 2nd fill: grants ${s.count} more random spells.`;
-        if (s.kind === "SHEEPIFY_ENEMY_CARDS") return ` 2nd fill: choose ${s.count} more enemy cards to sheepify.`;
-        return " 2nd fill: activates a secondary effect.";
-      })()
-    : "";
-  switch (e.kind) {
-    case "STUN_ENEMY_BOARD":       desc = `Fully immobilizes enemy for ${e.turns} turn${e.turns > 1 ? "s" : ""} (no actions allowed).`; break;
-    case "DAMAGE_ALL_ENEMIES":     desc = `Deals ${e.amount} damage split across all enemies.`; break;
-    case "BUFF_OWN_BOARD":         desc = `Gives own board +${e.atkBonus} ATK / +${e.hpBonus} HP for ${e.turns} turn${e.turns > 1 ? "s" : ""}.`; break;
-    case "HEAL_LEADER":            desc = `Restores ${e.amount} HP to your leader.`; break;
-    case "DRAW_CARDS":             desc = `Draw ${e.count} extra card${e.count > 1 ? "s" : ""}.`; break;
-    case "REDUCE_COSTS":           desc = `All cards cost ${e.amount} less for ${e.turns} turn${e.turns > 1 ? "s" : ""}.`; break;
-    case "KILL_ALL_BOARD":         desc = "Destroys all non-leader cards on both sides."; break;
-    case "SPAWN_ENTITIES":         desc = `Spawns ${e.count}× ${e.atk}/${e.hp} Cursed Spirits on your board.`; break;
-    case "GRANT_RANDOM_SPELLS":    desc = `Grants ${e.count} random synergy spells.`; break;
-    case "PERMANENT_LEADER_ATK":   desc = `Leader gains +${e.atk} permanent ATK. Counter ${e.counterDmg} dmg whenever attacked.`; break;
-    case "CHOOSE_KILL_ENEMIES":    desc = `Choose ${e.count} enemy board cards to instantly destroy.`; break;
-    case "COPY_ENEMY_CARD":        desc = "Copy one enemy board card (−1 ATK, −1 HP) onto your board."; break;
-    case "HEAL_AND_KILL_ONE":      desc = `Heal your leader for ${e.healAmount} HP, then destroy one enemy card.`; break;
-    case "SHEEPIFY_BOARD":         desc = "All board cards become 1/1 sheep."; break;
-    case "SHEEPIFY_ENEMY_CARDS":   desc = `Choose ${e.count} enemy board cards to turn into 1/1 sheep.`; break;
-    case "SNEAK_ATTACK_DOMAIN":    desc = `Deal ${e.amount} damage to any target — no counter damage.`; break;
-    case "GRANT_SPELL":            desc = `Grants spell: "${e.spellName}" — ${e.spellDesc}.`; break;
-    case "BUFF_LEADER_PERMANENT":  desc = e.atk > 0 && e.hp > 0
-      ? `Leader gains +${e.atk} ATK / +${e.hp} HP permanently.`
-      : e.atk > 0 ? `Leader gains +${e.atk} ATK permanently.`
-      : `Leader gains +${e.hp} HP permanently.`; break;
-    case "SUKUNA_BOARD_MODE":      desc = "Wipes all board cards. Sukuna enters the board as a 3/15 playing card — always targetable. Leader death ends the match."; break;
-    case "MAHORAGA_BOARD_MODE":    desc = "Mahoraga enters the board as a 1/25 card. Each hit he receives gives him +1 ATK (adaptation). Leader card death ends the match."; break;
-    case "TAKABA_BOARD_MODE":      desc = "Every card on both boards becomes a 1/1 sheep. Takaba enters the board as a 1/15 card — leader card death ends the match."; break;
-    case "BUFF_LEADER_PERMANENT":  desc = `Permanently grants your leader +${e.atk} ATK / +${e.hp} HP.`; break;
-    case "SHEEPIFY_ENEMY_LEADER":  desc = "Transforms the enemy leader into a 1/7 sheep."; break;
-    case "SUMMON_RIKA_AND_COPY":   desc = "Summons Rika Orimoto (5/5 Cursed Spirit) onto your board. Grants Cursed Copy spell — place a 3/3 copy of any board card."; break;
-    default:                       desc = "Activates a powerful cursed technique.";
-  }
-  return { name: d.name, desc: desc + bonusSpellSuffix + secondSuffix };
-}
 
 // ── Small corner checkmark on selected card ───────────────────────────────────
 function SelectedBadge() {
@@ -293,7 +234,7 @@ function LeaderPickPhase({ pid, profile, color, options, cardDb, onPick }: {
           const def = cardDb[id];
           if (!def) return null;
           const isSelected = selected === id;
-          const domain = domainEffectDesc(id);
+          const domain = describeDomain(id);
           return (
             <motion.div key={id} onClick={() => setSelected(id)}
               whileHover={{ y: -10, scale: 1.04 }} whileTap={{ scale: 0.97 }}
@@ -317,8 +258,8 @@ function LeaderPickPhase({ pid, profile, color, options, cardDb, onPick }: {
                   <div style={{ fontSize: 9, color: "#cc44ff", letterSpacing: 2, fontWeight: 900, marginBottom: 5 }}>
                     ✦ DOMAIN
                   </div>
-                  <div style={{ fontSize: 13, color: "#fff", fontWeight: 800, marginBottom: 6, lineHeight: 1.25 }}>{domain.name}</div>
-                  <div style={{ fontSize: 11, color: "#ddd", lineHeight: 1.55 }}>{domain.desc}</div>
+                  <div style={{ fontSize: 13, color: "#fff", fontWeight: 800, marginBottom: 6, lineHeight: 1.25 }}>{domain?.name}</div>
+                  <div style={{ fontSize: 11, color: "#ddd", lineHeight: 1.55 }}>{domain?.desc}</div>
                 </div>
               </div>
             </motion.div>
@@ -344,7 +285,7 @@ function LeaderPickPhase({ pid, profile, color, options, cardDb, onPick }: {
 }
 
 // ── Card draft pick ───────────────────────────────────────────────────────────
-function CardDraftPhase({ pid, profile, color, pickIndex, options, cardDb, pickedSoFar, leaderId, onPick }: {
+function CardDraftPhase({ profile, color, pickIndex, options, cardDb, pickedSoFar, leaderId, onPick }: {
   pid: PlayerId; profile: Profile; color: string;
   pickIndex: number; options: string[]; cardDb: Record<string, CardDef>;
   pickedSoFar: string[]; leaderId: string; onPick: (id: string) => void;
@@ -665,7 +606,7 @@ export default function DraftBattleScreen({
           const draft = getDraft(pid);
           const leaderId = draft.leaderId ?? "";
           const leaderDef = cardDb[leaderId];
-          const leaderDomain = leaderId ? domainEffectDesc(leaderId) : null;
+          const leaderDomain = leaderId ? describeDomain(leaderId) : null;
           const pickedSoFar = getAllPicked(draft).filter(Boolean).slice(1);
           const color = PLAYER_COLOR[pid];
           return (
