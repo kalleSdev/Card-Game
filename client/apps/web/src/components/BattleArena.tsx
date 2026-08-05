@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "framer-motion";
+import { DOMAIN_COLOR, DEFAULT_DOMAIN_COLOR } from "../theme";
 
 /**
  * BattleArena — a layered 2.5D battlefield backdrop.
@@ -287,7 +288,15 @@ function Crow({ delay, top, dur }: { delay: number; top: string; dur: number }) 
 }
 
 // ── Main arena ────────────────────────────────────────────────────────────────
-export default function BattleArena({ intensity = 1 }: { intensity?: number }) {
+export default function BattleArena({
+  domainLeaderId = null,
+}: {
+  /** Leader whose domain is currently active, or null. Floods the arena with their colour. */
+  domainLeaderId?: string | null;
+}) {
+  const domainColor = domainLeaderId
+    ? (DOMAIN_COLOR[domainLeaderId] ?? DEFAULT_DOMAIN_COLOR)
+    : null;
   const rawX = useMotionValue(0);
   const rawY = useMotionValue(0);
   const px = useSpring(rawX, { stiffness: 60, damping: 22, mass: 0.6 });
@@ -465,8 +474,11 @@ export default function BattleArena({ intensity = 1 }: { intensity?: number }) {
           <span key={i} style={{
             position: "absolute", bottom: -10, left: `${e.left}%`,
             width: e.size, height: e.size, borderRadius: "50%",
-            background: e.warm ? "rgba(255,180,90,0.9)" : "rgba(190,140,255,0.85)",
-            boxShadow: e.warm ? "0 0 7px rgba(255,160,60,0.8)" : "0 0 7px rgba(170,110,255,0.8)",
+            background: domainColor ?? (e.warm ? "rgba(255,180,90,0.9)" : "rgba(190,140,255,0.85)"),
+            boxShadow: domainColor
+              ? `0 0 9px ${domainColor}`
+              : e.warm ? "0 0 7px rgba(255,160,60,0.8)" : "0 0 7px rgba(170,110,255,0.8)",
+            transition: "background 0.8s, box-shadow 0.8s",
             ["--cg-drift" as string]: e.drift,
             animation: `cg-ember ${e.dur}s linear ${e.delay}s infinite`,
             opacity: 0,
@@ -539,17 +551,51 @@ export default function BattleArena({ intensity = 1 }: { intensity?: number }) {
         </div>
       ))}
 
-      {/* Domain surge — brightens the whole arena while a domain is active */}
-      {intensity > 1 && (
-        <motion.div
-          animate={{ opacity: [0.10, 0.24, 0.10] }}
-          transition={{ duration: 2.2, repeat: Infinity }}
-          style={{
-            position: "absolute", inset: 0, zIndex: 10,
-            background: "radial-gradient(ellipse at 50% 50%, rgba(190,90,255,0.30), transparent 68%)",
-          }}
-        />
-      )}
+      {/* Domain takeover — the arena adopts the active leader's signature colour */}
+      <AnimatePresence>
+        {domainColor && (
+          <motion.div
+            key="domain-flood"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.9 }}
+            style={{ position: "absolute", inset: 0, zIndex: 10, pointerEvents: "none" }}
+          >
+            {/* Colour wash from the horizon outward */}
+            <motion.div
+              animate={{ opacity: [0.22, 0.42, 0.22] }}
+              transition={{ duration: 2.6, repeat: Infinity }}
+              style={{
+                position: "absolute", inset: 0,
+                background: `radial-gradient(ellipse 80% 60% at 50% 50%, ${domainColor}44, transparent 70%)`,
+              }}
+            />
+            {/* Edge bleed — the domain closing in around the board */}
+            <motion.div
+              animate={{ opacity: [0.35, 0.6, 0.35] }}
+              transition={{ duration: 3.4, repeat: Infinity }}
+              style={{
+                position: "absolute", inset: 0,
+                boxShadow: `inset 0 0 220px ${domainColor}55, inset 0 0 90px ${domainColor}33`,
+              }}
+            />
+            {/* Sigil ring that snaps in when the domain opens */}
+            <motion.div
+              initial={{ scale: 0.6, opacity: 0.9 }}
+              animate={{ scale: 1.35, opacity: 0 }}
+              transition={{ duration: 1.2, ease: "easeOut" }}
+              style={{
+                position: "absolute", left: "50%", top: "48%",
+                width: 620, height: 620, marginLeft: -310, marginTop: -310,
+                borderRadius: "50%",
+                border: `2px solid ${domainColor}`,
+                boxShadow: `0 0 60px ${domainColor}88`,
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
