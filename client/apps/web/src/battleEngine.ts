@@ -1240,6 +1240,10 @@ function processTurnStart(state: BattleState): { state: BattleState; drew: strin
   p = { ...p, board: p.board.map(c => c?.beastDecay ? { ...c, currentHp: c.currentHp - 1 } : c) };
   p = { ...p, board: p.board.map(c => (c && c.currentHp <= 0) ? null : c) };
 
+  // A domain lasts through the opponent's reply and expires when its caster's next turn begins.
+  // Without this it was set on activation and never cleared.
+  if (p.domainActive) p = { ...p, domainActive: false };
+
   // Domain cooldown
   if (p.domainCooldown > 0) p = { ...p, domainCooldown: p.domainCooldown - 1 };
 
@@ -2347,7 +2351,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
             atk: 1, baseAtk: 1,
             currentHp: 1, maxHp: 1,
           };
-          let o2 = { ...state.players[opp], board: state.players[opp].board.map(c => c?.instanceId === tgt.instanceId ? sheepified : c) };
+          const o2 = { ...state.players[opp], board: state.players[opp].board.map(c => c?.instanceId === tgt.instanceId ? sheepified : c) };
           const remaining = pda.remaining - 1;
           const nextPda = remaining > 0 ? { ...pda, remaining } : null;
           events.push({ type: "DOMAIN_TARGET_DONE", pid });

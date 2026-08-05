@@ -117,7 +117,7 @@ describe("setup and invariants", () => {
     const before = JSON.stringify(s);
     const target = boardOf(s, "P2")[0];
     const attacker = boardOf(s, "P1")[0] ?? s.players.P1.leader;
-    let next = apply(s, { type: "SELECT_ATTACKER", pid: "P1", instanceId: attacker.instanceId }).state;
+    const next = apply(s, { type: "SELECT_ATTACKER", pid: "P1", instanceId: attacker.instanceId }).state;
     apply(next, { type: "ATTACK_CARD", pid: "P1", targetInstanceId: target.instanceId });
     expect(JSON.stringify(s)).toBe(before);
   });
@@ -234,6 +234,19 @@ describe("turn flow", () => {
     expect(res.state.activePlayer).toBe("P2");
     expect(res.state.players.P2.energy).toBe(res.state.players.P2.maxEnergy);
     expect(res.events.some(e => e.type === "TURN_START")).toBe(true);
+  });
+
+  it("expires an active domain when its caster's next turn begins", () => {
+    let s = setup();
+    s = { ...s, players: { ...s.players, P1: { ...s.players.P1, domainActive: true } } };
+
+    // Opponent's reply turn — the domain is still up
+    s = apply(s, { type: "END_TURN", pid: "P1" }).state;
+    expect(s.players.P1.domainActive).toBe(true);
+
+    // Back to the caster — it has run its course
+    s = apply(s, { type: "END_TURN", pid: "P2" }).state;
+    expect(s.players.P1.domainActive).toBe(false);
   });
 
   it("keeps a stunned card flagged for the turn it loses", () => {

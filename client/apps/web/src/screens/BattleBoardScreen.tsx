@@ -1583,7 +1583,6 @@ export default function BattleBoardScreen({
   useEffect(() => {
     if (mulliganStep !== "BATTLE" || battleState.winner || gameOverShown) return;
     setTurnTimeLeft(TURN_SECONDS);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [battleState.activePlayer, battleState.turn, mulliganStep, battleState.winner, gameOverShown]);
 
   useEffect(() => {
@@ -2120,7 +2119,13 @@ export default function BattleBoardScreen({
       overflow: "hidden", position: "relative",
     }}>
       {/* Layered 2.5D shrine arena — parallax backdrop with interactive props */}
-      <BattleArena intensity={player.domainActive || opp.domainActive ? 2 : 1} />
+      <BattleArena
+        domainLeaderId={
+          player.domainActive ? player.leader.defId
+          : opp.domainActive ? opp.leader.defId
+          : null
+        }
+      />
 
       {/* ── OPPONENT LEADER (top, centered) ──────────────────────────────── */}
       <div style={{
