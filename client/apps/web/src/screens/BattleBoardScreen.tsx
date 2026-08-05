@@ -31,6 +31,7 @@ import type { PlayerId, CardDef } from "@cg/contracts";
 import type { BattleState, BattleCard, BattlePlayer, BattleIntent, SpellCard } from "../battleEngine";
 import { createBattleEngine, createBattleState, DOMAIN_BATTLE_EFFECTS, BATTLE_SYNERGY_RULES, CARD_PERKS } from "../battleEngine";
 import BattleArena from "../components/BattleArena";
+import { DOMAIN_COLOR, DEFAULT_DOMAIN_COLOR } from "../theme";
 import { describeDomain } from "../domainText";
 import type { PlayerDraftResult } from "./DraftBattleScreen";
 import CharacterCard from "../components/CharacterCard";
@@ -865,7 +866,7 @@ function LeaderRightPanel({
 
   return (
     <div style={{
-      width: 252, flexShrink: 0, position: "relative",
+      width: LEADER_PANEL_WIDTH, flexShrink: 0, position: "relative",
       background: "rgba(4,4,16,0.88)", borderLeft: "1px solid #111128",
       display: "flex", flexDirection: "row", alignItems: "stretch",
       justifyContent: "center",
@@ -1178,19 +1179,28 @@ function BoardRow({
   );
 }
 
+// Right-hand column of the player's row: domain orb (130) + leader panel (252) + gutter (40).
+// A spacer of the same width sits on the left so the board row stays centred on screen.
+const DOMAIN_ORB_WIDTH = 130;
+const LEADER_PANEL_WIDTH = 252;
+const RIGHT_COLUMN_GUTTER = 40;
+const RIGHT_COLUMN_WIDTH = DOMAIN_ORB_WIDTH + LEADER_PANEL_WIDTH + RIGHT_COLUMN_GUTTER;
+
 // ── DomainOrb — big status circle between board and leader; click to activate ──
 function DomainOrb({
-  meter, cooldown, onActivate,
+  meter, cooldown, leaderId, onActivate,
 }: {
-  meter: number; cooldown: number; onActivate: () => void;
+  meter: number; cooldown: number; leaderId: string; onActivate: () => void;
 }) {
   const ready = meter >= 100 && cooldown === 0;
+  // When it's ready to fire, the orb previews the colour the arena will turn.
+  const dc = DOMAIN_COLOR[leaderId] ?? DEFAULT_DOMAIN_COLOR;
   const pct = Math.min(100, Math.round(meter));
   const size = 104;
   return (
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      width: size + 26, flexShrink: 0, position: "relative", zIndex: 3,
+      width: DOMAIN_ORB_WIDTH, flexShrink: 0, position: "relative", zIndex: 3,
     }}>
       <motion.div
         onClick={ready ? onActivate : undefined}
@@ -1198,9 +1208,9 @@ function DomainOrb({
         whileTap={ready ? { scale: 0.94 } : {}}
         animate={ready
           ? { boxShadow: [
-              "0 0 24px #aa44ff88, 0 0 60px #aa44ff33, inset 0 0 26px #aa44ff44",
-              "0 0 44px #cc66ffcc, 0 0 90px #aa44ff55, inset 0 0 34px #cc66ff66",
-              "0 0 24px #aa44ff88, 0 0 60px #aa44ff33, inset 0 0 26px #aa44ff44",
+              `0 0 24px ${dc}88, 0 0 60px ${dc}33, inset 0 0 26px ${dc}44`,
+              `0 0 44px ${dc}cc, 0 0 90px ${dc}55, inset 0 0 34px ${dc}66`,
+              `0 0 24px ${dc}88, 0 0 60px ${dc}33, inset 0 0 26px ${dc}44`,
             ] }
           : {}}
         transition={ready ? { duration: 1.4, repeat: Infinity } : {}}
@@ -1210,11 +1220,11 @@ function DomainOrb({
           position: "relative",
           display: "flex", alignItems: "center", justifyContent: "center",
           background: ready
-            ? "radial-gradient(circle at 50% 38%, #3a1060, #14042a 70%)"
+            ? `radial-gradient(circle at 50% 38%, ${dc}33, #12041f 70%)`
             : cooldown > 0
             ? "radial-gradient(circle at 50% 38%, #16161f, #0a0a12 70%)"
             : "radial-gradient(circle at 50% 38%, #1d1030, #0c0618 70%)",
-          border: ready ? "2px solid #cc66ffcc" : "2px solid rgba(140,110,200,0.25)",
+          border: ready ? `2px solid ${dc}cc` : "2px solid rgba(140,110,200,0.25)",
           boxShadow: ready ? undefined : "0 4px 18px rgba(0,0,0,0.6), inset 0 0 18px rgba(90,50,160,0.15)",
           userSelect: "none",
         }}
@@ -1236,7 +1246,7 @@ function DomainOrb({
             transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
             style={{
               position: "absolute", inset: -8, borderRadius: "50%",
-              border: "2px dashed rgba(204,102,255,0.5)",
+              border: `2px dashed ${dc}88`,
               pointerEvents: "none",
             }}
           />
@@ -1253,7 +1263,7 @@ function DomainOrb({
               position: "absolute",
               left: `${18 + i * 20}%`, bottom: "12%",
               width: 4, height: 4, borderRadius: "50%",
-              background: "#dd99ff", boxShadow: "0 0 8px #cc66ff",
+              background: dc, boxShadow: `0 0 8px ${dc}`,
               pointerEvents: "none",
             }}
           />
@@ -1266,7 +1276,7 @@ function DomainOrb({
                 transition={{ duration: 1.4, repeat: Infinity }}
                 style={{ fontSize: 24, marginBottom: 2 }}
               >🌀</motion.div>
-              <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: 1.5, color: "#eeccff", textShadow: "0 0 12px #cc66ff" }}>
+              <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: 1.5, color: "#fff", textShadow: `0 0 12px ${dc}` }}>
                 DOMAIN<br/>READY
               </div>
             </>
@@ -1290,7 +1300,7 @@ function DomainOrb({
         <motion.div
           animate={{ opacity: [0.6, 1, 0.6] }}
           transition={{ duration: 1.4, repeat: Infinity }}
-          style={{ marginTop: 6, fontSize: 8, fontWeight: 900, letterSpacing: 2, color: "#cc88ff" }}
+          style={{ marginTop: 6, fontSize: 8, fontWeight: 900, letterSpacing: 2, color: dc }}
         >CLICK TO UNLEASH</motion.div>
       )}
     </div>
@@ -2395,6 +2405,9 @@ export default function BattleBoardScreen({
           style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0, background: "radial-gradient(ellipse at 50% 50%, #6600aa22, transparent 70%)" }}
         />
         <BoardParticles />
+        {/* Spacer matching the right-hand column (orb + leader panel + gutter) so the
+            board row centres on screen and lines up with the opponent's row above. */}
+        <div style={{ width: RIGHT_COLUMN_WIDTH, flexShrink: 0 }} aria-hidden />
         {/* Board area */}
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", zIndex: 1 }}>
           <div style={{ position: "absolute", top: 5, left: 16, fontSize: 8, letterSpacing: 4, color: "#4a7a80", fontWeight: 800, zIndex: 1 }}>🛡 YOUR BOARD</div>
@@ -2416,7 +2429,7 @@ export default function BattleBoardScreen({
               </div>
             ) : null;
           })()}
-          <div style={{ marginLeft: 250, transform: "scale(1.2)", transformOrigin: "center center" }}>
+          <div style={{ transform: "scale(1.2)", transformOrigin: "center center" }}>
             <BoardRow
               board={player.board} cardDb={cardDb} cardScale={1.5}
               pendingId={battleState.pendingAttackerId}
@@ -2437,11 +2450,12 @@ export default function BattleBoardScreen({
         <DomainOrb
           meter={player.domainMeter}
           cooldown={player.domainCooldown}
+          leaderId={player.leader.defId}
           onActivate={() => dispatch({ type: "ACTIVATE_DOMAIN", pid })}
         />
 
         {/* Leader panel (right) — domain meter is now built-in on the left of the panel */}
-        <div style={{ marginRight: 40 }}>
+        <div style={{ marginRight: RIGHT_COLUMN_GUTTER }}>
           <LeaderRightPanel
             isHit={leaderHitPid === pid}
             leader={player.leader} cardDb={cardDb}
