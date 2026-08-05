@@ -31,7 +31,10 @@ import type { PlayerId, CardDef } from "@cg/contracts";
 import type { BattleState, BattleCard, BattlePlayer, BattleIntent, SpellCard } from "../battleEngine";
 import { createBattleEngine, createBattleState, DOMAIN_BATTLE_EFFECTS, BATTLE_SYNERGY_RULES, CARD_PERKS } from "../battleEngine";
 import BattleArena from "../components/BattleArena";
-import { DOMAIN_COLOR, DEFAULT_DOMAIN_COLOR } from "../theme";
+import RopeTimer from "../components/RopeTimer";
+import BattleLog from "../components/BattleLog";
+import type { LogEntry } from "../components/BattleLog";
+import { DOMAIN_COLOR, DEFAULT_DOMAIN_COLOR, COLOR } from "../theme";
 import { describeDomain } from "../domainText";
 import type { PlayerDraftResult } from "./DraftBattleScreen";
 import CharacterCard from "../components/CharacterCard";
@@ -537,28 +540,89 @@ function BoardCardView({
 
 // ── HandCardView ──────────────────────────────────────────────────────────────
 function HandCardView({
-  card, cardDb, energy, costReduction, onPlay,
+  card, cardDb, energy, costReduction, boardFull, isNew, onPlay,
 }: {
   card: BattleCard; cardDb: Record<string, CardDef>;
-  energy: number; costReduction: number; onPlay: () => void;
+  energy: number; costReduction: number;
+  boardFull: boolean; isNew?: boolean;
+  onPlay: () => void;
 }) {
   const def = cardDb[card.defId];
+  const [hovered, setHovered] = useState(false);
+  const [previewPos, setPreviewPos] = useState<{ x: number; y: number } | null>(null);
   const cost = Math.max(0, card.cost - costReduction);
   const canAfford = energy >= cost;
+  const playable = canAfford && !boardFull;
 
   return (
     <motion.div
-      onClick={canAfford ? onPlay : undefined}
-      whileHover={canAfford ? { y: -14, scale: 1.1 } : { y: -2, opacity: 0.7 }}
-      whileTap={canAfford ? { scale: 0.96 } : undefined}
-      transition={{ type: "spring", stiffness: 400, damping: 22 }}
-      style={{ position: "relative", cursor: canAfford ? "pointer" : "not-allowed", userSelect: "none", flexShrink: 0 }}
+      onClick={playable ? onPlay : undefined}
+      onHoverStart={(e) => {
+        setHovered(true);
+        const r = (e.target as HTMLElement)?.getBoundingClientRect?.();
+        if (r) setPreviewPos({ x: r.left + r.width / 2, y: r.top });
+      }}
+      onHoverEnd={() => { setHovered(false); setPreviewPos(null); }}
+      // Newly drawn cards sweep in from the deck side rather than just appearing
+      initial={isNew ? { opacity: 0, x: 90, y: 30, rotate: 14, scale: 0.7 } : false}
+      animate={{ opacity: 1, x: 0, y: 0, rotate: 0, scale: 1 }}
+      whileHover={playable ? { y: -18, scale: 1.12 } : { y: -3 }}
+      whileTap={playable ? { scale: 0.96 } : undefined}
+      transition={{ type: "spring", stiffness: 400, damping: 24 }}
+      style={{
+        position: "relative", userSelect: "none", flexShrink: 0,
+        cursor: playable ? "pointer" : "not-allowed",
+        zIndex: hovered ? 30 : 1,
+      }}
     >
+      {/* Playable ring — Hearthstone's "you can cast this" cue */}
+      {playable && (
+        <motion.div
+          animate={{ opacity: [0.45, 0.9, 0.45] }}
+          transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+          style={{
+            position: "absolute", inset: -3, borderRadius: 14, pointerEvents: "none", zIndex: 0,
+            boxShadow: `0 0 0 2px ${COLOR.hpGood}aa, 0 0 18px ${COLOR.hpGood}66`,
+          }}
+        />
+      )}
+
       <CharacterCard defId={card.defId} def={def} size="sm" dimmed={!canAfford} hideInfo
         costOverride={cost}
         statsOverlay={{ name: def?.name, atk: card.atk, hp: card.currentHp, maxHp: card.maxHp }}
       />
 
+      {/* Why it can't be played right now */}
+      {canAfford && boardFull && (
+        <div style={{
+          position: "absolute", bottom: 4, left: 0, right: 0, textAlign: "center",
+          fontSize: 7, fontWeight: 900, letterSpacing: 1, color: "#ffbb55",
+          background: "rgba(4,4,12,0.85)", padding: "2px 0", pointerEvents: "none",
+        }}>BOARD FULL</div>
+      )}
+
+      {/* Enlarged read of the card while hovering, portaled clear of the hand row */}
+      {hovered && previewPos && def && createPortal(
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9, y: 8 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.14 }}
+          style={{
+            position: "fixed",
+            left: Math.max(120, Math.min(previewPos.x, window.innerWidth - 120)),
+            top: previewPos.y - 20,
+            transform: "translate(-50%, -100%)",
+            pointerEvents: "none", zIndex: 9998,
+            filter: "drop-shadow(0 12px 34px rgba(0,0,0,0.85))",
+          }}
+        >
+          <CharacterCard defId={card.defId} def={def} size="lg" noHover
+            costOverride={cost}
+            statsOverlay={{ name: def?.name, atk: card.atk, hp: card.currentHp, maxHp: card.maxHp }}
+          />
+        </motion.div>,
+        document.body
+      )}
     </motion.div>
   );
 }
@@ -1479,6 +1543,17 @@ export default function BattleBoardScreen({
   const [turnBanner, setTurnBanner] = useState<{ key: number; pid: PlayerId } | null>(null);
   const shakeControls = useAnimationControls();
   const dmgKeyRef = useRef(0);
+  // Rolling readout of recent events, TFT style
+  const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
+  // Brief slow-motion on heavy hits — "hit stop" borrowed from fighting games,
+  // which is what makes a big Hearthstone swing land so hard
+  const [hitStop, setHitStop] = useState(false);
+
+  const pushLog = useCallback((entry: Omit<LogEntry, "id">) => {
+    const id = ++dmgKeyRef.current;
+    setLogEntries(prev => [...prev.slice(-5), { ...entry, id }]);
+    setTimeout(() => setLogEntries(prev => prev.filter(e => e.id !== id)), 5200);
+  }, []);
 
   const doReplace = (pid: PlayerId) => {
     if (mulliganReturning.size === 0) return;
@@ -1516,10 +1591,26 @@ export default function BattleBoardScreen({
         setTimeout(() => setSpellFlash(prev => prev?.key === key ? null : prev), 950);
       }
     }
+    // Snapshot names before the engine runs so the log can describe cards that die
+    const before = engine.getState();
+    const nameOf = (id: string): string => {
+      for (const pl of [before.players.P1, before.players.P2]) {
+        if (pl.leader.instanceId === id) return pl.leader.name;
+        const c = pl.board.find(b => b?.instanceId === id);
+        if (c) return c.name;
+      }
+      return "a card";
+    };
+
     const result = engine.apply(intent);
     setBattleState(result.state);
     for (const ev of result.events) {
-      if (ev.type === "DOMAIN_ACTIVATED") setDomainFlash(ev.name);
+      if (ev.type === "DOMAIN_ACTIVATED") {
+        setDomainFlash(ev.name);
+        pushLog({ pid: ev.pid, icon: "🌀", text: ev.name, tone: "domain" });
+      }
+      if (ev.type === "SPELL_CAST") pushLog({ pid: ev.pid, icon: "✦", text: "Spell cast", tone: "spell" });
+      if (ev.type === "CARD_DIED") pushLog({ pid: ev.pid, icon: "💀", text: `${nameOf(ev.instanceId)} destroyed`, tone: "death" });
       if (ev.type === "TURN_START" && ev.drew) { setDrewCardId(ev.drew); setTimeout(() => setDrewCardId(null), 700); }
       if (ev.type === "GAME_OVER") { setGameOverShown(true); return; }
 
@@ -1539,6 +1630,16 @@ export default function BattleBoardScreen({
         addHit(ev.targetId);
         addDmg(ev.targetId, ev.damage);
         if (ev.counterDamage > 0) { addHit(ev.attackerId); addDmg(ev.attackerId, ev.counterDamage); }
+        pushLog({
+          pid: ev.attackerPid, icon: "⚔",
+          text: `${nameOf(ev.attackerId)} hits ${nameOf(ev.targetId)} for ${ev.damage}`,
+          tone: "attack",
+        });
+        // Heavy blows briefly stall the frame so the impact reads
+        if (ev.damage >= 6) {
+          setHitStop(true);
+          setTimeout(() => setHitStop(false), 110);
+        }
       }
 
       if (ev.type === "ATTACK_LEADER") {
@@ -1553,6 +1654,15 @@ export default function BattleBoardScreen({
           x: [0, -mag, mag, -mag * 0.6, mag * 0.6, -mag * 0.25, 0],
           transition: { duration: 0.45, ease: "easeOut" },
         });
+        pushLog({
+          pid: ev.attackerPid, icon: "🩸",
+          text: `Leader struck for ${ev.damage} (${ev.leaderHpLeft} left)`,
+          tone: "attack",
+        });
+        if (ev.damage >= 5) {
+          setHitStop(true);
+          setTimeout(() => setHitStop(false), 130);
+        }
       }
 
       if (ev.type === "TURN_START") {
@@ -1566,7 +1676,7 @@ export default function BattleBoardScreen({
         setTimeout(() => setFreshIds(p => { const n = new Set(p); n.delete(ev.instanceId); return n; }), 600);
       }
     }
-  }, [engine]);
+  }, [engine, pushLog, shakeControls]);
 
   // Sync engine with post-mulligan React state when battle starts, then
   // advance past the DRAW phase so the first player draws their opening card.
@@ -2128,6 +2238,9 @@ export default function BattleBoardScreen({
       fontFamily: "'Segoe UI', system-ui, sans-serif",
       overflow: "hidden", position: "relative",
     }}>
+      {/* Rolling readout of recent events */}
+      <BattleLog entries={logEntries} />
+
       {/* Layered 2.5D shrine arena — parallax backdrop with interactive props */}
       <BattleArena
         domainLeaderId={
@@ -2242,7 +2355,10 @@ export default function BattleBoardScreen({
         </div>
 
         {/* Center: turn indicator + END TURN button side by side */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "center", position: "relative" }}>
+          {!timerPaused && (
+            <RopeTimer secondsLeft={turnTimeLeft} />
+          )}
           <div style={{
             fontSize: 10, fontWeight: 800, letterSpacing: 2,
             color: pid === "P1" ? "#4a9eff" : "#ff6666",
@@ -2250,18 +2366,39 @@ export default function BattleBoardScreen({
             padding: "3px 12px", borderRadius: 6,
             border: `1px solid ${pid === "P1" ? "#4a9eff33" : "#ff666633"}`,
           }}>{name}'s TURN</div>
-          <motion.button
-            onClick={handleEndTurn}
-            whileHover={{ scale: 1.05, boxShadow: "0 0 16px #44ff8844" }}
-            whileTap={{ scale: 0.95 }}
-            style={{
-              padding: "7px 28px",
-              background: "linear-gradient(135deg, #0a2a12, #0d3a16)",
-              border: "1px solid #44ff8833",
-              borderRadius: 8, color: "#44ff88", fontSize: 11, fontWeight: 900,
-              letterSpacing: 2, cursor: "pointer", fontFamily: "inherit",
-            }}
-          >END TURN →</motion.button>
+          {/* End turn — Hearthstone's button tells you whether you still have moves.
+              Amber and pulsing while something is left to do, calm green once you're spent. */}
+          {(() => {
+            const boardFull = player.board.every(s => s !== null);
+            const canPlayCard = !boardFull && player.cardPlayFrozen === 0 &&
+              player.hand.some(c => player.energy >= Math.max(0, c.cost - player.costReduction));
+            const canAttack = [player.leader, ...(player.board.filter(Boolean) as BattleCard[])]
+              .some(c => c.canAttack && !c.exhausted && c.stunTurns === 0);
+            const idle = canPlayCard || canAttack;
+            const accent = idle ? "#ffbb33" : COLOR.hpGood;
+            return (
+              <motion.button
+                onClick={handleEndTurn}
+                whileHover={{ scale: 1.05, boxShadow: `0 0 18px ${accent}66` }}
+                whileTap={{ scale: 0.95 }}
+                animate={idle
+                  ? { boxShadow: [`0 0 0 ${accent}00`, `0 0 20px ${accent}55`, `0 0 0 ${accent}00`] }
+                  : { boxShadow: `0 0 0 ${accent}00` }}
+                transition={idle ? { duration: 1.7, repeat: Infinity } : { duration: 0.3 }}
+                style={{
+                  padding: "7px 28px",
+                  background: idle
+                    ? "linear-gradient(135deg, #2e2004, #3d2a06)"
+                    : "linear-gradient(135deg, #0a2a12, #0d3a16)",
+                  border: `1px solid ${accent}55`,
+                  borderRadius: 8, color: accent, fontSize: 11, fontWeight: 900,
+                  letterSpacing: 2, cursor: "pointer", fontFamily: "inherit",
+                  minWidth: 148,
+                }}
+                title={idle ? "You still have moves available" : "Nothing left to do this turn"}
+              >{idle ? "END TURN" : "END TURN →"}</motion.button>
+            );
+          })()}
 
           {/* Turn timer — countdown + draining bar */}
           {(() => {
@@ -2696,21 +2833,17 @@ export default function BattleBoardScreen({
             {player.hand.map(card => {
               const isDrawn = drewCardId === card.instanceId;
               return (
-                <motion.div
-                  key={card.instanceId}
-                  initial={isDrawn ? { y: 60, opacity: 0 } : false}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={isDrawn ? { type: "spring", stiffness: 380, damping: 22 } : {}}
-                  style={{ flexShrink: 0, position: "relative", zIndex: 10 }}
-                >
+                <div key={card.instanceId} style={{ flexShrink: 0, position: "relative", zIndex: 10 }}>
                   <div style={{ transform: "scale(1.25)", transformOrigin: "bottom center" }}>
                     <HandCardView
                       card={card} cardDb={cardDb}
                       energy={player.energy} costReduction={player.costReduction}
+                      boardFull={player.board.every(s => s !== null)}
+                      isNew={isDrawn}
                       onPlay={() => handlePlayCard(card.instanceId)}
                     />
                   </div>
-                </motion.div>
+                </div>
               );
             })}
             {player.hand.length === 0 && (
@@ -2813,6 +2946,23 @@ export default function BattleBoardScreen({
         </svg>
         );
       })()}
+
+      {/* Hit stop — a beat of white-out on heavy impacts */}
+      <AnimatePresence>
+        {hitStop && (
+          <motion.div
+            key="hitstop"
+            initial={{ opacity: 0.32 }}
+            animate={{ opacity: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            style={{
+              position: "fixed", inset: 0, zIndex: 70, pointerEvents: "none",
+              background: "rgba(255,255,255,0.9)", mixBlendMode: "overlay",
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ── Overlays ─────────────────────────────────────────────────────── */}
       <AnimatePresence>
