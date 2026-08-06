@@ -140,7 +140,7 @@ function ProfileFormModal({
               <PlayerIcon icon={icon} size={64} style={{ display: "block" }} />
             </div>
             <div style={{ fontSize: 13, fontWeight: 800, color: "#fff", letterSpacing: 0.5 }}>
-              {(name.trim() || "—").slice(0, 14)}
+              {(name.trim() || "-").slice(0, 14)}
             </div>
             <div style={{ fontSize: 8, color: getTitleColor(0), letterSpacing: 2, marginTop: 3 }}>
               {getTitle(isEdit ? totalWins(editing!) : 0)}
@@ -320,7 +320,7 @@ export default function ProfileSelectScreen({
       display: "flex", flexDirection: "column", position: "relative", overflow: "hidden",
     }}>
       <div style={{ position: "absolute", inset: 0, background: "rgba(3,3,10,0.72)", zIndex: 0 }} />
-      <AmbientCanvas />
+      <AmbientCanvas intensity={0.35} />
       <AmbientOverlay />
 
       <div style={{ position: "relative", zIndex: 3, display: "flex", flexDirection: "column", flex: 1, padding: "28px 40px" }}>

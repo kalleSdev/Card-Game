@@ -154,7 +154,7 @@ function ProfileFormModal({
               <PlayerIcon icon={icon} size={64} style={{ display: "block" }} />
             </div>
             <div style={{ fontSize: 13, fontWeight: 800, color: "#fff" }}>
-              {(name.trim() || "—").slice(0, 14)}
+              {(name.trim() || "-").slice(0, 14)}
             </div>
             <div style={{ fontSize: 8, color: color, letterSpacing: 2, marginTop: 3 }}>
               {isEdit ? getTitle(totalWins(editing!)) : getTitle(0)}

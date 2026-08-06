@@ -283,9 +283,9 @@ export default function CardRevealCinematic({
                       fontSize: 9, color: theme.primary + "bb", letterSpacing: 6,
                       marginTop: 5, transform: "skewX(9deg)", fontWeight: 700,
                     }}>
-                      {def.affinity === "LEADER" ? "— LEADER CLASS —"
-                        : def.affinity === "COMBAT" ? "— COMBAT CLASS —"
-                        : "— SUPPORT CLASS —"}
+                      {def.affinity === "LEADER" ? "LEADER CLASS"
+                        : def.affinity === "COMBAT" ? "COMBAT CLASS"
+                        : "SUPPORT CLASS"}
                     </div>
                   </div>
 

@@ -37,7 +37,7 @@ function MiniBoard({ pid, state, playerNames, getEffect, lip }: {
           {effect.type === "domain" ? "DOMAIN EXPANSION" : "CURSED TECHNIQUE"}
         </div>
         <div style={{ fontSize: 11, fontWeight: "bold", color: decided === "ACTIVATE" ? "#44dd44" : "#888", marginBottom: 2 }}>
-          {decided === "ACTIVATE" ? "✦ ACTIVATED" : decided === "SKIP" ? "— SKIPPED" : "⬡ AVAILABLE"}
+          {decided === "ACTIVATE" ? "✦ ACTIVATED" : decided === "SKIP" ? "SKIPPED" : "⬡ AVAILABLE"}
         </div>
         <div style={{ fontSize: 13, color: "#ddd", fontWeight: "bold" }}>{effect.name}</div>
         <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>{effect.technique}</div>
@@ -122,13 +122,13 @@ export default function LockedInScreen({ state, onSend, playerNames }: {
           <div style={{ fontSize: 11, color: "#4a9eff", fontWeight: "bold", letterSpacing: 1 }}>
             {playerNames.P1}
             {lip.decisions.P1 && <span style={{ marginLeft: 6, fontSize: 9, color: lip.decisions.P1 === "ACTIVATE" ? "#44cc44" : "#555" }}>
-              {lip.decisions.P1 === "ACTIVATE" ? "✦ Domain Active" : "— Skipped"}
+              {lip.decisions.P1 === "ACTIVATE" ? "✦ Domain Active" : "Skipped"}
             </span>}
           </div>
           <div style={{ fontSize: 11, color: "#ff6666", fontWeight: "bold", letterSpacing: 1 }}>
             {playerNames.P2}
             {lip.decisions.P2 && <span style={{ marginLeft: 6, fontSize: 9, color: lip.decisions.P2 === "ACTIVATE" ? "#44cc44" : "#555" }}>
-              {lip.decisions.P2 === "ACTIVATE" ? "✦ Domain Active" : "— Skipped"}
+              {lip.decisions.P2 === "ACTIVATE" ? "✦ Domain Active" : "Skipped"}
             </span>}
           </div>
         </div>

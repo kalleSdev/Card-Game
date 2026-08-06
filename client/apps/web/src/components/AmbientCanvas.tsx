@@ -244,7 +244,14 @@ const THEMES: Record<AmbientTheme, ThemeConfig> = {
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function AmbientCanvas({ theme = "wisps" }: { theme?: AmbientTheme }) {
+export default function AmbientCanvas({
+  theme = "wisps",
+  intensity = 1,
+}: {
+  theme?: AmbientTheme;
+  /** 0..1 scales particle count, spawn rate and brightness. Use low values on calm screens. */
+  intensity?: number;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -253,7 +260,12 @@ export default function AmbientCanvas({ theme = "wisps" }: { theme?: AmbientThem
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const cfg = THEMES[theme];
+    const base = THEMES[theme];
+    const cfg = {
+      ...base,
+      maxParticles: Math.round(base.maxParticles * intensity),
+      spawnPerFrame: base.spawnPerFrame * intensity,
+    };
     const particles: Particle[] = [];
     let raf = 0;
     let t = 0;
@@ -294,7 +306,7 @@ export default function AmbientCanvas({ theme = "wisps" }: { theme?: AmbientThem
     };
     raf = requestAnimationFrame(loop);
     return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize); };
-  }, [theme]);
+  }, [theme, intensity]);
 
   return (
     <canvas
@@ -303,6 +315,7 @@ export default function AmbientCanvas({ theme = "wisps" }: { theme?: AmbientThem
         position: "fixed", inset: 0,
         width: "100vw", height: "100vh",
         pointerEvents: "none", zIndex: 0,
+        opacity: Math.min(1, 0.35 + intensity * 0.65),
       }}
     />
   );

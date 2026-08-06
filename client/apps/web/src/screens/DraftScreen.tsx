@@ -674,7 +674,7 @@ export default function DraftScreen({ state, onSend, playerNames, playerIcons }:
             fontWeight: "bold",
           }}
         >
-          {activeSpell === "REVEAL" ? "🃏 SELECT A CARD TO REVEAL" : activeSpell === "DENY" ? "🔒 SELECT A CARD TO DENY — it will be revealed and locked" : activeSpell === "FREEZE" ? "🧊 SELECT A CARD TO FREEZE — revealed and locked for 3 turns" : "📊 SELECT A CARD TO RATE"}
+          {activeSpell === "REVEAL" ? "🃏 SELECT A CARD TO REVEAL" : activeSpell === "DENY" ? "🔒 SELECT A CARD TO DENY, it will be revealed and locked" : activeSpell === "FREEZE" ? "🧊 SELECT A CARD TO FREEZE, revealed and locked for 3 turns" : "📊 SELECT A CARD TO RATE"}
         </motion.div>
       )}
 
@@ -876,7 +876,7 @@ export default function DraftScreen({ state, onSend, playerNames, playerIcons }:
                 <button
                   onClick={e => { e.stopPropagation(); setActiveSpell(active ? null : "DENY"); }}
                   disabled={!canDeny}
-                  title={denyOnCooldown ? "On cooldown — wait 1 more turn" : deniesLeft <= 0 ? "No denies left this draft" : "Reveal and lock a card — it can never be picked"}
+                  title={denyOnCooldown ? "On cooldown, wait 1 more turn" : deniesLeft <= 0 ? "No denies left this draft" : "Reveal and lock a card so it can never be picked"}
                   style={{
                     padding: "11px 18px", flex: 1,
                     background: active ? "rgba(200,20,20,0.30)" : canDeny ? "rgba(26,4,4,0.82)" : "rgba(8,8,8,0.5)",

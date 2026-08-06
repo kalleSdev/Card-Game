@@ -218,7 +218,7 @@ export default function BindingVowScreen({ state, onSend, playerNames, playerIco
               style={{ fontSize: 14, color: "#9966aa", textAlign: "center", letterSpacing: 1 }}
             >
               <span style={{ color: pColor, fontWeight: "bold", fontSize: 16 }}>{playerNames[me]}</span>
-              {" — choose your oath"}
+              {" choose your oath"}
             </motion.div>
 
             {(() => {

@@ -96,7 +96,7 @@ function PlayerPanel({
   const leaderDef = cardDb[draft.leaderId];
   const wins   = (profile.quickStats?.wins ?? 0) + (profile.draftStats?.wins ?? 0);
   const losses = (profile.quickStats?.losses ?? 0) + (profile.draftStats?.losses ?? 0);
-  const wlPct  = (wins + losses) > 0 ? ((wins / (wins + losses)) * 100).toFixed(0) + "%" : "—";
+  const wlPct  = (wins + losses) > 0 ? ((wins / (wins + losses)) * 100).toFixed(0) + "%" : "-";
 
   return (
     <motion.div
@@ -213,7 +213,7 @@ export default function PostGameScreen({
       position: "relative", overflow: "hidden",
     }}>
       <div style={{ position: "absolute", inset: 0, background: "rgba(2,2,8,0.90)", zIndex: 0 }} />
-      <AmbientCanvas />
+      <AmbientCanvas intensity={0.3} />
       <AmbientOverlay />
 
       <div style={{
