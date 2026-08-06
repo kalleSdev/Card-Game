@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import type { CardDef } from "@cg/contracts";
 import type { BattleState, BattleCard, BattlePlayer, BattleIntent } from "./battleEngine";
 import { createBattleState, applyBattleIntent, deriveStats, CARD_PERKS } from "./battleEngine";
@@ -359,5 +359,200 @@ describe("content integrity", () => {
       expect(st.hp).toBeGreaterThan(0);
       expect(st.cost).toBeGreaterThanOrEqual(0);
     }
+  });
+});
+
+describe("block tokens", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("nullifies exactly one damage instance then clears", () => {
+    let s = setup({ p1Board: ["grunt", "grunt2"], p2Board: ["guard"] });
+    const guard = boardOf(s, "P2")[0];
+
+    // P2 blocks their guard (do it directly, GRANT_BLOCK is P2's move)
+    s = {
+      ...s,
+      players: {
+        ...s.players,
+        P2: {
+          ...s.players.P2,
+          board: s.players.P2.board.map(c => c ? { ...c, blocked: true } : c) as BattlePlayer["board"],
+        },
+      },
+    };
+
+    const [a1, a2] = boardOf(s, "P1");
+    let st = apply(s, { type: "SELECT_ATTACKER", pid: "P1", instanceId: a1.instanceId }).state;
+    st = apply(st, { type: "ATTACK_CARD", pid: "P1", targetInstanceId: guard.instanceId }).state;
+
+    const afterFirst = boardOf(st, "P2")[0];
+    expect(afterFirst.currentHp).toBe(guard.currentHp); // absorbed
+    expect(afterFirst.blocked).toBe(false);             // consumed
+
+    st = apply(st, { type: "SELECT_ATTACKER", pid: "P1", instanceId: a2.instanceId }).state;
+    st = apply(st, { type: "ATTACK_CARD", pid: "P1", targetInstanceId: guard.instanceId }).state;
+    const afterSecond = boardOf(st, "P2")[0];
+    expect((afterSecond?.currentHp ?? 0)).toBeLessThan(guard.currentHp); // second hit lands
+  });
+
+  it("spends a charge and refuses stacking", () => {
+    const s = setup({ p1Board: ["grunt"] });
+    const mine = boardOf(s, "P1")[0];
+    const r1 = apply(s, { type: "GRANT_BLOCK", pid: "P1", targetInstanceId: mine.instanceId });
+    expect(r1.state.players.P1.blockCharges).toBe(2);
+    expect(boardOf(r1.state, "P1")[0].blocked).toBe(true);
+    // Same card again while the block still stands: rejected
+    expect(isIllegal(apply(r1.state, { type: "GRANT_BLOCK", pid: "P1", targetInstanceId: mine.instanceId }))).toBe(true);
+  });
+});
+
+describe("cleansing heals", () => {
+  it("a single target heal restores a sheepified card", () => {
+    let s = setup({ p1Board: ["grunt"] });
+    const mine = boardOf(s, "P1")[0];
+    // Sheepify it by hand
+    s = {
+      ...s,
+      players: {
+        ...s.players,
+        P1: {
+          ...s.players.P1,
+          board: s.players.P1.board.map(c => c ? {
+            ...c, isSheep: true, preSheepAtk: c.atk, preSheepHp: c.currentHp,
+            atk: 1, baseAtk: 1, currentHp: 1, maxHp: 1,
+          } : c) as BattlePlayer["board"],
+        },
+      },
+    };
+    const healSpell = s.players.P1.spells.find(sp => sp.effect.kind === "BUFF_ONE_HP")!;
+    const st = apply(s, { type: "CAST_SPELL", pid: "P1", spellId: healSpell.id, targetInstanceId: mine.instanceId }).state;
+    const healed = boardOf(st, "P1")[0];
+    expect(healed.isSheep).toBe(false);
+    expect(healed.atk).toBe(mine.atk); // true form restored
+  });
+
+  it("also clears stun", () => {
+    let s = setup({ p1Board: ["grunt"] });
+    const mine = boardOf(s, "P1")[0];
+    s = {
+      ...s,
+      players: {
+        ...s.players,
+        P1: {
+          ...s.players.P1,
+          board: s.players.P1.board.map(c => c ? { ...c, stunTurns: 1, canAttack: false, stunActive: true } : c) as BattlePlayer["board"],
+        },
+      },
+    };
+    const healSpell = s.players.P1.spells.find(sp => sp.effect.kind === "BUFF_ONE_HP")!;
+    const st = apply(s, { type: "CAST_SPELL", pid: "P1", spellId: healSpell.id, targetInstanceId: mine.instanceId }).state;
+    const healed = boardOf(st, "P1")[0];
+    expect(healed.stunTurns).toBe(0);
+    expect(healed.stunActive).toBe(false);
+  });
+});
+
+describe("random strikes (Mahoraga)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("actually damages the leader it lands on", () => {
+    const s = setup({ p1Board: ["mahoraga"] });
+    const maho = boardOf(s, "P1")[0];
+    // Pool with empty enemy board: [opp leader, own leader]. Force the own leader.
+    vi.spyOn(Math, "random").mockReturnValue(0.99);
+    const st = apply(s, { type: "ATTACK_RANDOM", pid: "P1", instanceId: maho.instanceId }).state;
+    expect(st.players.P1.leader.currentHp).toBe(30 - maho.atk);
+  });
+
+  it("never targets a vacant leader slot (board mode)", () => {
+    let s = setup({ p1Board: ["mahoraga"] });
+    // Own side in Mahoraga board mode: the portrait slot is empty
+    s = { ...s, players: { ...s.players, P1: { ...s.players.P1, mahoragaBoardMode: true } } };
+    const maho = boardOf(s, "P1")[0];
+    vi.spyOn(Math, "random").mockReturnValue(0.99); // last pool entry
+    const st = apply(s, { type: "ATTACK_RANDOM", pid: "P1", instanceId: maho.instanceId }).state;
+    // With the vacant own leader excluded, the last entry is the enemy leader
+    expect(st.players.P1.leader.currentHp).toBe(30);
+    expect(st.players.P2.leader.currentHp).toBe(30 - maho.atk);
+  });
+});
+
+describe("Higuruma's sentence", () => {
+  it("bound cards can strike each other straight through shields", () => {
+    let s = setup({ p1Board: ["higuruma"], p2Board: ["grunt", "guard"] });
+    const hig = boardOf(s, "P1")[0];
+    const grunt = boardOf(s, "P2")[0];
+    // Bind them, stuns already served
+    const bind = (pl: BattlePlayer, id: string, withId: string): BattlePlayer => ({
+      ...pl,
+      board: pl.board.map(c => c?.instanceId === id ? { ...c, sentencedWith: withId } : c) as BattlePlayer["board"],
+    });
+    s = {
+      ...s,
+      players: {
+        ...s.players,
+        P1: bind(s.players.P1, hig.instanceId, grunt.instanceId),
+        P2: bind(s.players.P2, grunt.instanceId, hig.instanceId),
+      },
+    };
+
+    let st = apply(s, { type: "SELECT_ATTACKER", pid: "P1", instanceId: hig.instanceId }).state;
+    // The guard has a shield, but judgement does not care
+    const res = apply(st, { type: "ATTACK_CARD", pid: "P1", targetInstanceId: grunt.instanceId });
+    expect(isIllegal(res)).toBe(false);
+    // And anything else stays out of reach
+    const guard = boardOf(s, "P2")[1];
+    st = apply(s, { type: "SELECT_ATTACKER", pid: "P1", instanceId: hig.instanceId }).state;
+    expect(isIllegal(apply(st, { type: "ATTACK_CARD", pid: "P1", targetInstanceId: guard.instanceId }))).toBe(true);
+  });
+});
+
+describe("Higuruma's sentence lifecycle", () => {
+  it("costs each card one turn, then frees them, and never locks up", () => {
+    let s = setup({ p1Board: ["higuruma"], p2Board: ["grunt"] });
+    const hig = boardOf(s, "P1")[0];
+    const foe = boardOf(s, "P2")[0];
+
+    s = apply(s, { type: "ACTIVATE_PERK", pid: "P1", instanceId: hig.instanceId, targetInstanceId: foe.instanceId }).state;
+    expect(boardOf(s, "P1")[0].sentencedWith).toBe(foe.instanceId);
+    expect(boardOf(s, "P2")[0].sentencedWith).toBe(hig.instanceId);
+
+    // P2's turn: their card serves its stun
+    s = apply(s, { type: "END_TURN", pid: "P1" }).state;
+    expect(boardOf(s, "P2")[0].canAttack).toBe(false);
+
+    // P1's turn: Higuruma serves his
+    s = apply(s, { type: "END_TURN", pid: "P2" }).state;
+    expect(boardOf(s, "P1")[0].canAttack).toBe(false);
+
+    // P2 again: their card is free
+    s = apply(s, { type: "END_TURN", pid: "P1" }).state;
+    expect(boardOf(s, "P2")[0].canAttack).toBe(true);
+    expect(boardOf(s, "P2")[0].stunTurns).toBe(0);
+
+    // P1 again: Higuruma is free. The sentence persists but the stun is done.
+    s = apply(s, { type: "END_TURN", pid: "P2" }).state;
+    expect(boardOf(s, "P1")[0].canAttack).toBe(true);
+    expect(boardOf(s, "P1")[0].stunTurns).toBe(0);
+    expect(boardOf(s, "P1")[0].sentencedWith).toBe(foe.instanceId);
+  });
+
+  it("releases the survivor when its counterpart dies", () => {
+    let s = setup({ p1Board: ["higuruma"], p2Board: ["grunt"] });
+    const hig = boardOf(s, "P1")[0];
+    const foe = boardOf(s, "P2")[0];
+    s = apply(s, { type: "ACTIVATE_PERK", pid: "P1", instanceId: hig.instanceId, targetInstanceId: foe.instanceId }).state;
+
+    // Wipe the bound enemy off the board
+    s = {
+      ...s,
+      players: {
+        ...s.players,
+        P2: { ...s.players.P2, board: s.players.P2.board.map(() => null) as BattlePlayer["board"] },
+      },
+    };
+    // Any intent runs checkWin, which releases broken sentences
+    s = apply(s, { type: "END_TURN", pid: "P1" }).state;
+    expect(boardOf(s, "P1")[0].sentencedWith).toBeUndefined();
   });
 });

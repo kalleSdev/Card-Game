@@ -25,7 +25,7 @@ function describeEffect(e: DomainEffect): string {
 
   switch (e.kind) {
     case "STUN_ENEMY_BOARD":
-      return `Fully immobilizes all enemies for ${turns(e.turns)} — no actions allowed.`;
+      return `Fully immobilizes all enemies for ${turns(e.turns)}. No actions allowed.`;
     case "DAMAGE_ALL_ENEMIES":
       return `Deals ${e.amount} damage split across all enemies.`;
     case "BUFF_OWN_BOARD":
@@ -57,22 +57,22 @@ function describeEffect(e: DomainEffect): string {
     case "SHEEPIFY_ENEMY_LEADER":
       return "Transforms the enemy leader into a 1/7 sheep.";
     case "SNEAK_ATTACK_DOMAIN":
-      return `Deal ${e.amount} damage to any target — no counter damage.`;
+      return `Deal ${e.amount} damage to any target with no counter damage.`;
     case "GRANT_SPELL":
-      return `Grants spell: "${e.spellName}" — ${e.spellDesc}.`;
+      return `Grants spell: "${e.spellName}". ${e.spellDesc}.`;
     case "BUFF_LEADER_PERMANENT":
       if (e.atk > 0 && e.hp > 0) return `Your leader gains +${e.atk} ATK / +${e.hp} HP permanently.`;
       return e.atk > 0
         ? `Your leader gains +${e.atk} ATK permanently.`
         : `Your leader gains +${e.hp} HP permanently.`;
     case "SUKUNA_BOARD_MODE":
-      return "Wipes all board cards. Sukuna enters as a 3/15 board card — always targetable. His death ends the match.";
+      return "Wipes all board cards. Sukuna enters as a 3/15 board card, always targetable. His death ends the match.";
     case "MAHORAGA_BOARD_MODE":
       return "Mahoraga enters as a 1/25 board card, gaining +1 ATK each time he is hit. His death ends the match.";
     case "TAKABA_BOARD_MODE":
-      return "Every card on both boards becomes a 1/1 sheep. Takaba enters as a 1/15 board card — his death ends the match.";
+      return "Every card on both boards becomes a 1/1 sheep. Takaba enters as a 1/15 board card. His death ends the match.";
     case "SUMMON_RIKA_AND_COPY":
-      return "Summons Rika (5/5 Cursed Spirit) and grants Cursed Copy — place a 3/3 copy of any board card.";
+      return "Summons Rika (5/5 Cursed Spirit) and grants Cursed Copy, which places a 3/3 copy of any board card.";
     default:
       return "Activates a powerful cursed technique.";
   }
@@ -82,11 +82,11 @@ function describeEffect(e: DomainEffect): string {
 function describeSecond(s: DomainEffect): string {
   switch (s.kind) {
     case "GRANT_SPELL":
-      return `2nd fill: grants "${s.spellName}" — ${s.spellDesc}.`;
+      return `2nd fill: grants "${s.spellName}". ${s.spellDesc}.`;
     case "BUFF_LEADER_PERMANENT":
       return `2nd fill: your leader gains +${s.atk} ATK / +${s.hp} HP permanently.`;
     case "SUMMON_RIKA_AND_COPY":
-      return "2nd fill: summons Rika (5/5) again — this time she arrives with a Shield.";
+      return "2nd fill: summons Rika (5/5) again, this time with a Shield.";
     case "TAKABA_BOARD_MODE":
       return "2nd fill: every card on both boards becomes a 1/1 sheep, and Takaba enters as a 1/15 board card.";
     case "SPAWN_ENTITIES":
@@ -128,7 +128,7 @@ export function describeDomain(defId: string): DomainText | null {
     defId === "gojo-base"
       ? " Grants Hollow Purple (5 damage), +5 energy, and unlimited spell draws this turn. Filling twice grants 2 Hollow Purples."
       : entry.grantSpell
-        ? ` Also grants "${entry.grantSpell.name}" — ${entry.grantSpell.desc}.`
+        ? ` Also grants "${entry.grantSpell.name}". ${entry.grantSpell.desc}.`
         : "";
 
   return {
