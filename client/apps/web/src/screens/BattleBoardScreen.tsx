@@ -429,14 +429,15 @@ function BoardCardView({
       {(() => {
         const marks: { label: string; color: string; title: string }[] = [];
         if ((card.reflectTurns ?? 0) > 0) marks.push({ label: `🌀${card.reflectTurns}`, color: "#66ddff", title: `Sky Warp — reflecting attacks for ${card.reflectTurns} more turn(s)` });
-        if (card.redirectNext)            marks.push({ label: "👏", color: "#ffcc44", title: "Boogie Woogie — next hit will be redirected" });
-        if (card.ignoreShields)           marks.push({ label: "🗡", color: "#ff8866", title: "Shield Breaker — ignoring Shields this turn" });
-        if (card.silentStrike)            marks.push({ label: "💨", color: "#aaccff", title: "Projection Rush — no counter, half damage this turn" });
-        if (card.splashNext)              marks.push({ label: "🌋", color: "#ff9944", title: "Maximum Meteor — next attack splashes" });
-        if (card.regen)                   marks.push({ label: "☸", color: "#ccaaff", title: "Adaptation — recovers 1 HP after surviving damage" });
+        if (card.redirectNext)            marks.push({ label: "👏", color: "#ffcc44", title: "Boogie Woogie: next hit will be redirected" });
+        if (card.ignoreShields)           marks.push({ label: "🗡", color: "#ff8866", title: "Shield Breaker: ignoring Shields this turn" });
+        if (card.silentStrike)            marks.push({ label: "💨", color: "#aaccff", title: "Projection Rush: no counter, half damage this turn" });
+        if (card.splashNext)              marks.push({ label: "🌋", color: "#ff9944", title: "Maximum Meteor: next attack splashes" });
+        if (card.regen)                   marks.push({ label: "☸", color: "#ccaaff", title: "Adaptation: recovers 1 HP after surviving damage" });
         if (card.rebirth)                 marks.push({ label: "♻", color: "#88ffaa", title: "Will respawn on death" });
-        if (card.sentencedWith)           marks.push({ label: "⚖", color: "#ffdd88", title: "Sentenced — can only attack its bound counterpart" });
-        if (card.beastDecay)              marks.push({ label: "🐗", color: "#ff7744", title: "Beast — loses 1 HP each turn" });
+        if (card.blocked)                 marks.push({ label: "✋", color: "#ffbb55", title: "Block: the next damage instance is nullified" });
+        if (card.sentencedWith)           marks.push({ label: "⚖", color: "#ffdd88", title: "Sentenced, can only attack its bound counterpart" });
+        if (card.beastDecay)              marks.push({ label: "🐗", color: "#ff7744", title: "Beast: loses 1 HP each turn" });
         if (marks.length === 0) return null;
         return (
           <div style={{
@@ -609,9 +610,11 @@ function HandCardView({
           transition={{ duration: 0.14 }}
           style={{
             position: "fixed",
-            left: Math.max(120, Math.min(previewPos.x, window.innerWidth - 120)),
-            top: previewPos.y - 20,
-            transform: "translate(-50%, -100%)",
+            // Framer Motion owns this element's transform, so anchor it with
+            // plain left/top maths instead: centred on the card, sitting well
+            // above the hand row (lg card is 168x238).
+            left: Math.max(12, Math.min(previewPos.x - 84, window.innerWidth - 180)),
+            top: Math.max(10, previewPos.y - 238 - 46),
             pointerEvents: "none", zIndex: 9998,
             filter: "drop-shadow(0 12px 34px rgba(0,0,0,0.85))",
           }}
@@ -673,6 +676,41 @@ function SpellCardView({
         position: "relative",
       }}
     >
+      {/* Single target heals also cleanse; the info circle explains it on hover */}
+      {effKind === "BUFF_ONE_HP" && (
+        <div
+          style={{ position: "absolute", top: 5, right: 5, zIndex: 5 }}
+          onMouseEnter={e => {
+            const tip = (e.currentTarget as HTMLElement).querySelector<HTMLElement>(".cleanse-tip");
+            if (tip) tip.style.display = "block";
+          }}
+          onMouseLeave={e => {
+            const tip = (e.currentTarget as HTMLElement).querySelector<HTMLElement>(".cleanse-tip");
+            if (tip) tip.style.display = "none";
+          }}
+        >
+          <div style={{
+            width: 16, height: 16, borderRadius: "50%",
+            background: "linear-gradient(135deg, #103a24, #072414)",
+            border: "1.5px solid rgba(90,230,160,0.8)",
+            boxShadow: "0 0 6px rgba(80,220,150,0.4)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 9, lineHeight: 1,
+          }}>✚</div>
+          <div className="cleanse-tip" style={{
+            display: "none", position: "absolute", bottom: 22, right: -4,
+            background: "rgba(4,4,14,0.97)", border: "1px solid #2a5a3a",
+            borderRadius: 8, padding: "7px 10px",
+            width: 180, zIndex: 999, pointerEvents: "none",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.8)",
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 900, color: "#66ffaa", marginBottom: 3 }}>✚ Cleanse</div>
+            <div style={{ fontSize: 9, color: "#fff", lineHeight: 1.5 }}>
+              Also removes negative effects from the target, such as Stun and Sheep.
+            </div>
+          </div>
+        </div>
+      )}
       <div style={{ fontSize: 32 }}>{icon}</div>
       <div style={{ fontSize: 12, fontWeight: 900, color, letterSpacing: 0.5, textAlign: "center", lineHeight: 1.3 }}>
         {spell.name}
@@ -969,6 +1007,23 @@ function LeaderRightPanel({
             </div>
           )}
         </div>
+      )}
+
+      {/* Leader Block pip */}
+      {leader.blocked && (
+        <motion.div
+          animate={{ opacity: [0.75, 1, 0.75] }}
+          transition={{ duration: 1.6, repeat: Infinity }}
+          title="Block: the next damage instance is nullified"
+          style={{
+            position: "absolute", top: 6, left: 8, zIndex: 40,
+            width: 20, height: 20, borderRadius: "50%",
+            background: "linear-gradient(135deg, #4a3410, #2a1c06)",
+            border: "1.5px solid rgba(255,180,80,0.9)",
+            boxShadow: "0 0 8px rgba(255,170,60,0.6)",
+            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11,
+          }}
+        >✋</motion.div>
       )}
 
       {/* Leader shields — each nullifies one instance of damage */}
@@ -1508,6 +1563,7 @@ export default function BattleBoardScreen({
   const [buffOneTargeting, setBuffOneTargeting] = useState<string | null>(null); // spell id for BUFF_ONE (own-card target)
   const [turnBackTargeting, setTurnBackTargeting] = useState(false);
   const [pendingShieldGrant, setPendingShieldGrant] = useState(false);
+  const [pendingBlockGrant, setPendingBlockGrant] = useState(false);
   // Perk activation flow — Mahito needs two targets (enemy first, then same-cost friendly)
   const [pendingPerk, setPendingPerk] = useState<{ instanceId: string; defId: string; enemyTargetId?: string } | null>(null);
   const [drewCardId, setDrewCardId] = useState<string | null>(null); // card drawn this turn (for animation)
@@ -1518,8 +1574,8 @@ export default function BattleBoardScreen({
   const mahoragaAiming = (() => {
     if (!battleState.pendingAttackerId) return false;
     const pl = battleState.players[battleState.activePlayer];
-    const c = pl.board.find(b => b?.instanceId === battleState.pendingAttackerId)
-      ?? (pl.leader.instanceId === battleState.pendingAttackerId ? pl.leader : null);
+    // Only his board form strikes wildly. As a leader in the portrait slot he aims normally.
+    const c = pl.board.find(b => b?.instanceId === battleState.pendingAttackerId);
     return c?.defId === "mahoraga" || c?.defId === "mahoraga-entity";
   })();
   useEffect(() => {
@@ -2193,6 +2249,11 @@ export default function BattleBoardScreen({
       setPendingShieldGrant(false);
       return;
     }
+    if (pendingBlockGrant) {
+      dispatch({ type: "GRANT_BLOCK", pid, targetInstanceId: instanceId });
+      setPendingBlockGrant(false);
+      return;
+    }
     if (turnBackTargeting) {
       const spell = player.spells.find(s => s.effect.kind === "TURN_BACK_SHEEP");
       if (spell) {
@@ -2498,7 +2559,14 @@ export default function BattleBoardScreen({
               fontSize: 9, padding: "3px 12px", borderRadius: 6,
               background: "rgba(68,136,255,0.14)", border: "1px solid #4488ff66",
               color: "#88bbff", letterSpacing: 1, fontWeight: 900,
-            }}>🛡 SELECT A CARD — OR YOUR LEADER — TO SHIELD</div>
+            }}>🛡 SELECT A CARD OR YOUR LEADER TO SHIELD</div>
+          )}
+          {pendingBlockGrant && (
+            <div style={{
+              fontSize: 9, padding: "3px 12px", borderRadius: 6,
+              background: "rgba(255,170,60,0.14)", border: "1px solid #ffaa3366",
+              color: "#ffcc77", letterSpacing: 1, fontWeight: 900,
+            }}>✋ SELECT A CARD OR YOUR LEADER TO BLOCK</div>
           )}
           {perkEnemyStage && pendingPerk && (
             <div style={{
@@ -2507,7 +2575,7 @@ export default function BattleBoardScreen({
               color: "#ffcc44", letterSpacing: 1, fontWeight: 900,
             }}>
               {pendingPerk.defId === "mahito" ? "🖐 SELECT AN ENEMY CARD TO TRANSFIGURE"
-                : pendingPerk.defId === "hanami" ? "🌸 SELECT ANY CARD TO STUN — FRIEND OR FOE"
+                : pendingPerk.defId === "hanami" ? "🌸 SELECT ANY CARD TO STUN, FRIEND OR FOE"
                 : pendingPerk.defId === "higuruma" ? "⚖ SELECT AN ENEMY CARD TO SENTENCE"
                 : pendingPerk.defId === "inumaki" ? "🗣 SELECT AN ENEMY CARD TO STUN"
                 : pendingPerk.enemyTargetId ? "📌 SELECT THE SECOND ENEMY CARD TO PIN"
@@ -2548,24 +2616,6 @@ export default function BattleBoardScreen({
         {/* Board area */}
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", zIndex: 1 }}>
           <div style={{ position: "absolute", top: 5, left: 16, fontSize: 8, letterSpacing: 4, color: "#4a7a80", fontWeight: 800, zIndex: 1 }}>🛡 YOUR BOARD</div>
-          {player.activeSynergies.length > 0 && (() => {
-            const obtainedSpellNames = new Set([
-              ...player.spells.map(s => s.name),
-              ...player.spellQueue.map(s => s.name),
-            ]);
-            const visibleSynergies = player.activeSynergies.filter(id => {
-              const rule = BATTLE_SYNERGY_RULES.find(r => r.id === id);
-              return rule && !obtainedSpellNames.has(rule.spellName);
-            });
-            return visibleSynergies.length > 0 ? (
-              <div style={{
-                position: "absolute", top: 18, left: 14, zIndex: 2,
-                display: "flex", flexDirection: "column", gap: 4,
-              }}>
-                {visibleSynergies.map(id => <SynergyTag key={id} id={id} />)}
-              </div>
-            ) : null;
-          })()}
           <div style={{ transform: "scale(1.2)", transformOrigin: "center center" }}>
             <BoardRow
               board={player.board} cardDb={cardDb} cardScale={1.5}
@@ -2604,10 +2654,15 @@ export default function BattleBoardScreen({
             domainCooldown={player.domainCooldown}
             onDomainActivate={() => dispatch({ type: "ACTIVATE_DOMAIN", pid })}
             onSelect={(ev) => {
-              // Shields can be placed on the leader — each stack nullifies one instance of damage
+              // Shields stack on the leader; a Block nullifies the next damage instance
               if (pendingShieldGrant) {
                 dispatch({ type: "GRANT_BOARD_SHIELD", pid, targetInstanceId: player.leader.instanceId });
                 setPendingShieldGrant(false);
+                return;
+              }
+              if (pendingBlockGrant) {
+                dispatch({ type: "GRANT_BLOCK", pid, targetInstanceId: player.leader.instanceId });
+                setPendingBlockGrant(false);
                 return;
               }
               if (buffOneTargeting) {
@@ -2642,8 +2697,28 @@ export default function BattleBoardScreen({
         <div style={{
           flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
           padding: "10px 12px", borderRight: "1px solid #1a1a30", gap: 8,
+          position: "relative",
         }}>
-          {/* Shield charges */}
+          {/* Active synergies waiting to be drawn, stacked above this panel */}
+          {player.activeSynergies.length > 0 && (() => {
+            const obtainedSpellNames = new Set([
+              ...player.spells.map(sp => sp.name),
+              ...player.spellQueue.map(sp => sp.name),
+            ]);
+            const visibleSynergies = player.activeSynergies.filter(id => {
+              const rule = BATTLE_SYNERGY_RULES.find(r => r.id === id);
+              return rule && !obtainedSpellNames.has(rule.spellName);
+            });
+            return visibleSynergies.length > 0 ? (
+              <div style={{
+                position: "absolute", bottom: "100%", left: 10, marginBottom: 6,
+                display: "flex", flexDirection: "column", gap: 4, zIndex: 5,
+              }}>
+                {visibleSynergies.map(id => <SynergyTag key={id} id={id} />)}
+              </div>
+            ) : null;
+          })()}
+          {/* Shield and Block charges */}
           <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
             {Array.from({ length: 3 }).map((_, i) => {
               const available = i < player.shieldCharges;
@@ -2693,6 +2768,59 @@ export default function BattleBoardScreen({
                     boxShadow: "0 4px 20px rgba(0,0,0,0.8)",
                   }}>
                     Give Shield to a character. (Shield disallows targeting of other non-Shield Cards.)
+                  </div>
+                </div>
+              );
+            })}
+            <div style={{ width: 1, height: 20, background: "#22223a", margin: "0 3px" }} />
+            {Array.from({ length: 3 }).map((_, i) => {
+              const available = i < player.blockCharges;
+              const isActive = pendingBlockGrant && available;
+              return (
+                <div key={`blk-${i}`} style={{ position: "relative" }}
+                  onMouseEnter={e => {
+                    const tip = (e.currentTarget as HTMLElement).querySelector<HTMLElement>(".block-tip");
+                    if (tip) tip.style.display = "block";
+                  }}
+                  onMouseLeave={e => {
+                    const tip = (e.currentTarget as HTMLElement).querySelector<HTMLElement>(".block-tip");
+                    if (tip) tip.style.display = "none";
+                  }}
+                >
+                  <motion.button
+                    onClick={() => { if (available && battleState.phase === "MAIN") { setPendingShieldGrant(false); setPendingBlockGrant(v => !v); } }}
+                    whileHover={available && battleState.phase === "MAIN" ? { scale: 1.15 } : {}}
+                    whileTap={available && battleState.phase === "MAIN" ? { scale: 0.9 } : {}}
+                    style={{
+                      width: 28, height: 28, borderRadius: "50%",
+                      background: available
+                        ? isActive
+                          ? "linear-gradient(135deg, #ffaa33, #cc6600)"
+                          : "linear-gradient(135deg, #4a3410, #2a1c06)"
+                        : "rgba(255,255,255,0.03)",
+                      border: available
+                        ? `2px solid ${isActive ? "#ffcc77" : "rgba(255,180,80,0.6)"}`
+                        : "2px solid #1a1a2a",
+                      cursor: available && battleState.phase === "MAIN" ? "pointer" : "default",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 13,
+                      opacity: available ? 1 : 0.2,
+                      boxShadow: isActive ? "0 0 14px #ffaa33aa" : available ? "0 0 6px rgba(255,170,60,0.3)" : "none",
+                      padding: 0,
+                    }}
+                  >
+                    ✋
+                  </motion.button>
+                  <div className="block-tip" style={{
+                    display: "none", position: "absolute", bottom: 34, left: "50%",
+                    transform: "translateX(-50%)",
+                    background: "rgba(4,4,14,0.97)", border: "1px solid #6a4a2a",
+                    borderRadius: 8, padding: "7px 10px",
+                    width: 190, zIndex: 999,
+                    fontSize: 9, color: "#cba", lineHeight: 1.5, pointerEvents: "none",
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.8)",
+                  }}>
+                    Block the next damage instance for one card or your leader. One Block per card at a time, but it can be reapplied once it breaks.
                   </div>
                 </div>
               );

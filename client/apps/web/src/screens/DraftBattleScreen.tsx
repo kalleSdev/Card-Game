@@ -639,6 +639,11 @@ export default function DraftBattleScreen({
                     <div style={{ fontSize: 9, color: "#cc44ff", letterSpacing: 2, fontWeight: 900, marginBottom: 5 }}>✦ DOMAIN</div>
                     <div style={{ fontSize: 13, color: "#fff", fontWeight: 800, marginBottom: 6, lineHeight: 1.25 }}>{leaderDomain.name}</div>
                     <div style={{ fontSize: 11, color: "#ddd", lineHeight: 1.55, fontWeight: 500 }}>{leaderDomain.desc}</div>
+                    {leaderDomain.secondDesc && (
+                      <div style={{ fontSize: 10, color: "#aa77ff", lineHeight: 1.5, marginTop: 6, paddingTop: 6, borderTop: "1px solid #9933cc33" }}>
+                        {leaderDomain.secondDesc}
+                      </div>
+                    )}
                   </div>
                   <div style={{ height: 1, background: "rgba(255,255,255,0.05)", margin: "2px 0" }} />
                 </>
