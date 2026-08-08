@@ -2,23 +2,9 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { DOMAIN_COLOR, DEFAULT_DOMAIN_COLOR } from "../theme";
 
-/**
- * BattleArena — a layered 2.5D battlefield backdrop.
- *
- * Everything is procedural (CSS + inline SVG), so there are no image assets to load
- * and no licensing concerns. Depth comes from parallax: each layer subscribes to the
- * same pointer springs but multiplies them by its own depth factor, so far layers
- * barely drift while foreground props swing noticeably.
- *
- * Layer stack (back → front):
- *   0. Cursed sky + drifting miasma
- *   1. Distant mountain ridge
- *   2. Torii gate silhouettes
- *   3. Shrine floor plate (perspective) + cursed seal
- *   4. Rising embers
- *   5. Foreground props (stone lanterns, hanging banner) — clickable
- *   6. Fog wisps + vignette
- */
+// Parallax background for the battle board. All CSS and SVG, no image files.
+// Each layer multiplies the same pointer spring by its own depth so the far
+// stuff barely moves and the props up front swing about.
 
 const ARENA_CSS = `
 @keyframes cg-miasma-a { 0%,100% { transform: translate3d(0,0,0) scale(1); opacity:.30 } 50% { transform: translate3d(6%,-3%,0) scale(1.15); opacity:.50 } }

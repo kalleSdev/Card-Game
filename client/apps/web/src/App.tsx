@@ -72,9 +72,7 @@ export default function App() {
   const [state, setState] = useState<GameState>(engine.getState());
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
 
-  // When the engine is rebuilt (new match), pull its fresh state in.
-  // This is React's documented "adjust state when a value changes" pattern —
-  // it re-renders immediately instead of committing a throwaway paint.
+  // New match means a new engine, so pull its state in during render.
   const [prevEngine, setPrevEngine] = useState(engine);
   if (prevEngine !== engine) {
     setPrevEngine(engine);

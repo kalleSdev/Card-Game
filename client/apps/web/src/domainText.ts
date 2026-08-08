@@ -1,14 +1,8 @@
 import type { DomainEffect } from "./battleEngine";
 import { DOMAIN_BATTLE_EFFECTS } from "./battleEngine";
 
-/**
- * Human-readable copy for domain abilities.
- *
- * This is the single source of truth for ability text. It previously lived as a
- * near-identical switch in three separate screens, which meant every balance change
- * had to be applied in triplicate and the copies drifted apart. Screens now call
- * `describeDomain()` and render the result however they like.
- */
+// All the display text for domain abilities. Screens call describeDomain() and
+// render the result however they want.
 
 export interface DomainText {
   /** Ability name, e.g. "Malevolent Shrine". */

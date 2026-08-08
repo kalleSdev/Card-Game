@@ -2,13 +2,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { PlayerId } from "@cg/contracts";
 import { COLOR } from "../theme";
 
-/**
- * Rolling feed of what just happened, in the spirit of TFT's combat readout.
- *
- * Entries are pushed by the battle screen as engine events arrive and expire on
- * their own, so the log stays short and never needs scrolling. It is purely a
- * readout — nothing here feeds back into the engine.
- */
+// Short feed of recent events. The battle screen pushes entries in and they
+// expire on their own, so it never needs scrolling.
 
 export interface LogEntry {
   id: number;

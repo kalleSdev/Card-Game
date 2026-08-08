@@ -1,13 +1,4 @@
-/**
- * Shared visual tokens.
- *
- * These values were already being used consistently across the UI, just written
- * out as raw hex in every file. Naming them keeps new code consistent and makes
- * a palette change a single edit instead of a find-and-replace.
- *
- * Existing screens still use literals in places; new and touched code should use
- * these instead.
- */
+// Colours used across the UI. Older screens still have raw hex in places.
 
 export const COLOR = {
   // Players

@@ -42,19 +42,17 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": "off",
 
-      // eslint-plugin-react-hooks v7 ships the React Compiler rule set. This project
-      // does not use the compiler, so these are treated as advisory tech-debt signals
-      // rather than build failures. The classic rules-of-hooks checks stay as errors.
+      // v7 of the hooks plugin adds the React Compiler rules. I'm not using the
+      // compiler, so these stay as warnings. Normal hooks rules keep erroring.
       "react-hooks/set-state-in-effect": "warn",
       "react-hooks/set-state-in-render": "warn",
       "react-hooks/refs": "warn",
       "react-hooks/purity": "warn",
 
-      // The codebase is deliberately `any`-free; keep it that way.
+      // No `any` anywhere so far, keep it that way.
       "@typescript-eslint/no-explicit-any": "error",
 
-      // Unused values are a real signal in a codebase this size, but allow the
-      // conventional underscore prefix for intentionally-ignored bindings.
+      // Underscore prefix means I meant to ignore it.
       "@typescript-eslint/no-unused-vars": [
         "warn",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },

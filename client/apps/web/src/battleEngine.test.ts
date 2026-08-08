@@ -3,11 +3,8 @@ import type { CardDef } from "@cg/contracts";
 import type { BattleState, BattleCard, BattlePlayer, BattleIntent } from "./battleEngine";
 import { createBattleState, applyBattleIntent, deriveStats, CARD_PERKS } from "./battleEngine";
 
-/**
- * These tests exercise the combat reducer directly. Because `applyBattleIntent`
- * is pure — it takes a state and an intent and returns a new state plus events —
- * no rendering, DOM or timers are involved.
- */
+// Tests for the combat engine. applyBattleIntent is pure so these just build a
+// state, apply an intent and check what comes back.
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 

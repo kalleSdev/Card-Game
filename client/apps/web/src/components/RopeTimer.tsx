@@ -1,12 +1,7 @@
 import { motion } from "framer-motion";
 
-/**
- * The burning rope from Hearthstone.
- *
- * Stays hidden for most of the turn and only appears once the clock gets low,
- * so it reads as a warning rather than permanent clutter. The rope shortens as
- * time runs out and the flame sits on the burning end, spitting embers.
- */
+// Burning rope timer. Hidden until the turn clock gets low, then it burns down
+// with a flame on the end.
 
 const ROPE_CSS = `
 @keyframes cg-rope-flicker { 0%,100% { transform: scale(1) rotate(-4deg); opacity:.95 } 50% { transform: scale(1.22) rotate(5deg); opacity:1 } }

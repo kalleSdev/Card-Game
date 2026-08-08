@@ -687,8 +687,8 @@ function boardCards(player: BattlePlayer): BattleCard[] {
   return player.board.filter(Boolean) as BattleCard[];
 }
 
-// Find a slot for a leader's board form. If the board is full the leader DEVOURS one of its
-// own cards — that card dies and the leader takes its place, rather than the domain fizzling.
+// Slot for a leader's board form. If the board is full it eats one of my own
+// cards and takes its place, so the domain never just fizzles.
 function claimBoardSlot(player: BattlePlayer): { slot: number; devoured: BattleCard | null } {
   if (player.board[2] === null) return { slot: 2, devoured: null };
   const empty = player.board.findIndex(s => s === null);
@@ -702,14 +702,14 @@ function claimBoardSlot(player: BattlePlayer): { slot: number; devoured: BattleC
   return { slot: 2, devoured: player.board[2] ?? null };
 }
 
-// Mahoraga strikes wildly only once he's DEPLOYED on the field — as a drafted card,
-// as Megumi's summon, or as his own board-mode form. In the leader slot he attacks normally.
+// Mahoraga only swings at random once he's on the board, whether drafted,
+// summoned by Megumi, or in his own board form. As a leader he aims normally.
 export function isWildStriker(player: BattlePlayer, card: BattleCard): boolean {
   if (card.instanceId === player.leader.instanceId) return false;
   return card.defId === "mahoraga" || card.defId === "mahoraga-entity";
 }
 
-// Deal damage to a leader — a stacked leader Shield nullifies the whole instance.
+// Damage a leader. A Block eats it first, then a stacked leader Shield.
 function damageLeader(player: BattlePlayer, amount: number): BattlePlayer {
   if (amount <= 0) return player;
   if (player.leader.blocked) {
@@ -721,8 +721,8 @@ function damageLeader(player: BattlePlayer, amount: number): BattlePlayer {
   return { ...player, leader: { ...player.leader, currentHp: player.leader.currentHp - amount } };
 }
 
-// Strip negative effects from a card. Used by single target heals, which double
-// as cleanses: a sheep returns to its true form, stuns wear off, beast decay stops.
+// Strip negative effects. Single target heals call this, so a sheep turns back,
+// stuns come off and beast decay stops.
 function cleanse(c: BattleCard): BattleCard {
   let out: BattleCard = { ...c, stunTurns: 0, stunActive: false, beastDecay: false };
   if (out.isSheep) {
@@ -738,8 +738,8 @@ function cleanse(c: BattleCard): BattleCard {
   return out;
 }
 
-// Damage a board card, honouring its Block token and regen. Central so every
-// damage path treats Block the same way.
+// Damage a board card, respecting Block and regen. Everything routes through
+// here so Block behaves the same everywhere.
 function hurtCard(c: BattleCard, dmg: number): BattleCard {
   if (dmg <= 0) return c;
   if (c.blocked) return { ...c, blocked: false };
@@ -747,8 +747,8 @@ function hurtCard(c: BattleCard, dmg: number): BattleCard {
   return { ...c, currentHp: hpA + ((c.regen && hpA > 0) ? 1 : 0) };
 }
 
-// Clear dead board cards — cards with a rebirth perk come back instead of dying.
-// Panda returns in an exact form (3/1 Gorilla); Kurourushi at half his highest stats.
+// Clear dead cards. Rebirth perks come back instead: Panda as a 3/1 gorilla,
+// Kurourushi at half his best stats.
 function clearDead(player: BattlePlayer): BattlePlayer {
   return {
     ...player,
@@ -1276,8 +1276,7 @@ function processTurnStart(state: BattleState): { state: BattleState; drew: strin
   p = { ...p, board: p.board.map(c => c?.beastDecay ? { ...c, currentHp: c.currentHp - 1 } : c) };
   p = { ...p, board: p.board.map(c => (c && c.currentHp <= 0) ? null : c) };
 
-  // A domain lasts through the opponent's reply and expires when its caster's next turn begins.
-  // Without this it was set on activation and never cleared.
+  // A domain covers its own turn plus the opponent's reply, then expires.
   if (p.domainActive) p = { ...p, domainActive: false };
 
   // Domain cooldown
@@ -1320,7 +1319,7 @@ function isPlayerDead(player: BattlePlayer): boolean {
   return false;
 }
 
-// A Sentence dies with its counterpart — otherwise the survivor could never attack again.
+// A sentence dies with its counterpart, or the survivor can never attack again.
 function releaseBrokenSentences(state: BattleState): BattleState {
   const alive = new Set<string>();
   for (const pid of ["P1", "P2"] as PlayerId[]) {
