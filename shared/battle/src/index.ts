@@ -2,3 +2,4 @@
 // copy of the game logic.
 export * from "./battleEngine";
 export * from "./stateView";
+export * from "./ai";

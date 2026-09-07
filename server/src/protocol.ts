@@ -8,6 +8,8 @@ export type ClientMessage =
   // Sent first. The socket does nothing else until it is authenticated.
   | { type: "auth"; token: string }
   | { type: "queue"; draft: PlayerDraftResult }
+  // Play the computer instead of waiting for someone
+  | { type: "practice"; draft: PlayerDraftResult }
   | { type: "intent"; intent: BattleIntent }
   | { type: "leave" };
 

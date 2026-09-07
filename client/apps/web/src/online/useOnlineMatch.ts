@@ -23,6 +23,8 @@ export interface OnlineMatch {
   /** Events from the last update, for driving animations. */
   events: BattleEvent[];
   queue: (draft: PlayerDraftResult) => void;
+  /** Start a match against the computer instead of waiting. */
+  practice: (draft: PlayerDraftResult) => void;
   send: (intent: BattleIntent) => void;
   leave: () => void;
 }
@@ -82,6 +84,7 @@ export function useOnlineMatch(enabled: boolean): OnlineMatch {
   return {
     status, error, you, opponentName, state, events,
     queue: useCallback((draft: PlayerDraftResult) => post({ type: "queue", draft }), [post]),
+    practice: useCallback((draft: PlayerDraftResult) => post({ type: "practice", draft }), [post]),
     send:  useCallback((intent: BattleIntent) => post({ type: "intent", intent }), [post]),
     leave: useCallback(() => post({ type: "leave" }), [post]),
   };

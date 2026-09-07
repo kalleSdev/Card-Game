@@ -3,7 +3,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { createEngine, createInitialState } from "@cg/engine";
 import type { PlayerId, PlayerDraftResult } from "@cg/contracts";
 import type { ClientMessage, ServerMessage } from "./protocol.js";
-import { createMatch, validateDraft, getMatch, endMatch, broadcast, submitIntent, type Match } from "./matches.js";
+import { createMatch, validateDraft, runBotIfItsTurn, getMatch, endMatch, broadcast, submitIntent, type Match } from "./matches.js";
 import {
   register, login, logout, userForToken, getCollection, recordResult,
   AuthError, type PublicUser,
@@ -99,6 +99,41 @@ function pairUp(a: { conn: Conn; draft: PlayerDraftResult }, b: { conn: Conn; dr
   broadcast(match);
 }
 
+// A practice match: the player takes P1, the computer takes P2 with a deck
+// thrown together from whatever is in the card pool.
+function startPractice(conn: Conn, draft: PlayerDraftResult) {
+  const nothing = () => {};
+  const match = createMatch(
+    cardDb,
+    { seat: { name: conn.user?.username ?? "Player", send: m => send(conn.socket, m as ServerMessage) }, draft },
+    { seat: { name: "Computer", send: nothing }, draft: randomDraft() },
+  );
+  match.botSeat = "P2";
+  liveMatchIds.add(match.id);
+  conn.matchId = match.id;
+  conn.playerId = "P1";
+  send(conn.socket, { type: "matched", matchId: match.id, you: "P1", opponentName: "Computer" });
+  broadcast(match);
+  runBotIfItsTurn(match);
+}
+
+function randomDraft(): PlayerDraftResult {
+  const ids = Object.keys(cardDb);
+  const pool = [...ids].sort(() => Math.random() - 0.5);
+  const of = (affinity: string, n: number) =>
+    pool.filter(id => cardDb[id].affinity === affinity).slice(0, n);
+  const combat = of("COMBAT", 5);
+  const support = of("SUPPORT", 4);
+  const rest = pool.filter(id => !combat.includes(id) && !support.includes(id)).slice(0, 3);
+  return {
+    leaderId: pool[0],
+    combatIds: combat,
+    supportIds: support,
+    extraIds: rest,
+    weaponIds: [],
+  };
+}
+
 // Write the result down for both players once a match ends.
 function settle(match: Match) {
   const winner = match.state.winner;
@@ -135,6 +170,13 @@ function handle(conn: Conn, msg: ClientMessage) {
         send(conn.socket, { type: "queued" });
       }
       return;
+    }
+
+    case "practice": {
+      const bad = validateDraft(msg.draft, cardDb);
+      if (bad) return send(conn.socket, { type: "error", reason: bad });
+      if (waiting && waiting.conn.socket === conn.socket) waiting = null;
+      return startPractice(conn, msg.draft);
     }
 
     case "intent": {

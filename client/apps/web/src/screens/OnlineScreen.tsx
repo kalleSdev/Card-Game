@@ -84,9 +84,22 @@ export default function OnlineScreen({
 
       <motion.button
         whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
-        onClick={() => { match.leave(); onLeave(); }}
+        onClick={() => match.practice(draft)}
+        disabled={match.status === "connecting"}
         style={{
           position: "relative", zIndex: 2, marginTop: 8,
+          padding: "11px 30px", borderRadius: 9,
+          background: "rgba(120,80,255,0.14)", border: "1px solid #6a4aff",
+          color: "#cbb8ff", fontSize: 11, letterSpacing: 3, fontWeight: 800,
+          cursor: "pointer", fontFamily: "inherit",
+        }}
+      >PLAY THE COMPUTER</motion.button>
+
+      <motion.button
+        whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
+        onClick={() => { match.leave(); onLeave(); }}
+        style={{
+          position: "relative", zIndex: 2, marginTop: 2,
           padding: "9px 26px", borderRadius: 8,
           background: "rgba(255,255,255,0.04)", border: "1px solid #2a2a3a",
           color: "#667", fontSize: 10, letterSpacing: 3,

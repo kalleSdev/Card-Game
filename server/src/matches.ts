@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { BattleState, BattleIntent } from "@cg/battle";
-import { createBattleState, applyBattleIntent, viewFor } from "@cg/battle";
+import { createBattleState, applyBattleIntent, viewFor, playBotTurn } from "@cg/battle";
 import type { CardDef, PlayerId, PlayerDraftResult } from "@cg/contracts";
 
 // Holds every live match. The server owns the real state; clients only ever get
@@ -16,6 +16,8 @@ export interface Match {
   id: string;
   state: BattleState;
   seats: Record<PlayerId, Seat>;
+  /** Set on practice matches: the seat the computer plays. */
+  botSeat?: PlayerId;
 }
 
 const matches = new Map<string, Match>();
@@ -68,6 +70,17 @@ export function createMatch(
   return match;
 }
 
+// Lets the computer take its turn (and any turns after it) once the human is done.
+export function runBotIfItsTurn(match: Match): void {
+  let guard = 0;
+  while (match.botSeat && match.state.activePlayer === match.botSeat && !match.state.winner && guard++ < 4) {
+    const { state, events } = playBotTurn(match.state, match.botSeat);
+    match.state = state;
+    broadcast(match, events);
+  }
+  if (match.state.winner) endMatch(match.id);
+}
+
 export function getMatch(id: string): Match | undefined {
   return matches.get(id);
 }
@@ -99,6 +112,7 @@ export function submitIntent(match: Match, from: PlayerId, intent: BattleIntent)
 
   match.state = result.state;
   broadcast(match, result.events);
-  if (match.state.winner) endMatch(match.id);
+  if (match.state.winner) { endMatch(match.id); return null; }
+  runBotIfItsTurn(match);
   return null;
 }

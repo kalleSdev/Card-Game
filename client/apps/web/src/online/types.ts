@@ -13,6 +13,7 @@ export interface PublicUser {
 export type ClientMessage =
   | { type: "auth"; token: string }
   | { type: "queue"; draft: PlayerDraftResult }
+  | { type: "practice"; draft: PlayerDraftResult }
   | { type: "intent"; intent: BattleIntent }
   | { type: "leave" };
 
