@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import type { CardDef } from "@cg/contracts";
 import { rc, rg } from "../helpers";
-import { deriveStats, CARD_PERKS } from "../battleEngine";
+import { deriveStats, CARD_PERKS } from "@cg/battle";
 import "../card-effects.css";
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -19,7 +19,7 @@
  */
 
 import type { CardDef, PlayerId } from "@cg/contracts";
-import type { PlayerDraftResult } from "./screens/DraftBattleScreen";
+import type { PlayerDraftResult } from "@cg/contracts";
 import { ROULETTE_ITEM_MAP } from "@cg/engine";
 
 // ─────────────────────────────────────────────────────────────────────────────

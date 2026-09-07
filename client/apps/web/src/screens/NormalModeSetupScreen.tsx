@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import type { CardDef } from "@cg/contracts";
 import type { Profile, SubDeck } from "../profiles";
 import { getAscensionRarity } from "../profiles";
-import { deriveStats } from "../battleEngine";
+import { deriveStats } from "@cg/battle";
 import type { PlayerDraftResult } from "./DraftBattleScreen";
 import CharacterCard from "../components/CharacterCard";
 import PlayerIcon from "../components/PlayerIcon";

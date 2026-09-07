@@ -239,3 +239,13 @@ export type GameEvent =
 // ===== Utilities =====
 export const otherPlayer = (p: PlayerId): PlayerId => (p === "P1" ? "P2" : "P1");
 export const slotKey = (s: SlotRef): string => `${s.type}:${s.index}`;
+
+// The result of one player's draft: the leader plus everything they picked.
+// Lives here because the battle engine needs it and must not depend on the UI.
+export interface PlayerDraftResult {
+  leaderId: string;
+  combatIds: string[];
+  supportIds: string[];
+  extraIds: string[];
+  weaponIds: string[];
+}

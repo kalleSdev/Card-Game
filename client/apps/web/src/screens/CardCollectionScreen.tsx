@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { CardDef } from "@cg/contracts";
 import type { Profile, CollectedCard } from "../profiles";
 import { getAscensionRarity, addCardsToCollection, addKillStar, resetCard, loadProfiles } from "../profiles";
-import { deriveStats } from "../battleEngine";
+import { deriveStats } from "@cg/battle";
 import CharacterCard from "../components/CharacterCard";
 import PlayerIcon from "../components/PlayerIcon";
 import { BG } from "../backgrounds";

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import type { CardDef } from "@cg/contracts";
 import type { Profile } from "../profiles";
-import { deriveStats } from "../battleEngine";
+import { deriveStats } from "@cg/battle";
 import CharacterCard from "../components/CharacterCard";
 import PlayerIcon from "../components/PlayerIcon";
 

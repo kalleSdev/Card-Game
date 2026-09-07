@@ -9,14 +9,13 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
-"dependencies": {
-  "@cg/contracts": "0.0.1",
-  "@cg/engine": "0.0.1",
-  "react": "^18.3.1",
-  "react-dom": "^18.3.1"
-}
-
-,
+  "dependencies": {
+    "@cg/contracts": "0.0.1",
+    "@cg/engine": "0.0.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@cg/battle": "0.0.1"
+  },
   "devDependencies": {
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",

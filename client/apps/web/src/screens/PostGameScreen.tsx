@@ -7,7 +7,7 @@ import PlayerIcon from "../components/PlayerIcon";
 import { BG } from "../backgrounds";
 import AmbientCanvas from "../components/AmbientCanvas";
 import AmbientOverlay from "../components/AmbientOverlay";
-import { BATTLE_SYNERGY_RULES } from "../battleEngine";
+import { BATTLE_SYNERGY_RULES } from "@cg/battle";
 
 interface Props {
   winner: PlayerId;

@@ -1,24 +1,19 @@
 import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import type { CardDef, PlayerId } from "@cg/contracts";
+import type { CardDef, PlayerId, PlayerDraftResult } from "@cg/contracts";
 import CharacterCard from "../components/CharacterCard";
 import PlayerIcon from "../components/PlayerIcon";
 import { BG } from "../backgrounds";
 import AmbientCanvas from "../components/AmbientCanvas";
 import AmbientOverlay from "../components/AmbientOverlay";
 import type { Profile } from "../profiles";
-import { BATTLE_SYNERGY_RULES, deriveStats } from "../battleEngine";
+import { BATTLE_SYNERGY_RULES, deriveStats } from "@cg/battle";
 import { describeDomain } from "../domainText";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-export interface PlayerDraftResult {
-  leaderId: string;
-  combatIds: string[];   // 2 drafted
-  supportIds: string[];  // 3 drafted
-  extraIds: string[];    // 5 random-affinity drafted
-  weaponIds: string[];
-}
+// Re-exported so the screens that already import it from here keep working
+export type { PlayerDraftResult };
 
 // Pick specs: first 5 typed, next 5 any-affinity
 type PickSpec =

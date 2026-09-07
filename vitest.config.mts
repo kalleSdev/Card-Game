@@ -9,10 +9,11 @@ export default defineConfig({
     alias: {
       "@cg/contracts": resolve(__dirname, "shared/contracts/src/index.ts"),
       "@cg/engine": resolve(__dirname, "client/packages/engine/src/index.ts"),
+      "@cg/battle": resolve(__dirname, "shared/battle/src/index.ts"),
     },
   },
   test: {
     environment: "node",
-    include: ["client/**/*.test.ts"],
+    include: ["client/**/*.test.ts", "shared/**/*.test.ts"],
   },
 });

@@ -1,5 +1,5 @@
-import type { DomainEffect } from "./battleEngine";
-import { DOMAIN_BATTLE_EFFECTS } from "./battleEngine";
+import type { DomainEffect } from "@cg/battle";
+import { DOMAIN_BATTLE_EFFECTS } from "@cg/battle";
 
 // All the display text for domain abilities. Screens call describeDomain() and
 // render the result however they want.

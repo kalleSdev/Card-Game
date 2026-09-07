@@ -28,8 +28,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   }
 }
 import type { PlayerId, CardDef } from "@cg/contracts";
-import type { BattleState, BattleCard, BattlePlayer, BattleIntent, SpellCard } from "../battleEngine";
-import { createBattleEngine, createBattleState, DOMAIN_BATTLE_EFFECTS, BATTLE_SYNERGY_RULES, CARD_PERKS } from "../battleEngine";
+import type { BattleState, BattleCard, BattlePlayer, BattleIntent, SpellCard } from "@cg/battle";
+import { createBattleEngine, createBattleState, DOMAIN_BATTLE_EFFECTS, BATTLE_SYNERGY_RULES, CARD_PERKS } from "@cg/battle";
 import BattleArena from "../components/BattleArena";
 import RopeTimer from "../components/RopeTimer";
 import BattleLog from "../components/BattleLog";
