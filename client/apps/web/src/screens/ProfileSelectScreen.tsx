@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { forwardRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { loadProfiles, createProfile, deleteProfile, updateProfile, getTitle, getTitleColor, totalWins } from "../profiles";
 import type { Profile } from "../profiles";
@@ -175,15 +175,14 @@ function ProfileFormModal({
 }
 
 // ── Profile card in the grid ──────────────────────────────────────────────────
-function ProfileCard({
-  profile, assignedTo, onAssign, onEdit, onDelete,
-}: {
+// forwardRef because AnimatePresence hands this a ref to measure it on exit
+const ProfileCard = forwardRef<HTMLDivElement, {
   profile: Profile;
   assignedTo: "P1" | "P2" | null;
   onAssign: () => void;
   onEdit: () => void;
   onDelete: () => void;
-}) {
+}>(function ProfileCard({ profile, assignedTo, onAssign, onEdit, onDelete }, ref) {
   const [confirmDel, setConfirmDel] = useState(false);
   const wins = totalWins(profile);
   const qWr = wr(profile.quickStats.wins, profile.quickStats.matches);
@@ -192,6 +191,7 @@ function ProfileCard({
 
   return (
     <motion.div
+      ref={ref}
       layout
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
@@ -273,7 +273,7 @@ function ProfileCard({
       </AnimatePresence>
     </motion.div>
   );
-}
+});
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 export default function ProfileSelectScreen({

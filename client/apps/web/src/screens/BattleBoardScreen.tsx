@@ -1562,6 +1562,12 @@ export default function BattleBoardScreen({
   const [pendingSpellId, setPendingSpellId] = useState<string | null>(null); // spell awaiting enemy target
   const [buffOneTargeting, setBuffOneTargeting] = useState<string | null>(null); // spell id for BUFF_ONE (own-card target)
   const [turnBackTargeting, setTurnBackTargeting] = useState(false);
+  // Whose side of the table we are rendering. Online this is your seat and never
+  // moves. Locally it swaps at the handoff, so the player about to act is always
+  // the one at the bottom and the other player's hand stays hidden up top.
+  const [viewer, setViewer] = useState<PlayerId>("P1");
+  // Set when the turn passes locally, cleared once the next player taps ready.
+  const [handoffTo, setHandoffTo] = useState<PlayerId | null>(null);
   const [pendingShieldGrant, setPendingShieldGrant] = useState(false);
   const [pendingBlockGrant, setPendingBlockGrant] = useState(false);
   // Perk activation flow — Mahito needs two targets (enemy first, then same-cost friendly)
@@ -1660,6 +1666,11 @@ export default function BattleBoardScreen({
 
     const result = engine.apply(intent);
     setBattleState(result.state);
+
+    // Turn passed, so hand the device over before showing the next player's cards
+    if (!result.state.winner && result.state.activePlayer !== before.activePlayer) {
+      setHandoffTo(result.state.activePlayer);
+    }
     for (const ev of result.events) {
       if (ev.type === "DOMAIN_ACTIVATED") {
         setDomainFlash(ev.name);
@@ -1739,6 +1750,7 @@ export default function BattleBoardScreen({
   // doReplace() bypasses the engine, so we push the mulligan result in first.
   useEffect(() => {
     if (mulliganStep === "BATTLE") {
+      setViewer(battleState.activePlayer);
       engine.setState(battleState);
       if (battleState.phase === "DRAW") {
         dispatch({ type: "END_TURN", pid: battleState.activePlayer });
@@ -1748,8 +1760,8 @@ export default function BattleBoardScreen({
   }, [mulliganStep]);
 
   const handleEndTurn = () => {
-    const pid = battleState.activePlayer;
-    dispatch({ type: "END_TURN", pid });
+    if (battleState.activePlayer !== viewer) return;
+    dispatch({ type: "END_TURN", pid: viewer });
   };
 
   // ── Turn timer: 60s per turn, auto-ends the turn at 0 ─────────────────────
@@ -1775,14 +1787,16 @@ export default function BattleBoardScreen({
   }, [turnTimeLeft]);
 
   const handlePlayCard = (instanceId: string) => {
-    const pid = battleState.activePlayer;
+    if (battleState.activePlayer !== viewer) return;
+    const pid = viewer;
     const slot = battleState.players[pid].board.findIndex(s => s === null);
     if (slot === -1) return;
     dispatch({ type: "PLAY_CARD", pid, instanceId, slot });
   };
 
   const handleSelectAttacker = (instanceId: string, ev?: React.MouseEvent) => {
-    const pid = battleState.activePlayer;
+    if (battleState.activePlayer !== viewer) return;
+    const pid = viewer;
     if (battleState.pendingAttackerId === instanceId) {
       dispatch({ type: "CANCEL_ATTACK", pid });
       setAttackLineStart(null);
@@ -1804,18 +1818,21 @@ export default function BattleBoardScreen({
   }, [battleState.pendingAttackerId]);
 
   const handleTargetCard   = (instanceId: string) => {
-    const pid = battleState.activePlayer;
+    if (battleState.activePlayer !== viewer) return;
+    const pid = viewer;
     if (!battleState.pendingAttackerId) return;
     dispatch({ type: "ATTACK_CARD", pid, targetInstanceId: instanceId });
   };
 
   const handleDomainTarget = (targetInstanceId: string) => {
-    const pid = battleState.activePlayer;
+    if (battleState.activePlayer !== viewer) return;
+    const pid = viewer;
     dispatch({ type: "DOMAIN_TARGET", pid, targetInstanceId });
   };
 
   const handleTargetLeader = () => {
-    const pid = battleState.activePlayer;
+    if (battleState.activePlayer !== viewer) return;
+    const pid = viewer;
     if (pendingSpellId) {
       dispatch({ type: "CAST_SPELL", pid, spellId: pendingSpellId, targetInstanceId: battleState.players[pid === "P1" ? "P2" : "P1"].leader.instanceId });
       setPendingSpellId(null);
@@ -1830,7 +1847,8 @@ export default function BattleBoardScreen({
   };
 
   const handleSpellClick = (spell: SpellCard) => {
-    const pid = battleState.activePlayer;
+    if (battleState.activePlayer !== viewer) return;
+    const pid = viewer;
     const eff = spell.effect;
     if (eff.kind === "TURN_BACK_SHEEP") {
       setTurnBackTargeting(prev => !prev);
@@ -1853,7 +1871,7 @@ export default function BattleBoardScreen({
   };
 
   const handleSpellTargetCard = (instanceId: string) => {
-    const pid = battleState.activePlayer;
+    const pid = viewer;
     if (!pendingSpellId) return;
     dispatch({ type: "CAST_SPELL", pid, spellId: pendingSpellId, targetInstanceId: instanceId });
     setPendingSpellId(null);
@@ -2160,10 +2178,12 @@ export default function BattleBoardScreen({
     );
   }
 
-  const pid    = battleState.activePlayer;
+  const pid    = viewer;
   const oppId: PlayerId = pid === "P1" ? "P2" : "P1";
   const player: BattlePlayer = battleState.players[pid];
   const opp:   BattlePlayer  = battleState.players[oppId];
+  // Nothing on the board is clickable while the other player is acting.
+  const isMyTurn = battleState.activePlayer === viewer;
   const name    = pid === "P1" ? p1Name : p2Name;
   const icon    = pid === "P1" ? p1Icon : p2Icon;
   const oppName = oppId === "P1" ? p1Name : p2Name;
@@ -2207,6 +2227,7 @@ export default function BattleBoardScreen({
 
   const handleActivatePerk = (card: BattleCard) => {
     if (battleState.phase !== "MAIN") return;
+    if (battleState.activePlayer !== viewer) return;
     if (pendingPerk?.instanceId === card.instanceId) { setPendingPerk(null); return; } // toggle off
     // Perks that need target selection before dispatching
     if (["mahito", "inumaki", "gakuganji", "nobara", "hanami", "higuruma"].includes(card.defId)) {
@@ -2217,6 +2238,7 @@ export default function BattleBoardScreen({
   };
 
   const handleOwnCardClick = (instanceId: string, ev?: React.MouseEvent) => {
+    if (battleState.activePlayer !== viewer) return;
     // Mahito perk stage 2: pick the same-cost friendly card
     if (pendingPerk?.defId === "mahito" && pendingPerk.enemyTargetId) {
       dispatch({
@@ -2310,6 +2332,41 @@ export default function BattleBoardScreen({
           : null
         }
       />
+
+      {/* Opponent's hand as face down cards. You only ever see how many they hold. */}
+      <div style={{
+        position: "relative", zIndex: 2, flexShrink: 0,
+        display: "flex", justifyContent: "center", alignItems: "flex-start",
+        height: 34, pointerEvents: "none",
+      }}>
+        {opp.hand.map((card, i) => {
+          const spread = Math.min(opp.hand.length, 10);
+          const offset = (i - (spread - 1) / 2) * 26;
+          return (
+            <motion.div
+              key={card.instanceId}
+              initial={{ y: -30, opacity: 0 }}
+              animate={{ y: -16, opacity: 1, rotate: (i - (spread - 1) / 2) * 2.2 }}
+              transition={{ type: "spring", stiffness: 300, damping: 26 }}
+              style={{
+                position: "absolute", left: `calc(50% + ${offset}px)`,
+                width: 30, height: 42, marginLeft: -15,
+                borderRadius: 4,
+                background: "linear-gradient(160deg, #1a1a3a, #0a0a1e)",
+                border: "1px solid #2e2e5a",
+                boxShadow: "0 3px 10px rgba(0,0,0,0.7)",
+                transformOrigin: "top center",
+              }}
+            />
+          );
+        })}
+        {opp.hand.length > 0 && (
+          <div style={{
+            position: "absolute", right: 22, top: 6,
+            fontSize: 9, color: "#556", letterSpacing: 2,
+          }}>{opp.hand.length} IN HAND</div>
+        )}
+      </div>
 
       {/* ── OPPONENT LEADER (top, centered) ──────────────────────────────── */}
       <div style={{
@@ -2420,13 +2477,19 @@ export default function BattleBoardScreen({
           {!timerPaused && (
             <RopeTimer secondsLeft={turnTimeLeft} />
           )}
-          <div style={{
-            fontSize: 10, fontWeight: 800, letterSpacing: 2,
-            color: pid === "P1" ? "#4a9eff" : "#ff6666",
-            background: pid === "P1" ? "rgba(74,158,255,0.07)" : "rgba(255,102,102,0.07)",
-            padding: "3px 12px", borderRadius: 6,
-            border: `1px solid ${pid === "P1" ? "#4a9eff33" : "#ff666633"}`,
-          }}>{name}'s TURN</div>
+          <motion.div
+            animate={isMyTurn ? {} : { opacity: [0.55, 1, 0.55] }}
+            transition={isMyTurn ? {} : { duration: 1.8, repeat: Infinity }}
+            style={{
+              fontSize: 10, fontWeight: 800, letterSpacing: 2,
+              color: isMyTurn ? (pid === "P1" ? COLOR.p1 : COLOR.p2) : "#7a7a90",
+              background: isMyTurn
+                ? (pid === "P1" ? "rgba(74,158,255,0.07)" : "rgba(255,102,102,0.07)")
+                : "rgba(255,255,255,0.03)",
+              padding: "3px 12px", borderRadius: 6,
+              border: `1px solid ${isMyTurn ? (pid === "P1" ? "#4a9eff33" : "#ff666633") : "#2a2a3a"}`,
+            }}
+          >{isMyTurn ? "YOUR TURN" : `WAITING FOR ${oppName.toUpperCase()}`}</motion.div>
           {/* End turn — Hearthstone's button tells you whether you still have moves.
               Amber and pulsing while something is left to do, calm green once you're spent. */}
           {(() => {
@@ -2638,7 +2701,7 @@ export default function BattleBoardScreen({
           meter={player.domainMeter}
           cooldown={player.domainCooldown}
           leaderId={player.leader.defId}
-          onActivate={() => dispatch({ type: "ACTIVATE_DOMAIN", pid })}
+          onActivate={() => { if (isMyTurn) dispatch({ type: "ACTIVATE_DOMAIN", pid }); }}
         />
 
         {/* Leader panel (right) — domain meter is now built-in on the left of the panel */}
@@ -2652,7 +2715,7 @@ export default function BattleBoardScreen({
             selected={!player.mahoragaBoardMode && !player.sukunaBoardMode && !player.takabaBoardMode && battleState.pendingAttackerId === player.leader.instanceId}
             domainMeter={player.domainMeter}
             domainCooldown={player.domainCooldown}
-            onDomainActivate={() => dispatch({ type: "ACTIVATE_DOMAIN", pid })}
+            onDomainActivate={() => { if (isMyTurn) dispatch({ type: "ACTIVATE_DOMAIN", pid }); }}
             onSelect={(ev) => {
               // Shields stack on the leader; a Block nullifies the next damage instance
               if (pendingShieldGrant) {
@@ -3089,6 +3152,59 @@ export default function BattleBoardScreen({
               background: "rgba(255,255,255,0.9)", mixBlendMode: "overlay",
             }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Handoff. Covers the board so the next player cannot see the hand of
+          whoever just finished their turn. */}
+      <AnimatePresence>
+        {handoffTo && !battleState.winner && (
+          <motion.div
+            key="handoff"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: "fixed", inset: 0, zIndex: 9000,
+              background: "rgba(2,2,8,0.97)", backdropFilter: "blur(14px)",
+              display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center", gap: 22,
+            }}
+          >
+            <div style={{ fontSize: 9, letterSpacing: 6, color: "#445" }}>PASS THE DEVICE</div>
+            <motion.div
+              initial={{ scale: 0.9 }} animate={{ scale: 1 }}
+              style={{
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 12,
+              }}
+            >
+              <div style={{
+                width: 74, height: 74, borderRadius: "50%", overflow: "hidden",
+                border: `2px solid ${handoffTo === "P1" ? COLOR.p1 : COLOR.p2}`,
+              }}>
+                <PlayerIcon icon={handoffTo === "P1" ? p1Icon : p2Icon} size={74} style={{ display: "block" }} />
+              </div>
+              <div style={{
+                fontSize: 26, fontWeight: 900, letterSpacing: 3,
+                color: handoffTo === "P1" ? COLOR.p1 : COLOR.p2,
+              }}>
+                {handoffTo === "P1" ? p1Name : p2Name}
+              </div>
+              <div style={{ fontSize: 10, color: "#556", letterSpacing: 2 }}>YOUR TURN</div>
+            </motion.div>
+
+            <motion.button
+              whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.96 }}
+              onClick={() => { setViewer(handoffTo); setHandoffTo(null); }}
+              style={{
+                marginTop: 6, padding: "12px 44px", borderRadius: 10,
+                background: `linear-gradient(135deg, ${COLOR.cursedDeep}, ${COLOR.cursed})`,
+                border: "none", color: "#fff",
+                fontSize: 12, fontWeight: 900, letterSpacing: 4,
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >I'M READY</motion.button>
+          </motion.div>
         )}
       </AnimatePresence>
 
