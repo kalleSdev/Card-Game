@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { GameState, Intent, PlayerId, CardDef } from "@cg/contracts";
 import { createEngine, createInitialState } from "@cg/engine";
 import type { PlayerIcons, PlayerNames } from "./types";
@@ -26,11 +26,15 @@ import AugmentScreen from "./screens/AugmentScreen";
 import LockedInScreen from "./screens/LockedInScreen";
 import ResolutionScreen from "./screens/ResolutionScreen";
 import RankingScreen from "./screens/RankingScreen";
+import LoginScreen from "./screens/LoginScreen";
+import { fetchMe, logout as apiLogout } from "./online/api";
+import type { PublicUser } from "./online/types";
 
 type AppScreen =
   | "SPLASH" | "HOME" | "PROFILE_SELECT" | "PROFILES_VIEW"
   | "DRAFT_BATTLE" | "NORMAL_MODE_SETUP" | "SETUP" | "GAME"
-  | "BATTLE_BOARD" | "POST_GAME" | "CARD_REWARD" | "GALLERY" | "RANKING";
+  | "BATTLE_BOARD" | "POST_GAME" | "CARD_REWARD" | "GALLERY" | "RANKING"
+  | "LOGIN";
 
 type BattleMode = "quick-draft" | "normal";
 
@@ -71,6 +75,11 @@ export default function App() {
   const engine = useMemo(() => createEngine(createInitialState()), [key]);
   const [state, setState] = useState<GameState>(engine.getState());
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
+  // Signed in account, if any. Online play needs one, the offline modes do not.
+  const [account, setAccount] = useState<PublicUser | null>(null);
+
+  // Pick an existing session back up on load
+  useEffect(() => { fetchMe().then(me => { if (me) setAccount(me.user); }); }, []);
 
   // New match means a new engine, so pull its state in during render.
   const [prevEngine, setPrevEngine] = useState(engine);
@@ -149,11 +158,21 @@ export default function App() {
       onGallery={() => setAppScreen("GALLERY")}
       onProfiles={() => setAppScreen("PROFILES_VIEW")}
       onRanking={() => setAppScreen("RANKING")}
+      account={account}
+      onAccount={() => setAppScreen("LOGIN")}
+      onSignOut={() => { apiLogout(); setAccount(null); }}
       onBack={() => setAppScreen("SPLASH")}
     />
   );
 
   if (appScreen === "RANKING") return <RankingScreen profiles={loadProfiles()} onBack={() => setAppScreen("HOME")} />;
+
+  if (appScreen === "LOGIN") return (
+    <LoginScreen
+      onSignedIn={user => { setAccount(user); setAppScreen("HOME"); }}
+      onBack={() => setAppScreen("HOME")}
+    />
+  );
 
   if (appScreen === "GALLERY") return <CardGallery cardDb={state.cardDb} onBack={() => setAppScreen("HOME")} />;
   if (appScreen === "PROFILES_VIEW") return (

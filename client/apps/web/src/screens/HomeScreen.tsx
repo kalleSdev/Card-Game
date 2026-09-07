@@ -148,7 +148,17 @@ function ModeBtn({ btn, isHov, onHover }: {
   );
 }
 
-export default function HomeScreen({ onSelect, onDraftBattle, onNormalMode, onGallery, onProfiles, onRanking, onBack }: { onSelect: () => void; onDraftBattle: () => void; onNormalMode: () => void; onGallery: () => void; onProfiles: () => void; onRanking: () => void; onBack?: () => void }) {
+export default function HomeScreen({
+  onSelect, onDraftBattle, onNormalMode, onGallery, onProfiles, onRanking,
+  account, onAccount, onSignOut, onBack,
+}: {
+  onSelect: () => void; onDraftBattle: () => void; onNormalMode: () => void;
+  onGallery: () => void; onProfiles: () => void; onRanking: () => void;
+  account: { username: string; wins: number; losses: number } | null;
+  onAccount: () => void;
+  onSignOut: () => void;
+  onBack?: () => void;
+}) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [pulse, setPulse] = useState(false);
 
@@ -188,6 +198,47 @@ export default function HomeScreen({ onSelect, onDraftBattle, onNormalMode, onGa
           ← BACK
         </button>
       )}
+
+      {/* Account strip, top right. Offline modes work without one. */}
+      <div style={{
+        position: "fixed", top: 18, right: 18, zIndex: 10,
+        display: "flex", alignItems: "center", gap: 8,
+      }}>
+        {account ? (
+          <>
+            <div style={{
+              padding: "7px 14px", borderRadius: 8,
+              background: "rgba(204,68,255,0.08)", border: "1px solid #cc44ff44",
+              fontSize: 11, color: "#dcaaff", letterSpacing: 1,
+            }}>
+              {account.username}
+              <span style={{ color: "#667", marginLeft: 8, fontSize: 10 }}>
+                {account.wins}W {account.losses}L
+              </span>
+            </div>
+            <button
+              onClick={onSignOut}
+              style={{
+                padding: "7px 12px", background: "rgba(255,255,255,0.04)",
+                border: "1px solid #2a2a3a", borderRadius: 8,
+                color: "#556", cursor: "pointer", fontSize: 10,
+                letterSpacing: 1, fontFamily: "inherit",
+              }}
+            >SIGN OUT</button>
+          </>
+        ) : (
+          <button
+            onClick={onAccount}
+            style={{
+              padding: "8px 18px",
+              background: "linear-gradient(135deg, rgba(153,51,255,0.2), rgba(204,68,255,0.15))",
+              border: "1px solid #cc44ff55", borderRadius: 8,
+              color: "#cc44ff", cursor: "pointer", fontSize: 11,
+              letterSpacing: 2, fontFamily: "inherit", fontWeight: 700,
+            }}
+          >SIGN IN</button>
+        )}
+      </div>
 
       {/* Ambient particles */}
       <AmbientCanvas />
