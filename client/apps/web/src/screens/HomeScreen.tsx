@@ -149,11 +149,12 @@ function ModeBtn({ btn, isHov, onHover }: {
 }
 
 export default function HomeScreen({
-  onSelect, onDraftBattle, onNormalMode, onGallery, onProfiles, onRanking,
+  onSelect, onDraftBattle, onNormalMode, onGallery, onProfiles, onRanking, onPlayOnline,
   account, onAccount, onSignOut, onBack,
 }: {
   onSelect: () => void; onDraftBattle: () => void; onNormalMode: () => void;
   onGallery: () => void; onProfiles: () => void; onRanking: () => void;
+  onPlayOnline: () => void;
   account: { username: string; wins: number; losses: number } | null;
   onAccount: () => void;
   onSignOut: () => void;
@@ -343,6 +344,7 @@ export default function HomeScreen({
           {/* RIGHT column: Normal Mode */}
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {([
+              { id: "online", icon: "🌐", title: "PLAY ONLINE", sub: "Draft a deck · Face a real opponent", color: "#4a9eff", badge: "NEW", onClick: onPlayOnline },
               { id: "normal", icon: "⚔️", title: "NORMAL MODE", sub: "Use your collected deck · Build your legacy", color: "#44ff88", badge: "NEW", onClick: onNormalMode },
             ] as const).map(btn => {
               const isHov = hovered === btn.id;

@@ -27,6 +27,7 @@ import LockedInScreen from "./screens/LockedInScreen";
 import ResolutionScreen from "./screens/ResolutionScreen";
 import RankingScreen from "./screens/RankingScreen";
 import LoginScreen from "./screens/LoginScreen";
+import OnlineScreen from "./screens/OnlineScreen";
 import { fetchMe, logout as apiLogout } from "./online/api";
 import type { PublicUser } from "./online/types";
 
@@ -34,7 +35,7 @@ type AppScreen =
   | "SPLASH" | "HOME" | "PROFILE_SELECT" | "PROFILES_VIEW"
   | "DRAFT_BATTLE" | "NORMAL_MODE_SETUP" | "SETUP" | "GAME"
   | "BATTLE_BOARD" | "POST_GAME" | "CARD_REWARD" | "GALLERY" | "RANKING"
-  | "LOGIN";
+  | "LOGIN" | "ONLINE";
 
 type BattleMode = "quick-draft" | "normal";
 
@@ -77,6 +78,8 @@ export default function App() {
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   // Signed in account, if any. Online play needs one, the offline modes do not.
   const [account, setAccount] = useState<PublicUser | null>(null);
+  // True while the draft is being done to take online rather than to play locally
+  const [draftingForOnline, setDraftingForOnline] = useState(false);
 
   // Pick an existing session back up on load
   useEffect(() => { fetchMe().then(me => { if (me) setAccount(me.user); }); }, []);
@@ -158,6 +161,29 @@ export default function App() {
       onGallery={() => setAppScreen("GALLERY")}
       onProfiles={() => setAppScreen("PROFILES_VIEW")}
       onRanking={() => setAppScreen("RANKING")}
+      onPlayOnline={() => {
+        if (!account) { setAppScreen("LOGIN"); return; }
+        // Online uses the signed in account rather than a local profile,
+        // so skip profile select and draft a single deck
+        const me: Profile = {
+          id: `online-${account.id}`,
+          name: account.username,
+          icon: "player-1",
+          createdAt: Date.now(),
+          quickStats:  { wins: 0, losses: 0, matches: 0 },
+          draftStats:  { wins: 0, losses: 0, matches: 0 },
+          normalStats: { wins: 0, losses: 0, matches: 0 },
+          history: [], collection: [], subDecks: [],
+        };
+        setP1Profile(me);
+        setP2Profile(me);
+        setPlayerNames({ P1: me.name, P2: "Opponent" });
+        setPlayerIcons({ P1: me.icon, P2: "player-2" });
+        setBattleMode("quick-draft");
+        setDraftMode(true);
+        setDraftingForOnline(true);
+        setAppScreen("DRAFT_BATTLE");
+      }}
       account={account}
       onAccount={() => setAppScreen("LOGIN")}
       onSignOut={() => { apiLogout(); setAccount(null); }}
@@ -166,6 +192,15 @@ export default function App() {
   );
 
   if (appScreen === "RANKING") return <RankingScreen profiles={loadProfiles()} onBack={() => setAppScreen("HOME")} />;
+
+  if (appScreen === "ONLINE" && p1DraftResult && account) return (
+    <OnlineScreen
+      cardDb={state.cardDb}
+      draft={p1DraftResult}
+      username={account.username}
+      onLeave={() => { setDraftingForOnline(false); setAppScreen("HOME"); }}
+    />
+  );
 
   if (appScreen === "LOGIN") return (
     <LoginScreen
@@ -221,11 +256,13 @@ export default function App() {
         cardDb={state.cardDb}
         p1Profile={p1Profile}
         p2Profile={p2Profile}
-        onBack={() => setAppScreen("PROFILE_SELECT")}
+        solo={draftingForOnline}
+        onBack={() => { setDraftingForOnline(false); setAppScreen(draftingForOnline ? "HOME" : "PROFILE_SELECT"); }}
         onBattleStart={(p1Result, p2Result) => {
           setP1DraftResult(p1Result);
           setP2DraftResult(p2Result);
-          setAppScreen("BATTLE_BOARD");
+          // Drafted to take online, so queue instead of playing it here
+          setAppScreen(draftingForOnline ? "ONLINE" : "BATTLE_BOARD");
         }}
       />
     );

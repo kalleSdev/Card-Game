@@ -28,7 +28,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   }
 }
 import type { PlayerId, CardDef } from "@cg/contracts";
-import type { BattleState, BattleCard, BattlePlayer, BattleIntent, SpellCard } from "@cg/battle";
+import type { BattleState, BattleCard, BattlePlayer, BattleIntent, BattleEvent, SpellCard } from "@cg/battle";
 import { createBattleEngine, createBattleState, DOMAIN_BATTLE_EFFECTS, BATTLE_SYNERGY_RULES, CARD_PERKS } from "@cg/battle";
 import BattleArena from "../components/BattleArena";
 import RopeTimer from "../components/RopeTimer";
@@ -149,7 +149,18 @@ function SynergyTag({ id }: { id: string }) {
 //  └─────────────────────────────────────────┘
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Supplied when the match is being played over the network. The server owns the
+// state, so the board stops running its own engine and just sends intents.
+export interface OnlineBinding {
+  you: PlayerId;
+  opponentName: string;
+  state: BattleState;
+  events: BattleEvent[];
+  send: (intent: BattleIntent) => void;
+}
+
 interface Props {
+  online?: OnlineBinding;
   p1Draft: PlayerDraftResult;
   p2Draft: PlayerDraftResult;
   cardDb: Record<string, CardDef>;
@@ -1541,6 +1552,7 @@ function GameOverOverlay({ winnerName, winnerIcon, onDone }: {
 // Main screen
 // ─────────────────────────────────────────────────────────────────────────────
 export default function BattleBoardScreen({
+  online,
   p1Draft, p2Draft, cardDb,
   p1Name, p2Name, p1Icon, p2Icon,
   onGameOver,
@@ -1548,7 +1560,9 @@ export default function BattleBoardScreen({
   // Mulligan phase: players swap cards before battle starts
   type MulliganStep = "P1" | "P2" | "BATTLE";
   type MulliganSubPhase = "SELECT" | "REPLACED";
-  const [mulliganStep, setMulliganStep] = useState<MulliganStep>("P1");
+  const isOnline = !!online;
+  // Online matches are already dealt by the server, so there is no local mulligan
+  const [mulliganStep, setMulliganStep] = useState<MulliganStep>(isOnline ? "BATTLE" : "P1");
   const [mulliganSubPhase, setMulliganSubPhase] = useState<MulliganSubPhase>("SELECT");
   const [mulliganReturning, setMulliganReturning] = useState<Set<string>>(new Set());
   const [newCardIds, setNewCardIds] = useState<Set<string>>(new Set());
@@ -1556,7 +1570,10 @@ export default function BattleBoardScreen({
 
   const [initialState] = useState(() => createBattleState(p1Draft, p2Draft, cardDb));
   const [engine] = useState(() => createBattleEngine(initialState));
-  const [battleState, setBattleState] = useState<BattleState>(() => engine.getState());
+  const [localState, setLocalState] = useState<BattleState>(() => engine.getState());
+  // Online the server is the only source of truth; locally we run our own engine
+  const battleState = online ? online.state : localState;
+  const setBattleState = setLocalState;
   const [domainFlash, setDomainFlash] = useState<string | null>(null);
   const [gameOverShown, setGameOverShown] = useState(false);
   const [pendingSpellId, setPendingSpellId] = useState<string | null>(null); // spell awaiting enemy target
@@ -1565,7 +1582,10 @@ export default function BattleBoardScreen({
   // Whose side of the table we are rendering. Online this is your seat and never
   // moves. Locally it swaps at the handoff, so the player about to act is always
   // the one at the bottom and the other player's hand stays hidden up top.
-  const [viewer, setViewer] = useState<PlayerId>("P1");
+  const [localViewer, setLocalViewer] = useState<PlayerId>("P1");
+  // Online your seat never changes. Locally it swaps at the handoff.
+  const viewer = online ? online.you : localViewer;
+  const setViewer = setLocalViewer;
   // Set when the turn passes locally, cleared once the next player taps ready.
   const [handoffTo, setHandoffTo] = useState<PlayerId | null>(null);
   const [pendingShieldGrant, setPendingShieldGrant] = useState(false);
@@ -1643,18 +1663,10 @@ export default function BattleBoardScreen({
     setMulliganStep(pid === "P1" ? "P2" : "BATTLE");
   };
 
-  const dispatch = useCallback((intent: BattleIntent) => {
-    // Spell splash — capture the spell's name before the engine consumes it
-    if (intent.type === "CAST_SPELL") {
-      const sp = engine.getState().players[intent.pid].spells.find(s => s.id === intent.spellId);
-      if (sp) {
-        const key = ++dmgKeyRef.current;
-        setSpellFlash({ key, name: sp.name });
-        setTimeout(() => setSpellFlash(prev => prev?.key === key ? null : prev), 950);
-      }
-    }
-    // Snapshot names before the engine runs so the log can describe cards that die
-    const before = engine.getState();
+  // Drives every animation off the engine's event stream. Local matches call this
+  // right after applying an intent, online matches call it when the server sends
+  // events down. `before` is the state as it was, so dead cards can still be named.
+  const playEvents = useCallback((events: BattleEvent[], before: BattleState) => {
     const nameOf = (id: string): string => {
       for (const pl of [before.players.P1, before.players.P2]) {
         if (pl.leader.instanceId === id) return pl.leader.name;
@@ -1663,15 +1675,7 @@ export default function BattleBoardScreen({
       }
       return "a card";
     };
-
-    const result = engine.apply(intent);
-    setBattleState(result.state);
-
-    // Turn passed, so hand the device over before showing the next player's cards
-    if (!result.state.winner && result.state.activePlayer !== before.activePlayer) {
-      setHandoffTo(result.state.activePlayer);
-    }
-    for (const ev of result.events) {
+    for (const ev of events) {
       if (ev.type === "DOMAIN_ACTIVATED") {
         setDomainFlash(ev.name);
         pushLog({ pid: ev.pid, icon: "🌀", text: ev.name, tone: "domain" });
@@ -1743,7 +1747,44 @@ export default function BattleBoardScreen({
         setTimeout(() => setFreshIds(p => { const n = new Set(p); n.delete(ev.instanceId); return n; }), 600);
       }
     }
-  }, [engine, pushLog, shakeControls]);
+  }, [pushLog, shakeControls]);
+
+  const dispatch = useCallback((intent: BattleIntent) => {
+    // Online the server runs the rules, so just post the intent and wait
+    if (online) return online.send(intent);
+
+    // Spell splash needs the name before the engine consumes the spell
+    if (intent.type === "CAST_SPELL") {
+      const sp = engine.getState().players[intent.pid].spells.find(s => s.id === intent.spellId);
+      if (sp) {
+        const key = ++dmgKeyRef.current;
+        setSpellFlash({ key, name: sp.name });
+        setTimeout(() => setSpellFlash(prev => prev?.key === key ? null : prev), 950);
+      }
+    }
+
+    const before = engine.getState();
+    const result = engine.apply(intent);
+    setBattleState(result.state);
+
+    // Turn passed, so hand the device over before showing the next player's cards
+    if (!result.state.winner && result.state.activePlayer !== before.activePlayer) {
+      setHandoffTo(result.state.activePlayer);
+    }
+    playEvents(result.events, before);
+  }, [engine, online, playEvents, setBattleState]);
+
+  // Online, events arrive with each server update rather than from a local apply.
+  const lastEventsRef = useRef<BattleEvent[] | null>(null);
+  const prevOnlineStateRef = useRef<BattleState | null>(null);
+  useEffect(() => {
+    if (!online) return;
+    if (online.events === lastEventsRef.current) return;
+    const before = prevOnlineStateRef.current ?? online.state;
+    lastEventsRef.current = online.events;
+    prevOnlineStateRef.current = online.state;
+    if (online.events.length) playEvents(online.events, before);
+  }, [online, playEvents]);
 
   // Sync engine with post-mulligan React state when battle starts, then
   // advance past the DRAW phase so the first player draws their opening card.
@@ -3158,7 +3199,7 @@ export default function BattleBoardScreen({
       {/* Handoff. Covers the board so the next player cannot see the hand of
           whoever just finished their turn. */}
       <AnimatePresence>
-        {handoffTo && !battleState.winner && (
+        {handoffTo && !isOnline && !battleState.winner && (
           <motion.div
             key="handoff"
             initial={{ opacity: 0 }}

@@ -510,13 +510,15 @@ function DraftCompleteSplash({ p1Profile, p2Profile, onStartBattle }: {
 
 // ── Main orchestrator ─────────────────────────────────────────────────────────
 export default function DraftBattleScreen({
-  cardDb, p1Profile, p2Profile, onBack, onBattleStart,
+  cardDb, p1Profile, p2Profile, onBack, onBattleStart, solo = false,
 }: {
   cardDb: Record<string, CardDef>;
   p1Profile: Profile;
   p2Profile: Profile;
   onBack: () => void;
   onBattleStart: (p1: PlayerDraftResult, p2: PlayerDraftResult) => void;
+  // Online play only needs one deck, so skip the handoff and P2 draft
+  solo?: boolean;
 }) {
   type Phase =
     | { step: "HANDOFF_P1" }
@@ -525,7 +527,9 @@ export default function DraftBattleScreen({
     | { step: "HANDOFF_P2" }
     | { step: "DONE" };
 
-  const [phase, setPhase] = useState<Phase>({ step: "HANDOFF_P1" });
+  const [phase, setPhase] = useState<Phase>(
+    solo ? { step: "LEADER_PICK", pid: "P1" } : { step: "HANDOFF_P1" }
+  );
   const [p1Draft, setP1Draft] = useState<Partial<PlayerDraftResult>>({});
   const [p2Draft, setP2Draft] = useState<Partial<PlayerDraftResult>>({});
   const [leaderOptions, setLeaderOptions] = useState<string[]>(() => getLeaderOptions(cardDb));
@@ -590,7 +594,7 @@ export default function DraftBattleScreen({
 
       {phaseLabel && (
         <div style={{ position: "fixed", top: 18, right: 18, zIndex: 10, fontSize: 9, color: "#334", letterSpacing: 3 }}>
-          QUICK DRAFT · {phaseLabel}
+          {solo ? "ONLINE DRAFT" : "QUICK DRAFT"} · {phaseLabel}
         </div>
       )}
 
@@ -743,8 +747,11 @@ export default function DraftBattleScreen({
                   } else {
                     // Skip weapon selection — weapons not used in Quick Draft
                     setDraft(pid, { weaponIds: [] });
-                    if (pid === "P1") setPhase({ step: "HANDOFF_P2" });
-                    else              setPhase({ step: "DONE" });
+                    if (solo) {
+                      const full = { ...getDraft(pid), ...update, weaponIds: [] } as PlayerDraftResult;
+                      onBattleStart(full, full);
+                    } else if (pid === "P1") setPhase({ step: "HANDOFF_P2" });
+                    else setPhase({ step: "DONE" });
                   }
                 }}
               />
