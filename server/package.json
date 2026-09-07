@@ -12,10 +12,14 @@
     "@cg/battle": "0.0.1",
     "@cg/contracts": "0.0.1",
     "@cg/engine": "0.0.1",
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^13.0.3",
     "fastify": "^5.2.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/ws": "^8.5.13",
     "tsx": "^4.19.2"
   }

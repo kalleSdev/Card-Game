@@ -5,11 +5,14 @@ import type { PlayerId, PlayerDraftResult } from "@cg/contracts";
 // types later and the two sides cannot drift.
 
 export type ClientMessage =
-  | { type: "queue"; name: string; draft: PlayerDraftResult }
+  // Sent first. The socket does nothing else until it is authenticated.
+  | { type: "auth"; token: string }
+  | { type: "queue"; draft: PlayerDraftResult }
   | { type: "intent"; intent: BattleIntent }
   | { type: "leave" };
 
 export type ServerMessage =
+  | { type: "authed"; username: string }
   | { type: "queued" }
   | { type: "matched"; matchId: string; you: PlayerId; opponentName: string }
   // Full state, already redacted for the receiving player

@@ -13,6 +13,12 @@ build/
 coverage/
 .vitest/
 
+# Local database
+server/data/
+*.db
+*.db-shm
+*.db-wal
+
 # Environment
 .env
 .env.local
