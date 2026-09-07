@@ -5,7 +5,8 @@
   "workspaces": [
     "client/apps/*",
     "client/packages/*",
-    "shared/*"
+    "shared/*",
+    "server"
   ],
   "scripts": {
     "dev": "npm -w @cg/app-web run dev",
@@ -16,7 +17,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify": "npm run typecheck && npm run lint && npm run test"
+    "verify": "npm run typecheck && npm run lint && npm run test",
+    "server": "npm -w @cg/server run dev"
   },
   "dependencies": {
     "framer-motion": "^12.40.0",
