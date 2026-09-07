@@ -706,7 +706,7 @@ export default function DraftBattleScreen({
         flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
         padding: "60px 40px",
       }}>
-        <AnimatePresence mode="wait">
+        <AnimatePresence>
 
           {phase.step === "HANDOFF_P1" && (
             <PlayerHandoff key="handoff-p1" nextPlayer="P1" profile={p1Profile}

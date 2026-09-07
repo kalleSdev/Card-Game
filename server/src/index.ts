@@ -3,7 +3,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { createEngine, createInitialState } from "@cg/engine";
 import type { PlayerId, PlayerDraftResult } from "@cg/contracts";
 import type { ClientMessage, ServerMessage } from "./protocol.js";
-import { createMatch, getMatch, endMatch, broadcast, submitIntent, type Match } from "./matches.js";
+import { createMatch, validateDraft, getMatch, endMatch, broadcast, submitIntent, type Match } from "./matches.js";
 import {
   register, login, logout, userForToken, getCollection, recordResult,
   AuthError, type PublicUser,
@@ -72,6 +72,17 @@ const send = (ws: WebSocket, msg: ServerMessage) => {
 };
 
 function startMatch(a: { conn: Conn; draft: PlayerDraftResult }, b: { conn: Conn; draft: PlayerDraftResult }) {
+  try {
+    pairUp(a, b);
+  } catch (err) {
+    // Neither player should be left staring at an empty queue if this ever throws
+    const reason = err instanceof Error ? err.message : "Could not start the match";
+    send(a.conn.socket, { type: "error", reason });
+    send(b.conn.socket, { type: "error", reason });
+  }
+}
+
+function pairUp(a: { conn: Conn; draft: PlayerDraftResult }, b: { conn: Conn; draft: PlayerDraftResult }) {
   const nameOf = (c: Conn) => c.user?.username ?? "Player";
   const match = createMatch(
     cardDb,
@@ -113,6 +124,8 @@ function handle(conn: Conn, msg: ClientMessage) {
 
   switch (msg.type) {
     case "queue": {
+      const bad = validateDraft(msg.draft, cardDb);
+      if (bad) return send(conn.socket, { type: "error", reason: bad });
       if (waiting && waiting.conn.socket !== conn.socket) {
         const opponent = waiting;
         waiting = null;

@@ -20,6 +20,25 @@ export interface Match {
 
 const matches = new Map<string, Match>();
 
+// Checked before a player is put in the queue, so one bad deck cannot take the
+// other player's place in the queue with it.
+export function validateDraft(
+  draft: PlayerDraftResult | undefined,
+  cardDb: Record<string, CardDef>,
+): string | null {
+  if (!draft) return "No deck was sent";
+  if (!draft.leaderId || !cardDb[draft.leaderId]) return "That leader does not exist";
+  const cards = [
+    ...(draft.combatIds ?? []),
+    ...(draft.supportIds ?? []),
+    ...(draft.extraIds ?? []),
+  ];
+  if (cards.length === 0) return "Your deck is empty";
+  const unknown = cards.find(id => !cardDb[id]);
+  if (unknown) return `Your deck has a card that does not exist: ${unknown}`;
+  return null;
+}
+
 export function createMatch(
   cardDb: Record<string, CardDef>,
   p1: { seat: Omit<Seat, "playerId">; draft: PlayerDraftResult },

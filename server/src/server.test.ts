@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createEngine, createInitialState } from "@cg/engine";
 import type { PlayerId, PlayerDraftResult } from "@cg/contracts";
-import { createMatch, submitIntent, endMatch, type Match, type Seat } from "./matches.js";
+import { createMatch, submitIntent, endMatch, validateDraft, type Match, type Seat } from "./matches.js";
 
 // Drives the match layer directly rather than over a socket, so the test does
 // not need a running server or a free port.
@@ -25,6 +25,24 @@ function makeMatch() {
   const match = createMatch(cardDb, { seat: seat("P1"), draft }, { seat: seat("P2"), draft });
   return { match, sent };
 }
+
+describe("draft validation", () => {
+  it("accepts a normal draft", () => {
+    expect(validateDraft(draft, cardDb)).toBeNull();
+  });
+
+  it("rejects a leader that does not exist", () => {
+    expect(validateDraft({ ...draft, leaderId: "nobody" }, cardDb)).toBe("That leader does not exist");
+  });
+
+  it("rejects a card that does not exist", () => {
+    expect(validateDraft({ ...draft, extraIds: ["nobody"] }, cardDb)).toMatch(/does not exist/);
+  });
+
+  it("rejects an empty deck", () => {
+    expect(validateDraft({ ...draft, combatIds: [], supportIds: [], extraIds: [] }, cardDb)).toBe("Your deck is empty");
+  });
+});
 
 describe("match layer", () => {
   it("starts on MAIN so the first player can act immediately", () => {
