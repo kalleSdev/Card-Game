@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createEngine, createInitialState } from "@cg/engine";
 import type { PlayerId, PlayerDraftResult } from "@cg/contracts";
-import { createMatch, submitIntent, endMatch, validateDraft, type Match, type Seat } from "./matches.js";
+import { createMatch, submitIntent, endMatch, validateDraft, forfeit, rebindSeat, forceEndTurn, type Match, type Seat } from "./matches.js";
 
 // Drives the match layer directly rather than over a socket, so the test does
 // not need a running server or a free port.
@@ -104,5 +104,35 @@ describe("match layer", () => {
     // Different matches roll different seeds
     expect(a.state.rngSeed).not.toBe(b.state.rngSeed);
     endMatch(a.id); endMatch(b.id);
+  });
+});
+
+describe("ending a match outside the rules", () => {
+  it("hands the win to the other seat on a forfeit", () => {
+    const { match, sent } = makeMatch();
+    const winner = forfeit(match, "P1", "Surrendered");
+    expect(winner).toBe("P2");
+    expect(match.state.winner).toBe("P2");
+    for (const pid of ["P1", "P2"] as PlayerId[]) {
+      expect(sent[pid]).toContainEqual({ type: "matchOver", winner: "P2", reason: "Surrendered" });
+    }
+    endMatch(match.id);
+  });
+
+  it("passes the turn on when a player runs out of time", () => {
+    const { match } = makeMatch();
+    const before = match.state.activePlayer;
+    forceEndTurn(match);
+    expect(match.state.activePlayer).not.toBe(before);
+    endMatch(match.id);
+  });
+
+  it("sends to the new socket after a player reconnects", () => {
+    const { match } = makeMatch();
+    const resumed: unknown[] = [];
+    rebindSeat(match, "P1", m => resumed.push(m));
+    forfeit(match, "P2", "Left the match");
+    expect(resumed.length).toBeGreaterThan(0);
+    endMatch(match.id);
   });
 });

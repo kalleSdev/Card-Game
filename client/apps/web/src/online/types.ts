@@ -14,6 +14,7 @@ export type ClientMessage =
   | { type: "auth"; token: string }
   | { type: "queue"; draft: PlayerDraftResult }
   | { type: "practice"; draft: PlayerDraftResult }
+  | { type: "surrender" }
   | { type: "intent"; intent: BattleIntent }
   | { type: "leave" };
 
@@ -23,4 +24,7 @@ export type ServerMessage =
   | { type: "matched"; matchId: string; you: PlayerId; opponentName: string }
   | { type: "state"; state: BattleState; events: BattleEvent[] }
   | { type: "opponentLeft" }
+  | { type: "opponentDisconnected"; seconds: number }
+  | { type: "opponentReturned" }
+  | { type: "matchOver"; winner: PlayerId; reason: string }
   | { type: "error"; reason: string };

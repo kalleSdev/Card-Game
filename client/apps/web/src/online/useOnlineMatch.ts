@@ -22,10 +22,16 @@ export interface OnlineMatch {
   state: BattleState | null;
   /** Events from the last update, for driving animations. */
   events: BattleEvent[];
+  /** Set while the opponent is dropped but still has time to come back. */
+  opponentAway: number | null;
+  /** How the match ended, when it was not by the rules. */
+  endedBecause: string | null;
   queue: (draft: PlayerDraftResult) => void;
   /** Start a match against the computer instead of waiting. */
   practice: (draft: PlayerDraftResult) => void;
   send: (intent: BattleIntent) => void;
+  /** Concede the match. */
+  surrender: () => void;
   leave: () => void;
 }
 
@@ -39,6 +45,8 @@ export function useOnlineMatch(enabled: boolean): OnlineMatch {
   const [opponentName, setOpponentName] = useState<string | null>(null);
   const [state, setState] = useState<BattleState | null>(null);
   const [events, setEvents] = useState<BattleEvent[]>([]);
+  const [opponentAway, setOpponentAway] = useState<number | null>(null);
+  const [endedBecause, setEndedBecause] = useState<string | null>(null);
 
   const post = useCallback((msg: ClientMessage) => {
     const ws = socketRef.current;
@@ -50,11 +58,21 @@ export function useOnlineMatch(enabled: boolean): OnlineMatch {
     const token = getToken();
     if (!token) { setStatus("disconnected"); setError("Sign in first"); return; }
 
-    const ws = new WebSocket(socketUrl());
-    socketRef.current = ws;
-    setStatus("connecting");
+    // A dropped socket is not the end of the match. The server holds the seat
+    // open for a short while, so keep trying to get back to it.
+    let closed = false;
+    let attempt = 0;
+    let retry: ReturnType<typeof setTimeout> | undefined;
 
-    ws.onopen = () => ws.send(JSON.stringify({ type: "auth", token } satisfies ClientMessage));
+    const connect = () => {
+      const ws = new WebSocket(socketUrl());
+      socketRef.current = ws;
+      setStatus("connecting");
+      wire(ws, token);
+    };
+
+    const wire = (ws: WebSocket, token: string) => {
+    ws.onopen = () => { attempt = 0; ws.send(JSON.stringify({ type: "auth", token } satisfies ClientMessage)); };
 
     ws.onmessage = ev => {
       const msg = JSON.parse(ev.data as string) as ServerMessage;
@@ -62,6 +80,8 @@ export function useOnlineMatch(enabled: boolean): OnlineMatch {
         case "authed":       setStatus("ready"); setError(null); break;
         case "queued":       setStatus("queued"); break;
         case "matched":
+          setEndedBecause(null);
+          setOpponentAway(null);
           setYou(msg.you);
           setOpponentName(msg.opponentName);
           setStatus("playing");
@@ -71,21 +91,38 @@ export function useOnlineMatch(enabled: boolean): OnlineMatch {
           setEvents(msg.events);
           break;
         case "opponentLeft": setStatus("opponentLeft"); break;
+        case "opponentDisconnected": setOpponentAway(msg.seconds); break;
+        case "opponentReturned":     setOpponentAway(null); break;
+        case "matchOver":            setEndedBecause(msg.reason); break;
         case "error":        setError(msg.reason); break;
       }
     };
 
-    ws.onclose = () => setStatus("disconnected");
+    ws.onclose = () => {
+      if (closed) return;
+      setStatus("disconnected");
+      // Back off a little each time so a server that is down is not hammered
+      const wait = Math.min(1000 * 2 ** attempt++, 8000);
+      retry = setTimeout(connect, wait);
+    };
     ws.onerror = () => setError("Lost connection to the server");
+    };
 
-    return () => ws.close();
+    connect();
+
+    return () => {
+      closed = true;
+      if (retry) clearTimeout(retry);
+      socketRef.current?.close();
+    };
   }, [enabled]);
 
   return {
-    status, error, you, opponentName, state, events,
+    status, error, you, opponentName, state, events, opponentAway, endedBecause,
     queue: useCallback((draft: PlayerDraftResult) => post({ type: "queue", draft }), [post]),
     practice: useCallback((draft: PlayerDraftResult) => post({ type: "practice", draft }), [post]),
     send:  useCallback((intent: BattleIntent) => post({ type: "intent", intent }), [post]),
+    surrender: useCallback(() => post({ type: "surrender" }), [post]),
     leave: useCallback(() => post({ type: "leave" }), [post]),
   };
 }

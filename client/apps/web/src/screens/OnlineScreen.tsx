@@ -36,6 +36,8 @@ export default function OnlineScreen({
           state: match.state,
           events: match.events,
           send: match.send,
+          surrender: match.surrender,
+          opponentAway: match.opponentAway,
         }}
         // The board still wants these for names and icons
         p1Draft={draft}
@@ -55,6 +57,7 @@ export default function OnlineScreen({
     : match.status === "ready"       ? "Getting you in the queue"
     : match.status === "queued"      ? "Looking for an opponent"
     : match.status === "opponentLeft"? "Your opponent left the match"
+    : match.status === "disconnected" ? "Reconnecting"
     : "Not connected";
 
   return (
@@ -77,6 +80,9 @@ export default function OnlineScreen({
         <div style={{ fontSize: 10, color: "#556", letterSpacing: 2, marginTop: 10 }}>
           Signed in as {username}
         </div>
+        {match.endedBecause && (
+          <div style={{ fontSize: 10, color: "#889", letterSpacing: 2, marginTop: 8 }}>{match.endedBecause}</div>
+        )}
         {match.error && (
           <div style={{ fontSize: 10, color: "#ff8888", marginTop: 14 }}>{match.error}</div>
         )}

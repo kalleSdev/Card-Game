@@ -11,6 +11,7 @@ export type ClientMessage =
   // Play the computer instead of waiting for someone
   | { type: "practice"; draft: PlayerDraftResult }
   | { type: "intent"; intent: BattleIntent }
+  | { type: "surrender" }
   | { type: "leave" };
 
 export type ServerMessage =
@@ -20,4 +21,9 @@ export type ServerMessage =
   // Full state, already redacted for the receiving player
   | { type: "state"; state: BattleState; events: BattleEvent[] }
   | { type: "opponentLeft" }
+  // The opponent dropped but has a little while to come back
+  | { type: "opponentDisconnected"; seconds: number }
+  | { type: "opponentReturned" }
+  // Ended by something other than the rules: a surrender, a drop, or a stall
+  | { type: "matchOver"; winner: PlayerId; reason: string }
   | { type: "error"; reason: string };

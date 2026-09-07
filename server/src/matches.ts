@@ -81,6 +81,35 @@ export function runBotIfItsTurn(match: Match): void {
   if (match.state.winner) endMatch(match.id);
 }
 
+/**
+ * Ends a match for a reason the rules know nothing about: a surrender, a player
+ * who never came back, or one who stopped taking their turns. The winner is
+ * recorded on the state so both sides settle it the same way a real win does.
+ */
+export function forfeit(match: Match, loser: PlayerId, reason: string): PlayerId {
+  const winner: PlayerId = loser === "P1" ? "P2" : "P1";
+  match.state = { ...match.state, winner };
+  for (const pid of ["P1", "P2"] as PlayerId[]) {
+    match.seats[pid].send({ type: "matchOver", winner, reason });
+  }
+  broadcast(match);
+  return winner;
+}
+
+/** Points a seat at a new socket, for a player who dropped and came back. */
+export function rebindSeat(match: Match, pid: PlayerId, send: Seat["send"]): void {
+  match.seats[pid] = { ...match.seats[pid], send };
+}
+
+/** Ends the turn on behalf of a player who ran out of time. */
+export function forceEndTurn(match: Match): void {
+  const pid = match.state.activePlayer;
+  const result = applyBattleIntent(match.state, { type: "END_TURN", pid });
+  if (result.events.some(e => e.type === "ILLEGAL")) return;
+  match.state = result.state;
+  broadcast(match, result.events);
+}
+
 export function getMatch(id: string): Match | undefined {
   return matches.get(id);
 }

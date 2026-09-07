@@ -1,16 +1,19 @@
 import Fastify from "fastify";
 import { WebSocketServer, type WebSocket } from "ws";
-import { createEngine, createInitialState } from "@cg/engine";
 import type { PlayerId, PlayerDraftResult } from "@cg/contracts";
 import type { ClientMessage, ServerMessage } from "./protocol.js";
-import { createMatch, validateDraft, runBotIfItsTurn, getMatch, endMatch, broadcast, submitIntent, type Match } from "./matches.js";
+import { cardsFor } from "./universes.js";
+import {
+  createMatch, validateDraft, runBotIfItsTurn, getMatch, endMatch, broadcast, submitIntent,
+  forfeit, rebindSeat, forceEndTurn, type Match,
+} from "./matches.js";
 import {
   register, login, logout, userForToken, getCollection, recordResult,
   AuthError, type PublicUser,
 } from "./auth.js";
 
 const PORT = Number(process.env.PORT ?? 8787);
-const cardDb = createEngine(createInitialState()).getState().cardDb;
+const cardDb = cardsFor();
 
 const app = Fastify({ logger: false });
 
@@ -63,7 +66,18 @@ interface Conn {
   playerId?: PlayerId;
 }
 
+// How long a player gets to come back before they lose the match, and how long
+// a turn can sit untouched before the server ends it for them.
+const RECONNECT_SECONDS = 45;
+const TURN_SECONDS = 90;
+const MAX_MISSED_TURNS = 3;
+
 const conns = new Map<WebSocket, Conn>();
+// Lets a returning player find the match they dropped out of
+const seatOfUser = new Map<string, { matchId: string; playerId: PlayerId }>();
+const dropTimers = new Map<string, NodeJS.Timeout>();
+const turnTimers = new Map<string, { timer: NodeJS.Timeout; pid: PlayerId }>();
+const missedTurns = new Map<string, { pid: PlayerId; count: number }>();
 let waiting: { conn: Conn; draft: PlayerDraftResult } | null = null;
 const liveMatchIds = new Set<string>();
 
@@ -94,9 +108,13 @@ function pairUp(a: { conn: Conn; draft: PlayerDraftResult }, b: { conn: Conn; dr
   a.conn.matchId = match.id; a.conn.playerId = "P1";
   b.conn.matchId = match.id; b.conn.playerId = "P2";
 
+  if (a.conn.user) seatOfUser.set(a.conn.user.id, { matchId: match.id, playerId: "P1" });
+  if (b.conn.user) seatOfUser.set(b.conn.user.id, { matchId: match.id, playerId: "P2" });
+
   send(a.conn.socket, { type: "matched", matchId: match.id, you: "P1", opponentName: nameOf(b.conn) });
   send(b.conn.socket, { type: "matched", matchId: match.id, you: "P2", opponentName: nameOf(a.conn) });
   broadcast(match);
+  armTurnTimer(match);
 }
 
 // A practice match: the player takes P1, the computer takes P2 with a deck
@@ -112,9 +130,11 @@ function startPractice(conn: Conn, draft: PlayerDraftResult) {
   liveMatchIds.add(match.id);
   conn.matchId = match.id;
   conn.playerId = "P1";
+  if (conn.user) seatOfUser.set(conn.user.id, { matchId: match.id, playerId: "P1" });
   send(conn.socket, { type: "matched", matchId: match.id, you: "P1", opponentName: "Computer" });
   broadcast(match);
   runBotIfItsTurn(match);
+  armTurnTimer(match);
 }
 
 function randomDraft(): PlayerDraftResult {
@@ -134,6 +154,48 @@ function randomDraft(): PlayerDraftResult {
   };
 }
 
+// Gives whoever is to move a deadline. A player who lets it run out has their
+// turn ended for them, and loses if they keep doing it.
+function armTurnTimer(match: Match) {
+  const existing = turnTimers.get(match.id);
+  const pid = match.state.activePlayer;
+  if (existing?.pid === pid) return;
+  if (existing) clearTimeout(existing.timer);
+  if (match.state.winner || match.botSeat === pid) { turnTimers.delete(match.id); return; }
+
+  const timer = setTimeout(() => {
+    const live = getMatch(match.id);
+    if (!live || live.state.winner) return;
+    const missed = missedTurns.get(live.id);
+    const count = missed?.pid === pid ? missed.count + 1 : 1;
+    missedTurns.set(live.id, { pid, count });
+    if (count >= MAX_MISSED_TURNS) {
+      finishMatch(live, forfeit(live, pid, "Ran out of time"));
+      return;
+    }
+    forceEndTurn(live);
+    runBotIfItsTurn(live);
+    armTurnTimer(live);
+  }, TURN_SECONDS * 1000);
+
+  turnTimers.set(match.id, { timer, pid });
+}
+
+// Clears everything a match was holding on to.
+function finishMatch(match: Match, _winner: PlayerId) {
+  settle(match);
+  const t = turnTimers.get(match.id);
+  if (t) clearTimeout(t.timer);
+  turnTimers.delete(match.id);
+  missedTurns.delete(match.id);
+  const d = dropTimers.get(match.id);
+  if (d) clearTimeout(d);
+  dropTimers.delete(match.id);
+  for (const [userId, seat] of seatOfUser) if (seat.matchId === match.id) seatOfUser.delete(userId);
+  liveMatchIds.delete(match.id);
+  endMatch(match.id);
+}
+
 // Write the result down for both players once a match ends.
 function settle(match: Match) {
   const winner = match.state.winner;
@@ -151,7 +213,8 @@ function handle(conn: Conn, msg: ClientMessage) {
     const user = userForToken(msg.token);
     if (!user) return send(conn.socket, { type: "error", reason: "Session expired, sign in again" });
     conn.user = user;
-    return send(conn.socket, { type: "authed", username: user.username });
+    send(conn.socket, { type: "authed", username: user.username });
+    return resumeMatch(conn);
   }
 
   // Everything past this point needs a signed in user
@@ -184,13 +247,69 @@ function handle(conn: Conn, msg: ClientMessage) {
       if (!match || !conn.playerId) return send(conn.socket, { type: "error", reason: "You are not in a match" });
       const rejected = submitIntent(match, conn.playerId, msg.intent);
       if (rejected) return send(conn.socket, { type: "error", reason: rejected });
-      if (match.state.winner) settle(match);
+      missedTurns.delete(match.id);
+      if (match.state.winner) finishMatch(match, match.state.winner);
+      else armTurnTimer(match);
       return;
+    }
+
+    case "surrender": {
+      const match = conn.matchId ? getMatch(conn.matchId) : undefined;
+      if (!match || !conn.playerId) return send(conn.socket, { type: "error", reason: "You are not in a match" });
+      return finishMatch(match, forfeit(match, conn.playerId, "Surrendered"));
     }
 
     case "leave":
       return dropFromMatch(conn);
   }
+}
+
+// Puts a player who dropped back into their seat, if the match is still going.
+function resumeMatch(conn: Conn) {
+  if (!conn.user) return;
+  const seat = seatOfUser.get(conn.user.id);
+  if (!seat) return;
+  const match = getMatch(seat.matchId);
+  if (!match || match.state.winner) { seatOfUser.delete(conn.user.id); return; }
+
+  const drop = dropTimers.get(match.id);
+  if (drop) { clearTimeout(drop); dropTimers.delete(match.id); }
+
+  conn.matchId = match.id;
+  conn.playerId = seat.playerId;
+  rebindSeat(match, seat.playerId, m => send(conn.socket, m as ServerMessage));
+
+  const other: PlayerId = seat.playerId === "P1" ? "P2" : "P1";
+  send(conn.socket, {
+    type: "matched",
+    matchId: match.id,
+    you: seat.playerId,
+    opponentName: match.seats[other].name,
+  });
+  broadcast(match);
+  match.seats[other].send({ type: "opponentReturned" });
+  armTurnTimer(match);
+}
+
+// A dropped socket does not end the match straight away. The player gets a
+// short window to come back before the win is handed over.
+function handleDisconnect(conn: Conn) {
+  if (waiting && waiting.conn.socket === conn.socket) waiting = null;
+  const match = conn.matchId ? getMatch(conn.matchId) : undefined;
+  if (!match || !conn.playerId || match.state.winner) return;
+
+  const gone = conn.playerId;
+  const other: PlayerId = gone === "P1" ? "P2" : "P1";
+  match.seats[other].send({ type: "opponentDisconnected", seconds: RECONNECT_SECONDS });
+  // Nothing to send to a seat nobody is holding
+  rebindSeat(match, gone, () => {});
+
+  const timer = setTimeout(() => {
+    const live = getMatch(match.id);
+    if (!live || live.state.winner) return;
+    finishMatch(live, forfeit(live, gone, "Left the match"));
+  }, RECONNECT_SECONDS * 1000);
+  dropTimers.set(match.id, timer);
 }
 
 function dropFromMatch(conn: Conn) {
@@ -199,8 +318,8 @@ function dropFromMatch(conn: Conn) {
   if (!match || !conn.playerId) return;
   const other: PlayerId = conn.playerId === "P1" ? "P2" : "P1";
   match.seats[other].send({ type: "opponentLeft" });
-  liveMatchIds.delete(match.id);
-  endMatch(match.id);
+  if (conn.user) seatOfUser.delete(conn.user.id);
+  finishMatch(match, forfeit(match, conn.playerId, "Left the match"));
   conn.matchId = undefined;
   conn.playerId = undefined;
 }
@@ -226,7 +345,7 @@ wss.on("connection", (socket: WebSocket) => {
   });
 
   socket.on("close", () => {
-    dropFromMatch(conn);
+    handleDisconnect(conn);
     conns.delete(socket);
   });
 });

@@ -157,6 +157,10 @@ export interface OnlineBinding {
   state: BattleState;
   events: BattleEvent[];
   send: (intent: BattleIntent) => void;
+  /** Concede the match. */
+  surrender: () => void;
+  /** Seconds the opponent has to reconnect, while they are away. */
+  opponentAway: number | null;
 }
 
 interface Props {
@@ -1808,6 +1812,13 @@ export default function BattleBoardScreen({
   // ── Turn timer: 60s per turn, auto-ends the turn at 0 ─────────────────────
   const TURN_SECONDS = 60;
   const [turnTimeLeft, setTurnTimeLeft] = useState(TURN_SECONDS);
+  // A match can end without the engine ever emitting GAME_OVER, for instance
+  // when someone surrenders or never comes back. A winner on the state is
+  // enough on its own.
+  useEffect(() => {
+    if (battleState.winner && !gameOverShown) setGameOverShown(true);
+  }, [battleState.winner, gameOverShown]);
+
   const [timerPaused, setTimerPaused] = useState(false); // dev toggle
   useEffect(() => {
     if (mulliganStep !== "BATTLE" || battleState.winner || gameOverShown) return;
@@ -2618,6 +2629,20 @@ export default function BattleBoardScreen({
               </motion.div>
             );
           })()}
+
+          {/* Online only: concede the match */}
+          {isOnline && !battleState.winner && (
+            <button
+              onClick={() => online?.surrender()}
+              title="Give up this match"
+              style={{
+                padding: "6px 12px", borderRadius: 8,
+                background: "rgba(255,80,80,0.07)", border: "1px solid #7a3030",
+                color: "#bb6666", fontSize: 9, letterSpacing: 2, fontWeight: 800,
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >SURRENDER</button>
+          )}
         </div>
 
         {/* Right: targeting / action badges */}
@@ -3198,6 +3223,23 @@ export default function BattleBoardScreen({
 
       {/* Handoff. Covers the board so the next player cannot see the hand of
           whoever just finished their turn. */}
+      <AnimatePresence>
+        {isOnline && online?.opponentAway != null && !battleState.winner && (
+          <motion.div
+            key="opp-away"
+            initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}
+            style={{
+              position: "fixed", top: 52, left: "50%", transform: "translateX(-50%)", zIndex: 8000,
+              padding: "8px 18px", borderRadius: 10,
+              background: "rgba(10,10,20,0.94)", border: "1px solid #4a4a6a",
+              color: "#aab", fontSize: 11, letterSpacing: 2,
+            }}
+          >
+            {online.opponentName} dropped out · waiting up to {online.opponentAway}s
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {handoffTo && !isOnline && !battleState.winner && (
           <motion.div
