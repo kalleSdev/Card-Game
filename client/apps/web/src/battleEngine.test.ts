@@ -450,29 +450,48 @@ describe("cleansing heals", () => {
 });
 
 describe("random strikes (Mahoraga)", () => {
-  afterEach(() => vi.restoreAllMocks());
+  // The bug here was a strike landing on a leader and dealing no damage at all.
+  // So rather than pin the target, check the events and the state agree.
+  it("state matches whatever the strike reports hitting", () => {
+    for (let seed = 1; seed <= 60; seed++) {
+      const s = { ...setup({ p1Board: ["mahoraga"], p2Board: ["grunt"] }), rngSeed: seed };
+      const maho = boardOf(s, "P1")[0];
+      const res = apply(s, { type: "ATTACK_RANDOM", pid: "P1", instanceId: maho.instanceId });
 
-  it("actually damages the leader it lands on", () => {
-    const s = setup({ p1Board: ["mahoraga"] });
-    const maho = boardOf(s, "P1")[0];
-    // Pool with empty enemy board: [opp leader, own leader]. Force the own leader.
-    vi.spyOn(Math, "random").mockReturnValue(0.99);
-    const st = apply(s, { type: "ATTACK_RANDOM", pid: "P1", instanceId: maho.instanceId }).state;
-    expect(st.players.P1.leader.currentHp).toBe(30 - maho.atk);
+      const hitLeader = res.events.find(e => e.type === "ATTACK_LEADER");
+      if (hitLeader && hitLeader.type === "ATTACK_LEADER") {
+        const victim = hitLeader.attackerPid === "P1" ? "P2" : "P1";
+        expect(res.state.players[victim].leader.currentHp).toBe(hitLeader.leaderHpLeft);
+        expect(hitLeader.leaderHpLeft).toBeLessThan(30);
+      }
+
+      const hitCard = res.events.find(e => e.type === "ATTACK_CARD");
+      if (hitCard && hitCard.type === "ATTACK_CARD") {
+        const before = [...boardOf(s, "P1"), ...boardOf(s, "P2")]
+          .find(c => c.instanceId === hitCard.targetId);
+        const after = [...boardOf(res.state, "P1"), ...boardOf(res.state, "P2")]
+          .find(c => c.instanceId === hitCard.targetId);
+        // Either it died, or it lost health
+        if (before && after) expect(after.currentHp).toBeLessThan(before.currentHp);
+      }
+
+      // Every strike has to report doing something
+      expect(res.events.some(e => e.type === "ATTACK_CARD" || e.type === "ATTACK_LEADER")).toBe(true);
+    }
   });
 
-  it("never targets a vacant leader slot (board mode)", () => {
-    let s = setup({ p1Board: ["mahoraga"] });
-    // Own side in Mahoraga board mode: the portrait slot is empty
-    s = { ...s, players: { ...s.players, P1: { ...s.players.P1, mahoragaBoardMode: true } } };
-    const maho = boardOf(s, "P1")[0];
-    vi.spyOn(Math, "random").mockReturnValue(0.99); // last pool entry
-    const st = apply(s, { type: "ATTACK_RANDOM", pid: "P1", instanceId: maho.instanceId }).state;
-    // With the vacant own leader excluded, the last entry is the enemy leader
-    expect(st.players.P1.leader.currentHp).toBe(30);
-    expect(st.players.P2.leader.currentHp).toBe(30 - maho.atk);
+  it("never hits a leader slot that has been vacated by board mode", () => {
+    for (let seed = 1; seed <= 60; seed++) {
+      let s = { ...setup({ p1Board: ["mahoraga"] }), rngSeed: seed };
+      s = { ...s, players: { ...s.players, P1: { ...s.players.P1, mahoragaBoardMode: true } } };
+      const maho = boardOf(s, "P1")[0];
+      const st = apply(s, { type: "ATTACK_RANDOM", pid: "P1", instanceId: maho.instanceId }).state;
+      expect(st.players.P1.leader.currentHp).toBe(30);
+    }
   });
 });
+
+
 
 describe("Higuruma's sentence", () => {
   it("bound cards can strike each other straight through shields", () => {
@@ -551,5 +570,40 @@ describe("Higuruma's sentence lifecycle", () => {
     // Any intent runs checkWin, which releases broken sentences
     s = apply(s, { type: "END_TURN", pid: "P1" }).state;
     expect(boardOf(s, "P1")[0].sentencedWith).toBeUndefined();
+  });
+});
+
+describe("determinism", () => {
+  // The server and every client have to reach the same state from the same seed,
+  // otherwise online matches and replays drift apart.
+  it("same seed gives the same opening state", () => {
+    const a = createBattleState(draft("gojo-base", ["grunt", "grunt2"]), draft("sukuna", ["grunt"]), DB, undefined, 12345);
+    const b = createBattleState(draft("gojo-base", ["grunt", "grunt2"]), draft("sukuna", ["grunt"]), DB, undefined, 12345);
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+  });
+
+  it("different seeds give different openings", () => {
+    const a = createBattleState(draft("gojo-base", ["grunt", "grunt2"]), draft("sukuna", ["grunt"]), DB, undefined, 1);
+    const b = createBattleState(draft("gojo-base", ["grunt", "grunt2"]), draft("sukuna", ["grunt"]), DB, undefined, 999);
+    expect(JSON.stringify(a)).not.toBe(JSON.stringify(b));
+  });
+
+  it("replaying the same intents from the same state gives the same result", () => {
+    const start = { ...setup({ p1Board: ["mahoraga"], p2Board: ["grunt"] }), rngSeed: 4242 };
+    const maho = boardOf(start, "P1")[0];
+    const run = () => {
+      let s = start;
+      s = apply(s, { type: "ATTACK_RANDOM", pid: "P1", instanceId: maho.instanceId }).state;
+      s = apply(s, { type: "END_TURN", pid: "P1" }).state;
+      s = apply(s, { type: "END_TURN", pid: "P2" }).state;
+      return JSON.stringify(s);
+    };
+    expect(run()).toBe(run());
+  });
+
+  it("carries the seed forward so consecutive calls do not repeat rolls", () => {
+    const s = { ...setup({ p1Board: ["mahoraga"], p2Board: ["grunt"] }), rngSeed: 77 };
+    const first = apply(s, { type: "ATTACK_RANDOM", pid: "P1", instanceId: boardOf(s, "P1")[0].instanceId }).state;
+    expect(first.rngSeed).not.toBe(s.rngSeed);
   });
 });

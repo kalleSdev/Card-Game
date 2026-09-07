@@ -370,6 +370,8 @@ export interface BattleState {
   pendingAttackerId: string | null;
   // Pending interactive domain action (requires DOMAIN_TARGET intents)
   pendingDomainAction: PendingDomainAction | null;
+  // Seed for the engine's RNG, carried in state so matches are reproducible
+  rngSeed: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -604,10 +606,32 @@ function adaptMahoragaIfHit(player: BattlePlayer, hitInstanceId: string, hpBefor
   };
 }
 
+// Seeded RNG. The engine must be deterministic: same state plus same intent has
+// to give the same result on my machine and on the server, otherwise replays and
+// online matches drift apart. Seed lives in BattleState and is restored at the
+// start of every call, then written back on the way out.
+let _rng = 1;
+
+function rngInit(seed: number): void {
+  _rng = seed >>> 0;
+}
+
+function rngCurrent(): number {
+  return _rng >>> 0;
+}
+
+// mulberry32
+function rnd(): number {
+  _rng = (_rng + 0x6d2b79f5) | 0;
+  let t = Math.imul(_rng ^ (_rng >>> 15), 1 | _rng);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(rnd() * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
@@ -624,7 +648,11 @@ export function createBattleState(
   p2Draft: PlayerDraftResult,
   cardDb: Record<string, CardDef>,
   mulliganHands?: { P1: string[]; P2: string[] },
+  // Pass a seed to get the same match every time. The server will set this so
+  // both players and any replay agree on every shuffle and coin flip.
+  seed: number = (Math.random() * 0xffffffff) >>> 0,
 ): BattleState {
+  rngInit(seed);
   _instanceCounter = 0;
   const p1 = buildPlayer("P1", p1Draft, cardDb);
   const p2 = buildPlayer("P2", p2Draft, cardDb);
@@ -642,7 +670,7 @@ export function createBattleState(
   const fp2 = mulliganHands ? applyMulligan(p2, mulliganHands.P2) : p2;
 
   // Coin flip: random first player
-  const firstPlayer: PlayerId = Math.random() < 0.5 ? "P1" : "P2";
+  const firstPlayer: PlayerId = rnd() < 0.5 ? "P1" : "P2";
 
   // Second player gets a bonus energy spell to compensate going second
   const goSecondSpell: SpellCard = {
@@ -667,6 +695,7 @@ export function createBattleState(
     log: [],
     pendingAttackerId: null,
     pendingDomainAction: null,
+    rngSeed: rngCurrent(),
   };
 }
 
@@ -1358,6 +1387,12 @@ function checkWin(state: BattleState): BattleState {
 export type BattleResult = { state: BattleState; events: BattleEvent[] };
 
 export function applyBattleIntent(state: BattleState, intent: BattleIntent): BattleResult {
+  rngInit(state.rngSeed);
+  const result = applyIntentInner(state, intent);
+  return { ...result, state: { ...result.state, rngSeed: rngCurrent() } };
+}
+
+function applyIntentInner(state: BattleState, intent: BattleIntent): BattleResult {
   const events: BattleEvent[] = [];
   const illegal = (reason: string): BattleResult => ({
     state, events: [{ type: "ILLEGAL", reason }],
@@ -1418,7 +1453,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
         ...(vacantP ? [] : [{ side: "own" as const, card: p.leader, isLeader: true }]),
       ];
       if (pool.length === 0) return illegal("No targets");
-      const picked = pool[Math.floor(Math.random() * pool.length)];
+      const picked = pool[Math.floor(rnd() * pool.length)];
 
       const damage = attacker.atk;
 
@@ -1429,7 +1464,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       let redirectVictimIdR: string | null = null;
       if (redirectR) {
         const poolR = boardCards(p).filter(c => c.instanceId !== attacker.instanceId);
-        if (poolR.length > 0) redirectVictimIdR = poolR[Math.floor(Math.random() * poolR.length)].instanceId;
+        if (poolR.length > 0) redirectVictimIdR = poolR[Math.floor(rnd() * poolR.length)].instanceId;
       }
       // Reflect sends the full damage back; Todo's redirect cancels the counter entirely
       const counter = reflectR ? damage : (picked.isLeader || redirectR) ? 0 : picked.card.atk;
@@ -1483,7 +1518,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       if (!attacker.canAttack || attacker.exhausted) return illegal("Attacker cannot attack");
       // Mahoraga strikes wherever the wheel turns — his attacks are always random
       if (isWildStriker(state.players[pid], attacker)) {
-        return applyBattleIntent({ ...state, pendingAttackerId: null }, { type: "ATTACK_RANDOM", pid, instanceId: attacker.instanceId });
+        return applyIntentInner({ ...state, pendingAttackerId: null }, { type: "ATTACK_RANDOM", pid, instanceId: attacker.instanceId });
       }
 
       const target = findOnBoard(state.players[opp], intent.targetInstanceId);
@@ -1518,7 +1553,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       let redirectVictimId: string | null = null;
       if (redirect) {
         const pool = boardCards(p);
-        if (pool.length > 0) redirectVictimId = pool[Math.floor(Math.random() * pool.length)].instanceId;
+        if (pool.length > 0) redirectVictimId = pool[Math.floor(rnd() * pool.length)].instanceId;
       }
 
       // Uro perk: attacks aimed at her damage the attacker instead
@@ -1628,7 +1663,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       if (attacker.sentencedWith) return illegal("Sentenced: this card can only attack the card it is bound to!");
       // Mahoraga's attacks are always random
       if (isWildStriker(state.players[pid], attacker)) {
-        return applyBattleIntent({ ...state, pendingAttackerId: null }, { type: "ATTACK_RANDOM", pid, instanceId: attacker.instanceId });
+        return applyIntentInner({ ...state, pendingAttackerId: null }, { type: "ATTACK_RANDOM", pid, instanceId: attacker.instanceId });
       }
       // Only shield cards protect the leader — clear them first (unless Toji berserk)
       const tauntGuards = state.players[opp].sukunaBoardMode ? [] : boardCards(state.players[opp]).filter(c => c.hasTaunt);
@@ -2012,7 +2047,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
       if (p.energy < 1) return illegal("Not enough energy (need 1)");
       if (p.spellPool.length === 0) return illegal("No spells left in pool");
       // Pick random spell from pool and remove it
-      const poolIdx = Math.floor(Math.random() * p.spellPool.length);
+      const poolIdx = Math.floor(rnd() * p.spellPool.length);
       const drawnSpell = p.spellPool[poolIdx];
       const newPool = p.spellPool.filter((_, i) => i !== poolIdx);
       p = addSpell({ ...p, energy: p.energy - 1, spellPool: newPool, synergyDrawUsed: true }, drawnSpell);
@@ -2204,7 +2239,7 @@ export function applyBattleIntent(state: BattleState, intent: BattleIntent): Bat
         }
         case "hakari": {
           p = setCard(p, cardIdx, { perkUsed: true });
-          const rule = BATTLE_SYNERGY_RULES[Math.floor(Math.random() * BATTLE_SYNERGY_RULES.length)];
+          const rule = BATTLE_SYNERGY_RULES[Math.floor(rnd() * BATTLE_SYNERGY_RULES.length)];
           p = addSpell(p, {
             id: `spell-hakari-perk-${++_instanceCounter}`,
             synergyId: rule.id,
