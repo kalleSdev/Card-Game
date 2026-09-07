@@ -266,6 +266,7 @@ export interface BattleCard {
   rebirthAs?: { atk: number; hp: number; name?: string }; // Panda: respawns as an exact statline (3/1 Gorilla)
   beastDecay?: boolean;     // Takaba's Turn Beast: loses 1 HP at its owner's turn start
   stunActive?: boolean;     // display-only: card is spending this turn stunned
+  hidden?: boolean;         // redacted for the opposing client, render as a card back
   blocked?: boolean;        // Block token: nullifies the next damage instance, then clears
   sentencedWith?: string;   // Higuruma's Sentence: this card may only ever attack that instanceId
 }
