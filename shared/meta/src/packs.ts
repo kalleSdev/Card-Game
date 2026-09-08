@@ -1,20 +1,45 @@
 import type { PrintId, PrintTier } from "./prints";
-import { PRINTS_BY_TIER, VARIANT_CHANCE } from "./prints";
+import { PRINTS, PRINT_INFO } from "./prints";
 import { assertSumsTo100, makeRng, pickWeighted, type Rng } from "./rng";
 
 // Packs roll in two or three stages. First the tier, then — on 5★ and 6★ — the
 // standard print or its variant. Cosmetic packs roll a category after that.
 
-export type RateTable = Readonly<Record<PrintTier, number>>;
+/**
+ * Odds are quoted per print rather than per tier, so a variant is not tied to a
+ * fixed share of its tier and each of the six can be tuned on its own.
+ */
+export type RateTable = Readonly<Record<PrintId, number>>;
 
 /** Silver and gold packs, cards and cosmetics alike. */
-export const STANDARD_RATES: RateTable = { 3: 87, 4: 9, 5: 3.6, 6: 0.4 };
+export const STANDARD_RATES: RateTable = {
+  base: 90,
+  foil: 7.5,
+  altArt: 2,
+  blackLabel: 0.3,
+  secret: 0.18,
+  signed: 0.02,
+};
 
 /** Diamond packs. Better on every line, not just the top. */
-export const DIAMOND_RATES: RateTable = { 3: 78.2, 4: 16, 5: 5, 6: 0.8 };
+export const DIAMOND_RATES: RateTable = {
+  base: 64,
+  foil: 25,
+  altArt: 8.5,
+  blackLabel: 1.7,
+  secret: 0.7,
+  signed: 0.1,
+};
 
 assertSumsTo100("STANDARD_RATES", Object.values(STANDARD_RATES));
 assertSumsTo100("DIAMOND_RATES", Object.values(DIAMOND_RATES));
+
+/** Rolls the six print rates up into four tier rates, for cosmetic packs. */
+export function tierRates(rates: RateTable): Record<PrintTier, number> {
+  const totals: Record<PrintTier, number> = { 3: 0, 4: 0, 5: 0, 6: 0 };
+  for (const print of PRINTS) totals[PRINT_INFO[print].tier] += rates[print];
+  return totals;
+}
 
 export type PackId =
   | "silverCard" | "goldCard" | "diamondCard"
@@ -95,19 +120,18 @@ export interface PackResult {
 }
 
 function rollTier(rng: Rng, rates: RateTable): PrintTier {
+  const totals = tierRates(rates);
   return pickWeighted(rng, [
-    { value: 3 as PrintTier, weight: rates[3] },
-    { value: 4 as PrintTier, weight: rates[4] },
-    { value: 5 as PrintTier, weight: rates[5] },
-    { value: 6 as PrintTier, weight: rates[6] },
+    { value: 3 as PrintTier, weight: totals[3] },
+    { value: 4 as PrintTier, weight: totals[4] },
+    { value: 5 as PrintTier, weight: totals[5] },
+    { value: 6 as PrintTier, weight: totals[6] },
   ]);
 }
 
-/** Standard print, or its variant one time in ten. */
-function rollPrint(rng: Rng, tier: PrintTier): PrintId {
-  const options = PRINTS_BY_TIER[tier];
-  if (options.length === 1) return options[0];
-  return rng.next() * 100 < VARIANT_CHANCE ? options[1] : options[0];
+/** One roll across all six prints. */
+function rollPrint(rng: Rng, rates: RateTable): PrintId {
+  return pickWeighted(rng, PRINTS.map(print => ({ value: print, weight: rates[print] })));
 }
 
 function rollCategory(rng: Rng, tier: PrintTier): CosmeticCategory {
@@ -131,27 +155,21 @@ export function openPack(
   const pulls: Pull[] = [];
 
   for (let i = 0; i < pack.pulls; i++) {
-    const tier = rollTier(rng, pack.rates);
     if (pack.contents === "cosmetics") {
+      const tier = rollTier(rng, pack.rates);
       pulls.push({ kind: "cosmetic", category: rollCategory(rng, tier), tier });
       continue;
     }
     if (cardPool.length === 0) throw new Error("Cannot open a card pack with an empty pool");
+    const print = rollPrint(rng, pack.rates);
     const cardId = cardPool[Math.floor(rng.next() * cardPool.length)];
-    pulls.push({ kind: "card", cardId, print: rollPrint(rng, tier), tier });
+    pulls.push({ kind: "card", cardId, print, tier: PRINT_INFO[print].tier });
   }
 
   return { pack: packId, pulls, seed };
 }
 
-/** The real odds of a print once the variant roll is folded in, in percent. */
+/** The odds of a print, in percent. */
 export function effectiveRate(print: PrintId, rates: RateTable): number {
-  for (const tier of [3, 4, 5, 6] as PrintTier[]) {
-    const list = PRINTS_BY_TIER[tier];
-    const at = list.indexOf(print);
-    if (at < 0) continue;
-    if (list.length === 1) return rates[tier];
-    return (rates[tier] * (at === 1 ? VARIANT_CHANCE : 100 - VARIANT_CHANCE)) / 100;
-  }
-  return 0;
+  return rates[print];
 }

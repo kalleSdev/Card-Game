@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   PRINTS, PRINT_INFO, PRINTS_BY_TIER, printKey, parsePrintKey, printRank,
-  STANDARD_RATES, DIAMOND_RATES, PACKS, openPack, effectiveRate,
+  STANDARD_RATES, DIAMOND_RATES, PACKS, openPack, effectiveRate, tierRates,
   CATEGORY_WEIGHTS, MATCH_REWARDS,
   DUPLICATE_VALUE, craftCost, isCraftable, berriesForMatch, applyToWallet, canAfford, EMPTY_WALLET,
   RANKS, rankForMmr, nextMmr, breakEvenWinRate, displayRank, leaderboardRank,
@@ -53,19 +53,35 @@ describe("rate tables", () => {
     }
   });
 
-  it("makes diamond better than standard on every tier above base", () => {
-    expect(DIAMOND_RATES[4]).toBeGreaterThan(STANDARD_RATES[4]);
-    expect(DIAMOND_RATES[5]).toBeGreaterThan(STANDARD_RATES[5]);
-    expect(DIAMOND_RATES[6]).toBeGreaterThan(STANDARD_RATES[6]);
-    expect(DIAMOND_RATES[3]).toBeLessThan(STANDARD_RATES[3]);
+  it("makes diamond better than standard on every print above base", () => {
+    for (const print of PRINTS) {
+      if (print === "base") expect(DIAMOND_RATES[print]).toBeLessThan(STANDARD_RATES[print]);
+      else expect(DIAMOND_RATES[print]).toBeGreaterThan(STANDARD_RATES[print]);
+    }
   });
 
-  it("folds the variant roll into the effective rate", () => {
-    expect(effectiveRate("altArt", STANDARD_RATES)).toBeCloseTo(3.24, 4);
-    expect(effectiveRate("blackLabel", STANDARD_RATES)).toBeCloseTo(0.36, 4);
-    expect(effectiveRate("secret", STANDARD_RATES)).toBeCloseTo(0.36, 4);
-    expect(effectiveRate("signed", STANDARD_RATES)).toBeCloseTo(0.04, 4);
-    expect(effectiveRate("base", STANDARD_RATES)).toBe(87);
+  it("quotes a rate straight off the table", () => {
+    expect(effectiveRate("base", STANDARD_RATES)).toBe(90);
+    expect(effectiveRate("altArt", STANDARD_RATES)).toBe(2);
+    expect(effectiveRate("signed", STANDARD_RATES)).toBe(0.02);
+    expect(effectiveRate("signed", DIAMOND_RATES)).toBe(0.1);
+  });
+
+  it("rolls the six print rates up into four tier rates", () => {
+    const standard = tierRates(STANDARD_RATES);
+    expect(standard[3]).toBeCloseTo(90, 6);
+    expect(standard[4]).toBeCloseTo(7.5, 6);
+    expect(standard[5]).toBeCloseTo(2.3, 6);
+    expect(standard[6]).toBeCloseTo(0.2, 6);
+    expect(Object.values(standard).reduce((a, b) => a + b, 0)).toBeCloseTo(100, 6);
+    expect(Object.values(tierRates(DIAMOND_RATES)).reduce((a, b) => a + b, 0)).toBeCloseTo(100, 6);
+  });
+
+  it("keeps a variant rarer than the print it sits beside", () => {
+    for (const rates of [STANDARD_RATES, DIAMOND_RATES]) {
+      expect(rates.blackLabel).toBeLessThan(rates.altArt);
+      expect(rates.signed).toBeLessThan(rates.secret);
+    }
   });
 });
 
@@ -129,14 +145,15 @@ describe("opening packs", () => {
     }
     expect(pulls).toBe(100_000);
     // Base and foil are common enough to pin tightly
-    expect(((seen.base ?? 0) / pulls) * 100).toBeCloseTo(87, 0);
-    expect(((seen.foil ?? 0) / pulls) * 100).toBeCloseTo(9, 0);
-    // The rare tiers get a wider window: a hundred thousand pulls only expects
-    // about 40 signed cards, so exact agreement would be a fluke
-    expect(((seen.altArt ?? 0) / pulls) * 100).toBeGreaterThan(2.8);
-    expect(((seen.altArt ?? 0) / pulls) * 100).toBeLessThan(3.7);
+    expect(((seen.base ?? 0) / pulls) * 100).toBeCloseTo(90, 0);
+    expect(((seen.foil ?? 0) / pulls) * 100).toBeCloseTo(7.5, 0);
+    // The rare prints get a wider window: a hundred thousand pulls only expects
+    // about 20 signed cards, so exact agreement would be a fluke
+    expect(((seen.altArt ?? 0) / pulls) * 100).toBeGreaterThan(1.7);
+    expect(((seen.altArt ?? 0) / pulls) * 100).toBeLessThan(2.3);
     expect(seen.blackLabel ?? 0).toBeGreaterThan(200);
-    expect(seen.signed ?? 0).toBeGreaterThan(10);
+    expect(seen.secret ?? 0).toBeGreaterThan(100);
+    expect(seen.signed ?? 0).toBeGreaterThan(5);
   });
 
   it("gives the winner two packs and the loser one", () => {
@@ -177,19 +194,16 @@ describe("duplicates and currency", () => {
     expect(EMPTY_WALLET).toEqual({ berries: 0, stardust: 0 });
   });
 
-  it("takes about twelve gold packs of dusting to craft an alt art", () => {
-    const perPack =
-      10 * (0.87 * DUPLICATE_VALUE.base.stardust
-          + 0.09 * DUPLICATE_VALUE.foil.stardust
-          + 0.0324 * DUPLICATE_VALUE.altArt.stardust
-          + 0.0036 * DUPLICATE_VALUE.blackLabel.stardust
-          + 0.0036 * DUPLICATE_VALUE.secret.stardust
-          + 0.0004 * DUPLICATE_VALUE.signed.stardust);
+  it("takes about fifteen gold packs of dusting to craft an alt art", () => {
+    const perPack = 10 * PRINTS.reduce(
+      (sum, print) => sum + (STANDARD_RATES[print] / 100) * DUPLICATE_VALUE[print].stardust,
+      0,
+    );
     const cost = craftCost("altArt");
     expect(cost).not.toBeNull();
     const packs = (cost as number) / perPack;
-    expect(packs).toBeGreaterThan(10);
-    expect(packs).toBeLessThan(14);
+    expect(packs).toBeGreaterThan(12);
+    expect(packs).toBeLessThan(18);
   });
 });
 

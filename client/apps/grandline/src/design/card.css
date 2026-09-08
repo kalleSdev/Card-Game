@@ -1,7 +1,17 @@
 /* Card print treatments.
    Every print plays identically, so the only thing separating them is what you
    see here. They have to be tellable apart across a table, not on close
-   inspection, which is why each one changes shape or colour and not just trim. */
+   inspection, which is why each one changes shape or colour and not just trim.
+
+   From 4★ up they also catch the light: the card tilts a few degrees toward the
+   pointer and a sheen slides across it. Real foils only show themselves when
+   they move, so nothing here animates on its own — it responds. */
+
+.pc-slot {
+  perspective: 1000px;
+  display: inline-flex;
+  flex: none;
+}
 
 .pc {
   position: relative;
@@ -12,15 +22,27 @@
   background: var(--hull);
   border: 1px solid var(--rope);
   overflow: hidden;
-  transition:
-    transform 150ms cubic-bezier(0.2, 0, 0.2, 1),
-    box-shadow 150ms cubic-bezier(0.2, 0, 0.2, 1);
   isolation: isolate;
+  transform-style: preserve-3d;
+  transition:
+    transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pc--tilting {
+  transition:
+    transform 90ms linear,
+    box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .pc--interactive:hover {
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
+}
+
+/* Base has no light on it, so it needs the lift from CSS. The lit prints get
+   theirs from the tilt, which writes an inline transform. */
+.pc--base.pc--interactive:hover {
   transform: translateY(-4px);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
 .pc__art {
@@ -93,7 +115,7 @@
   position: absolute;
   top: 8px;
   left: 8px;
-  z-index: 3;
+  z-index: 6;
   padding: 3px 7px;
   border-radius: 3px;
   font-family: "IBM Plex Mono", ui-monospace, monospace;
@@ -110,7 +132,7 @@
   position: absolute;
   top: 8px;
   right: 8px;
-  z-index: 3;
+  z-index: 6;
   padding: 3px 7px;
   border-radius: 3px;
   font-family: "IBM Plex Mono", ui-monospace, monospace;
@@ -121,45 +143,94 @@
   backdrop-filter: blur(4px);
 }
 
+/* ── The light ─────────────────────────────────────────────────────────────
+   Two layers over the whole card. `sheen` is the coloured band that slides with
+   the pointer; `glare` is a soft white highlight sitting where the light would
+   hit. Base gets neither, which is what makes it read as the plain one. */
+
+.pc__sheen,
+.pc__glare {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pc__glare {
+  background: radial-gradient(
+    circle at var(--pc-mx, 50%) var(--pc-my, 50%),
+    rgba(255, 255, 255, 0.16),
+    transparent 46%
+  );
+  mix-blend-mode: soft-light;
+}
+.pc--blackLabel .pc__glare {
+  background: radial-gradient(
+    circle at var(--pc-mx, 50%) var(--pc-my, 50%),
+    rgba(255, 255, 255, 0.09),
+    transparent 42%
+  );
+}
+
+.pc--foil .pc__sheen,
+.pc--altArt .pc__sheen,
+.pc--blackLabel .pc__sheen,
+.pc--secret .pc__sheen,
+.pc--signed .pc__sheen {
+  opacity: var(--pc-sheen-rest, 0.5);
+}
+
+.pc--foil:hover .pc__sheen,
+.pc--altArt:hover .pc__sheen,
+.pc--blackLabel:hover .pc__sheen,
+.pc--secret:hover .pc__sheen,
+.pc--signed:hover .pc__sheen {
+  opacity: 1;
+}
+
+.pc--foil:hover .pc__glare,
+.pc--altArt:hover .pc__glare,
+.pc--blackLabel:hover .pc__glare,
+.pc--secret:hover .pc__glare,
+.pc--signed:hover .pc__glare {
+  opacity: 1;
+}
+
 /* ── 3★ base ──────────────────────────────────────────────────────────────
-   The reference point. Everything else is a departure from this. */
+   The reference point. No light on it at all. */
 .pc--base {
   --pc-accent: #8595a5;
 }
 
 /* ── 4★ foil ──────────────────────────────────────────────────────────────
-   Same illustration, with a sheen laid over it. Reads as treatment, not as a
-   different picture, which is exactly what a foil is. */
+   Same illustration under a sheen. Cool colours, a single wide band. */
 .pc--foil {
   --pc-accent: #7b6bd9;
+  --pc-sheen-rest: 0.4;
   border-color: rgba(123, 107, 217, 0.55);
 }
-.pc--foil .pc__art::after {
-  content: "";
-  position: absolute;
-  inset: 0;
+.pc--foil .pc__sheen {
   background: linear-gradient(
     115deg,
-    transparent 30%,
-    rgba(123, 107, 217, 0.4) 42%,
+    transparent 34%,
+    rgba(123, 107, 217, 0.38) 44%,
     rgba(242, 236, 223, 0.5) 50%,
-    rgba(62, 143, 160, 0.4) 58%,
-    transparent 70%
+    rgba(62, 143, 160, 0.38) 56%,
+    transparent 66%
   );
-  background-size: 260% 100%;
-  background-position: 100% 0;
-  transition: background-position 700ms cubic-bezier(0.16, 1, 0.3, 1);
+  background-size: 240% 240%;
+  background-position: var(--pc-mx, 50%) var(--pc-my, 50%);
   mix-blend-mode: screen;
-}
-.pc--foil:hover .pc__art::after {
-  background-position: 0 0;
 }
 
 /* ── 5★ alt art ───────────────────────────────────────────────────────────
-   A new illustration that breaks the frame: the art runs to the card's edge and
-   over the name plate, so the silhouette itself changes. */
+   A new illustration that breaks the frame. The light is warm and narrower than
+   the foil's, so it reads as gold leaf rather than as a rainbow. */
 .pc--altArt {
   --pc-accent: #e0a93b;
+  --pc-sheen-rest: 0.45;
   border-color: rgba(224, 169, 59, 0.6);
   box-shadow: inset 0 0 0 1px rgba(224, 169, 59, 0.16);
 }
@@ -172,27 +243,46 @@
   background: linear-gradient(180deg, transparent, rgba(7, 12, 19, 0.92) 42%);
   padding-top: 24px;
 }
+.pc--altArt .pc__sheen {
+  background:
+    linear-gradient(
+      112deg,
+      transparent 38%,
+      rgba(255, 214, 130, 0.34) 46%,
+      rgba(255, 245, 220, 0.46) 50%,
+      rgba(224, 169, 59, 0.3) 54%,
+      transparent 62%
+    ),
+    repeating-linear-gradient(
+      112deg,
+      transparent 0 8px,
+      rgba(255, 214, 130, 0.05) 8px 10px
+    );
+  background-size: 240% 240%, 200% 200%;
+  background-position: var(--pc-mx, 50%) var(--pc-my, 50%);
+  mix-blend-mode: screen;
+}
 
 /* ── 5★ black label ───────────────────────────────────────────────────────
-   The alt art restruck in monochrome on black. No colour anywhere, no frame on
-   the art, and the name set in the display face at full size. As rare as a 6★,
-   and it should look like it belongs to a different set entirely. */
+   Monochrome on black, borderless art, name set large. The light here is
+   colourless and wide, like a matte black card catching a room light. */
 .pc--blackLabel {
   --pc-accent: #e8e2d4;
-  background: #05070a;
+  --pc-sheen-rest: 0.18;
+  background: #03050a;
   border-color: rgba(232, 226, 212, 0.5);
 }
 .pc--blackLabel .pc__art {
   aspect-ratio: 5 / 5.4;
-  background: #05070a;
+  background: #03050a;
 }
 .pc--blackLabel .pc__art-fill {
-  filter: grayscale(1) contrast(1.25) brightness(0.72);
+  filter: grayscale(1) contrast(1.3) brightness(0.6);
 }
 .pc--blackLabel .pc__body {
   margin-top: -34px;
   z-index: 2;
-  background: linear-gradient(180deg, transparent, #05070a 42%);
+  background: linear-gradient(180deg, transparent, #03050a 46%);
   padding-top: 24px;
 }
 .pc--blackLabel .pc__name {
@@ -204,14 +294,35 @@
 .pc--blackLabel .pc__stats b {
   color: rgba(232, 226, 212, 0.75);
 }
+.pc--blackLabel .pc__sheen {
+  background:
+    linear-gradient(
+      118deg,
+      transparent 38%,
+      rgba(232, 226, 212, 0.08) 46%,
+      rgba(255, 255, 255, 0.2) 50%,
+      rgba(232, 226, 212, 0.07) 54%,
+      transparent 62%
+    ),
+    repeating-linear-gradient(
+      118deg,
+      transparent 0 16px,
+      rgba(232, 226, 212, 0.022) 16px 18px
+    );
+  background-size: 250% 250%, 220% 220%;
+  background-position: var(--pc-mx, 50%) var(--pc-my, 50%);
+  mix-blend-mode: screen;
+}
 
 /* ── 6★ secret ────────────────────────────────────────────────────────────
-   Red manga treatment: the art duotoned to ink and red, halftone over the top,
-   and the whole card carrying a red cast. */
+   Red manga treatment on near black: the art duotoned to ink and red under a
+   drawn halftone, with a holographic band over the top. The holo is desaturated
+   on purpose — a full rainbow would fight the red and look cheap. */
 .pc--secret {
   --pc-accent: #d6412f;
+  --pc-sheen-rest: 0.5;
   border-color: rgba(214, 65, 47, 0.75);
-  background: #12080a;
+  background: #0a0406;
   box-shadow: inset 0 0 0 1px rgba(214, 65, 47, 0.2);
 }
 .pc--secret .pc__art {
@@ -225,7 +336,7 @@
   position: absolute;
   inset: 0;
   z-index: 1;
-  background: linear-gradient(160deg, rgba(214, 65, 47, 0.85), rgba(90, 12, 12, 0.75));
+  background: linear-gradient(160deg, rgba(214, 65, 47, 0.85), rgba(70, 8, 10, 0.8));
   mix-blend-mode: color;
 }
 /* Halftone, drawn rather than loaded. */
@@ -241,19 +352,41 @@
 .pc--secret .pc__body {
   margin-top: -34px;
   z-index: 3;
-  background: linear-gradient(180deg, transparent, #12080a 42%);
+  background: linear-gradient(180deg, transparent, #0a0406 46%);
   padding-top: 24px;
+}
+.pc--secret .pc__sheen {
+  background:
+    linear-gradient(
+      110deg,
+      transparent 34%,
+      rgba(255, 120, 90, 0.24) 42%,
+      rgba(240, 200, 150, 0.3) 47%,
+      rgba(120, 190, 210, 0.26) 52%,
+      rgba(150, 120, 200, 0.24) 57%,
+      transparent 66%
+    ),
+    repeating-linear-gradient(
+      110deg,
+      transparent 0 5px,
+      rgba(255, 255, 255, 0.045) 5px 7px
+    );
+  background-size: 230% 230%, 190% 190%;
+  background-position: var(--pc-mx, 50%) var(--pc-my, 50%);
+  mix-blend-mode: screen;
 }
 
 /* ── 6★ signed ────────────────────────────────────────────────────────────
-   The secret print with a signature struck across it. One in 2,500. */
+   The secret print with a signature struck across it. One in five thousand, and
+   the only print whose holo runs edge to edge rather than in a single band. */
 .pc--signed {
   --pc-accent: #ff6a4d;
+  --pc-sheen-rest: 0.6;
   border-color: rgba(255, 106, 77, 0.9);
-  background: #12080a;
+  background: #0a0406;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 106, 77, 0.28),
-    0 0 24px rgba(214, 65, 47, 0.22);
+    inset 0 0 0 1px rgba(255, 106, 77, 0.3),
+    0 0 26px rgba(214, 65, 47, 0.24);
 }
 .pc--signed .pc__art {
   aspect-ratio: 5 / 5.4;
@@ -266,7 +399,7 @@
   position: absolute;
   inset: 0;
   z-index: 1;
-  background: linear-gradient(160deg, rgba(214, 65, 47, 0.85), rgba(90, 12, 12, 0.75));
+  background: linear-gradient(160deg, rgba(214, 65, 47, 0.85), rgba(70, 8, 10, 0.8));
   mix-blend-mode: color;
 }
 .pc--signed .pc__art::after {
@@ -287,12 +420,43 @@
 .pc--signed .pc__body {
   margin-top: -34px;
   z-index: 5;
-  background: linear-gradient(180deg, transparent, #12080a 42%);
+  background: linear-gradient(180deg, transparent, #0a0406 46%);
   padding-top: 24px;
+}
+.pc--signed .pc__sheen {
+  background:
+    linear-gradient(
+      108deg,
+      rgba(255, 120, 90, 0.16) 0%,
+      rgba(255, 210, 140, 0.24) 18%,
+      rgba(130, 220, 220, 0.2) 36%,
+      rgba(160, 130, 220, 0.22) 54%,
+      rgba(255, 140, 110, 0.24) 72%,
+      rgba(255, 210, 140, 0.18) 100%
+    ),
+    repeating-linear-gradient(
+      108deg,
+      transparent 0 4px,
+      rgba(255, 255, 255, 0.06) 4px 6px
+    );
+  background-size: 220% 220%, 170% 170%;
+  background-position: var(--pc-mx, 50%) var(--pc-my, 50%);
+  mix-blend-mode: screen;
 }
 
 /* A duplicate in a pack opening: dimmed back so the eye skips it. */
 .pc--duplicate {
   opacity: 0.42;
   filter: saturate(0.5);
+}
+.pc--duplicate .pc__sheen,
+.pc--duplicate .pc__glare {
+  opacity: 0 !important;
+}
+
+/* Someone who has asked for less movement gets the treatments without the tilt. */
+@media (prefers-reduced-motion: reduce) {
+  .pc {
+    transform: none !important;
+  }
 }

@@ -40,9 +40,6 @@ export const PRINTS_BY_TIER: Record<PrintTier, readonly PrintId[]> = {
   6: ["secret", "signed"],
 };
 
-/** How often the variant comes up instead of the standard print, in percent. */
-export const VARIANT_CHANCE = 10;
-
 /** Identifies one card in one treatment. Everything you own is one of these. */
 export interface OwnedPrint {
   cardId: string;
