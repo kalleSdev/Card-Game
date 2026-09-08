@@ -1,12 +1,11 @@
 import { useState } from "react";
 import {
   PACKS, PRINTS, PRINT_INFO, STANDARD_RATES, DIAMOND_RATES, effectiveRate,
-  type PackId, type Pull,
+  type PackId,
 } from "@cg/meta";
-import { CARD_SIZE, COLOR, PRINT_COLOR, RADIUS, SPACE, text } from "../design/tokens";
-import PrintCard from "../components/PrintCard";
+import { COLOR, PRINT_COLOR, SPACE, text } from "../design/tokens";
 import { Button, Currency, Panel, SectionHead, Text, TierPip } from "../components/primitives";
-import { cardFace } from "../data/pool";
+import PackOpening, { type Opened } from "./PackOpening";
 import type { Store } from "../data/store";
 
 /** Packs a match hands out for free, on top of being buyable. */
@@ -125,16 +124,19 @@ function ExactRate({ print }: { print: (typeof PRINTS)[number] }) {
   );
 }
 
-/** Unopened packs, and what came out of the last one. */
+/** Unopened packs. Opening one hands off to the reveal. */
 export function PacksScreen({ store }: { store: Store }) {
   const [busy, setBusy] = useState<string | null>(null);
-  const [result, setResult] = useState<{ pulls: Pull[]; isNew: boolean[] } | null>(null);
+  const [opened, setOpened] = useState<Opened | null>(null);
 
-  const open = async (id: string) => {
+  const open = async (id: string, packId: PackId) => {
     setBusy(id);
-    setResult(await store.open(id));
+    const result = await store.open(id);
     setBusy(null);
+    if (result) setOpened({ packId, pulls: result.pulls, isNew: result.isNew });
   };
+
+  if (opened) return <PackOpening opened={opened} onDone={() => setOpened(null)} />;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: SPACE.xl }}>
@@ -143,6 +145,12 @@ export function PacksScreen({ store }: { store: Store }) {
         title="Unopened"
         right={<span style={{ ...text("data"), fontSize: 15, color: COLOR.mist }}>{store.packs.length}</span>}
       />
+
+      {store.error && (
+        <Panel padding={SPACE.lg} style={{ borderColor: "#7A2A22" }}>
+          <span style={{ ...text("small"), color: "#E9857A" }}>{store.error}</span>
+        </Panel>
+      )}
 
       {store.packs.length === 0 ? (
         <Panel padding={SPACE.xxxl}>
@@ -170,7 +178,7 @@ export function PacksScreen({ store }: { store: Store }) {
                   <Button
                     tone="primary"
                     disabled={busy !== null}
-                    onClick={() => open(pack.id)}
+                    onClick={() => open(pack.id, pack.packId)}
                   >
                     {busy === pack.id ? "Opening" : "Open"}
                   </Button>
@@ -179,54 +187,6 @@ export function PacksScreen({ store }: { store: Store }) {
             );
           })}
         </div>
-      )}
-
-      {result && (
-        <section>
-          <SectionHead
-            eyebrow="Just opened"
-            title="What came out"
-            right={<Button size="sm" tone="ghost" onClick={() => setResult(null)}>Clear</Button>}
-          />
-          <div style={{ display: "flex", flexWrap: "wrap", gap: SPACE.lg }}>
-            {result.pulls.map((pull, i) =>
-              pull.kind === "card" ? (
-                <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "center", width: CARD_SIZE.sm }}>
-                  <PrintCard
-                    card={cardFace(pull.cardId)}
-                    print={pull.print}
-                    width={CARD_SIZE.sm}
-                    duplicate={!result.isNew[i]}
-                  />
-                  <span style={{ ...text("label"), fontSize: 9, color: result.isNew[i] ? COLOR.kelp : COLOR.fathom }}>
-                    {result.isNew[i] ? "New" : "+1"}
-                  </span>
-                </div>
-              ) : (
-                <div
-                  key={i}
-                  style={{
-                    width: CARD_SIZE.sm,
-                    aspectRatio: "5 / 7",
-                    borderRadius: RADIUS.lg,
-                    border: `1px solid ${COLOR.rope}`,
-                    background: COLOR.hull,
-                    display: "flex", flexDirection: "column",
-                    alignItems: "center", justifyContent: "center", gap: 6,
-                    textAlign: "center", padding: SPACE.md,
-                  }}
-                >
-                  <TierPip tier={pull.tier} />
-                  <span style={{ ...text("small"), fontSize: 12 }}>{pull.category}</span>
-                  <span style={{ ...text("label"), fontSize: 8, color: COLOR.fathom }}>Cosmetic</span>
-                </div>
-              ),
-            )}
-          </div>
-          <p style={{ ...text("small"), color: COLOR.fathom, marginTop: SPACE.md }}>
-            Cards are already in your binder. The proper opening, with the reveal, comes next.
-          </p>
-        </section>
       )}
     </div>
   );

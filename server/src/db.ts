@@ -1,11 +1,16 @@
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // SQLite for now. Everything goes through this file, so swapping to Postgres
 // later means rewriting one module rather than hunting queries all over.
 
-const DB_PATH = process.env.DB_PATH ?? "server/data/cardgame.db";
+// Resolved against this file rather than the working directory. npm runs a
+// workspace script from the package folder, so a relative default landed the
+// database in server/server/data depending on where it was started from.
+const DEFAULT_DB = fileURLToPath(new URL("../data/cardgame.db", import.meta.url));
+const DB_PATH = process.env.DB_PATH ?? DEFAULT_DB;
 
 function open() {
   if (DB_PATH !== ":memory:") mkdirSync(dirname(DB_PATH), { recursive: true });

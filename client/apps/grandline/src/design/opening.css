@@ -1,0 +1,181 @@
+/* The pack opening.
+   The one screen allowed to take its time. Everything else in this app answers
+   in 150ms; here the whole point is the pause before you know. */
+
+.po {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: radial-gradient(ellipse 90% 70% at 50% 0%, #101d2c, #04070c 70%);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.po__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+}
+
+.po__stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 24px;
+}
+
+.po__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  justify-content: center;
+  perspective: 1400px;
+}
+
+/* ── One card in the row ─────────────────────────────────────────────────── */
+
+.po__slot {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 520ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Face down, and slightly turned away so the row reads as a stack of backs */
+.po__slot--down {
+  transform: rotateY(180deg);
+}
+
+.po__face {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* The back sits on top of the front, flipped, so one is always hidden */
+.po__face--back {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(180deg);
+}
+
+/* ── The card back ───────────────────────────────────────────────────────── */
+
+.po__back {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  border: 1px solid #22303f;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 50%, rgba(62, 143, 160, 0.14), transparent 70%),
+    linear-gradient(160deg, #121d2b, #0a121b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* A compass rose, drawn rather than loaded. */
+.po__rose {
+  width: 58%;
+  aspect-ratio: 1;
+  opacity: 0.5;
+}
+
+/* ── The moment a card lands ─────────────────────────────────────────────── */
+
+/* Common: a short lift as it settles */
+.po__slot--revealed .po__face--front {
+  animation: po-settle 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes po-settle {
+  0% { transform: scale(0.94); }
+  60% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+/* A burst behind the card, sized and coloured by what turned up. Base and foil
+   get none: if everything flashes, nothing does. */
+.po__burst {
+  position: absolute;
+  inset: -30%;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  z-index: -1;
+}
+
+.po__slot--revealed .po__burst {
+  animation: po-burst 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes po-burst {
+  0% { opacity: 0; transform: scale(0.4); }
+  35% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.25); }
+}
+
+.po__slot--tier5 .po__burst {
+  background: radial-gradient(circle, rgba(224, 169, 59, 0.5), transparent 62%);
+}
+.po__slot--tier6 .po__burst {
+  background: radial-gradient(circle, rgba(214, 65, 47, 0.62), transparent 64%);
+}
+
+/* A rare card holds the room for a beat longer */
+.po__slot--tier5 .po__face--front,
+.po__slot--tier6 .po__face--front {
+  animation-duration: 620ms;
+}
+
+/* ── Labels under each card ──────────────────────────────────────────────── */
+
+.po__tag {
+  margin-top: 8px;
+  text-align: center;
+  font-family: "Archivo", system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  min-height: 14px;
+  opacity: 0;
+  transition: opacity 300ms ease 180ms;
+}
+.po__slot--revealed + .po__tag {
+  opacity: 1;
+}
+
+/* ── A cosmetic, which has no card ───────────────────────────────────────── */
+
+.po__cosmetic {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  border: 1px solid #22303f;
+  background: #0d1520;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  padding: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .po__slot,
+  .po__slot--revealed .po__face--front,
+  .po__slot--revealed .po__burst {
+    transition: none;
+    animation: none;
+  }
+  .po__slot--down {
+    transform: none;
+  }
+}
