@@ -3,6 +3,7 @@ import { PRINTS, type PrintId } from "@cg/meta";
 import { db, type TradeRow } from "./db.js";
 import { copiesOf, moveCurrency } from "./packs.js";
 import { normaliseCode } from "./lobbies.js";
+import { postTrade } from "./feed.js";
 
 /**
  * Player to player trading.
@@ -334,6 +335,13 @@ export function confirmTrade(userId: string, tradeId: string): Trade {
 
     db.prepare("UPDATE trades SET state = 'done', closed_at = ?, updated_at = ? WHERE id = ?")
       .run(at, at, tradeId);
+
+    const count = (offer: Offer) => offer.prints.reduce((sum, line) => sum + line.count, 0);
+    postTrade(
+      { id: now.a_user, username: nameOf(now.a_user) },
+      nameOf(bUser),
+      count(a), count(b), a.berries, b.berries,
+    );
 
     return view({ ...now, state: "done", closed_at: at, updated_at: at }, userId);
   })();

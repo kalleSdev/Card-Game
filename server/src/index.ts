@@ -12,6 +12,7 @@ import {
 } from "./packs.js";
 import { PACKS, PRINTS, RANKS, COSMETIC_BY_ID, isProfileIcon, type PackId, type PrintId } from "@cg/meta";
 import { applyResult, leaderboard, standingOf } from "./ranking.js";
+import { recent, postMatch, postStreak, postRank } from "./feed.js";
 import { LobbyBook } from "./lobbies.js";
 import {
   openTrade, joinTrade, cancelTrade, setOffer, confirmTrade, openTradeFor, historyFor,
@@ -131,6 +132,13 @@ app.get("/leaderboard", async () => {
     standings: standings.map(s => ({ ...s, profile: profileOf(s.userId) })),
     ranks: RANKS,
   };
+});
+
+// Public, like the ladder: the feed is the room, and you can watch it without
+// having an account of your own.
+app.get("/feed", async (req) => {
+  const { limit } = (req.query ?? {}) as { limit?: string };
+  return { entries: recent(Number(limit) || 50) };
 });
 
 // ── Trading ─────────────────────────────────────────────────────────────────
@@ -469,9 +477,16 @@ function settle(match: Match) {
     const won = winner === pid;
     recordResult(conn.user.id, opponent, won, match.state.turn);
 
+    postMatch(conn.user, opponent, won, match.state.turn);
+
     let rankChange = null;
     try {
       rankChange = applyResult(conn.user.id, won);
+      // A streak is worth saying once it is a run rather than two in a row
+      if (rankChange.streak >= 3) postStreak(conn.user, rankChange.streak);
+      if (rankChange.rankedUp || rankChange.rankedDown) {
+        postRank(conn.user, rankChange.rank, rankChange.rankName, rankChange.rankedUp, rankChange.after);
+      }
     } catch (err) {
       console.warn("ranking failed", conn.user.username, err);
     }

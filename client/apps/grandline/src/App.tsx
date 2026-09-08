@@ -7,6 +7,7 @@ import ShopScreen, { PacksScreen } from "./screens/Shop";
 import LadderScreen from "./screens/Ladder";
 import ProfileScreen from "./screens/Profile";
 import TradeScreen from "./screens/Trade";
+import FeedScreen from "./screens/Feed";
 import SignIn from "./screens/SignIn";
 import { useStore } from "./data/store";
 import { COLOR, SPACE, text } from "./design/tokens";
@@ -41,6 +42,7 @@ export default function App() {
         : page === "decks" ? <DecksScreen store={store} onSignIn={goSignIn} />
         : page === "shop" ? <ShopScreen store={store} onSignIn={goSignIn} />
         : page === "packs" ? <PacksScreen store={store} onSignIn={goSignIn} />
+        : page === "feed" ? <FeedScreen />
         : page === "ladder" ? <LadderScreen store={store} />
         : page === "profile" ? <ProfileScreen store={store} onSignIn={goSignIn} />
         : page === "trade" ? <TradeScreen store={store} onSignIn={goSignIn} />

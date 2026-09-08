@@ -180,6 +180,19 @@ db.exec(`
     at       INTEGER NOT NULL
   );
 
+  -- The global feed. Denormalised on purpose: a name is written in as it was
+  -- at the time, so reading the feed is one query with no joins, and a renamed
+  -- or deleted account cannot rewrite what already happened.
+  CREATE TABLE IF NOT EXISTS feed (
+    id       TEXT PRIMARY KEY,
+    kind     TEXT NOT NULL,
+    user_id  TEXT,
+    username TEXT NOT NULL,
+    body     TEXT NOT NULL,
+    at       INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_feed_at       ON feed(at DESC);
   CREATE INDEX IF NOT EXISTS idx_trades_a      ON trades(a_user, state);
   CREATE INDEX IF NOT EXISTS idx_trades_b      ON trades(b_user, state);
   CREATE INDEX IF NOT EXISTS idx_trade_log_a   ON trade_log(a_user, at);

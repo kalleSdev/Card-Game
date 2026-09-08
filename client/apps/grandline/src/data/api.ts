@@ -250,3 +250,20 @@ export const confirmTrade = (id: string) =>
 
 export const cancelTrade = (id: string) =>
   call<{ ok: true }>(`/trades/${id}/cancel`, { method: "POST" });
+
+// ── The feed ────────────────────────────────────────────────────────────────
+
+export type FeedKind = "match" | "streak" | "rank" | "pull" | "trade";
+
+export interface FeedEntry {
+  id: string;
+  kind: FeedKind;
+  userId: string | null;
+  username: string;
+  at: number;
+  body: Record<string, unknown>;
+}
+
+/** Public, so this works signed out. */
+export const fetchFeed = (limit = 50) =>
+  call<{ entries: FeedEntry[] }>(`/feed?limit=${limit}`);

@@ -17,6 +17,7 @@ export const NAV: NavItem[] = [
   { id: "packs", label: "Packs" },
   { id: "shop", label: "Shop" },
   { id: "trade", label: "Trade" },
+  { id: "feed", label: "Feed" },
   { id: "ladder", label: "Ladder" },
   { id: "profile", label: "Profile" },
   { id: "design", label: "Design" },
@@ -24,7 +25,7 @@ export const NAV: NavItem[] = [
 
 /**
  * The frame every page sits in. A permanent left rail rather than tabs, because
- * there are nine destinations and hiding them behind a menu would be pretending
+ * there are ten destinations and hiding them behind a menu would be pretending
  * the app is smaller than it is.
  */
 export default function Shell({

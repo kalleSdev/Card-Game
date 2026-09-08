@@ -5,6 +5,7 @@ import {
   type PackId, type PrintId, type Pull, type Currency,
 } from "@cg/meta";
 import { db, type PackRow, type PrintRow, type ProfileRow, type WalletRow } from "./db.js";
+import { postPull } from "./feed.js";
 import { cardsFor, DEFAULT_UNIVERSE, type UniverseId } from "./universes.js";
 
 /**
@@ -314,8 +315,16 @@ export function openOwnedPack(userId: string, packRowId: string): OpenedPack {
     const seed = randomSeed();
     const result = openPack(row.pack_id as PackId, Object.keys(cardsFor(universe)), seed);
 
+    const who = db.prepare("SELECT username FROM users WHERE id = ?").get(userId) as
+      | { username: string }
+      | undefined;
+
     const isNew = result.pulls.map(pull => {
-      if (pull.kind === "card") return addPrint(userId, pull.cardId, pull.print);
+      if (pull.kind === "card") {
+        // The room hears about the good ones, whether or not it is a first
+        if (who) postPull({ id: userId, username: who.username }, pull.cardId, pull.print);
+        return addPrint(userId, pull.cardId, pull.print);
+      }
       // A cosmetic pull is either something to wear or a handful of Berries
       if (pull.cosmeticId) return addCosmetic(userId, pull.cosmeticId);
       if (pull.berries) moveCurrency(userId, "berries", pull.berries, "packReward", "cosmetic pull");
