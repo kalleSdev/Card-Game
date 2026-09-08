@@ -77,7 +77,16 @@ export default function ProfileScreen({ store, onSignIn }: { store: Store; onSig
           {/* Only the icon laps over the banner. Lifting the whole row would
               take the name up with it and clip it against the banner edge. */}
           <div style={{ display: "flex", alignItems: "flex-end", gap: SPACE.xl, flexWrap: "wrap" }}>
-            <div style={{ marginTop: -(ICON_SIZE / 2), marginBottom: SPACE.sm }}>
+            {/* Positioned, because the banner above is relative and would
+                otherwise paint over the half of the icon that laps onto it. */}
+            <div
+              style={{
+                position: "relative",
+                zIndex: 1,
+                marginTop: -(ICON_SIZE / 2),
+                marginBottom: SPACE.sm,
+              }}
+            >
               <BorderRing id={profile.borderId} size={ICON_SIZE}>
                 <div
                   style={{
