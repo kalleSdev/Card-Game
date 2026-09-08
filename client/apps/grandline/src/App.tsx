@@ -3,6 +3,8 @@ import Shell from "./components/Shell";
 import DesignLanguage from "./screens/DesignLanguage";
 import CollectionScreen from "./screens/Collection";
 import DecksScreen from "./screens/Decks";
+import ShopScreen, { PacksScreen } from "./screens/Shop";
+import SignIn from "./screens/SignIn";
 import { useStore } from "./data/store";
 import { COLOR, SPACE, text } from "./design/tokens";
 import { Panel, Text } from "./components/primitives";
@@ -11,13 +13,36 @@ export default function App() {
   const [page, setPage] = useState("collection");
   const store = useStore();
 
+  if (store.loading) return <Loading />;
+  if (!store.account) return <SignIn store={store} />;
+
   return (
-    <Shell active={page} onNavigate={setPage} wallet={store.wallet}>
+    <Shell
+      active={page}
+      onNavigate={setPage}
+      wallet={store.wallet}
+      username={store.account.username}
+      packsWaiting={store.packs.length}
+      onSignOut={() => void store.signOut()}
+    >
       {page === "collection" ? <CollectionScreen store={store} />
         : page === "decks" ? <DecksScreen store={store} />
+        : page === "shop" ? <ShopScreen store={store} />
+        : page === "packs" ? <PacksScreen store={store} />
         : page === "design" ? <DesignLanguage />
         : <NotBuiltYet id={page} />}
     </Shell>
+  );
+}
+
+function Loading() {
+  return (
+    <div style={{
+      minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+      ...text("label"), color: COLOR.fathom,
+    }}>
+      Loading
+    </div>
   );
 }
 

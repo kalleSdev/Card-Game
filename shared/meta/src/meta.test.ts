@@ -198,10 +198,15 @@ describe("duplicates and currency", () => {
   });
 
   it("pays a win more than a loss, and the first win of the day most", () => {
-    expect(berriesForMatch(false)).toBe(40);
-    expect(berriesForMatch(true)).toBe(150);
-    expect(berriesForMatch(true, true)).toBe(300);
-    expect(berriesForMatch(false, true)).toBe(40);
+    expect(berriesForMatch(false)).toBe(80);
+    expect(berriesForMatch(true)).toBe(100);
+    expect(berriesForMatch(true, true)).toBe(250);
+    expect(berriesForMatch(false, true)).toBe(80);
+  });
+
+  it("keeps a loss worth playing without making it as good as a win", () => {
+    expect(berriesForMatch(false)).toBeLessThan(berriesForMatch(true));
+    expect(berriesForMatch(false)).toBeGreaterThan(0);
   });
 
   it("refuses to spend money that is not there", () => {

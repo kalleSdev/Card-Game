@@ -6,7 +6,8 @@ import { cardsFor, botFor, DEFAULT_UNIVERSE, type UniverseId } from "./universes
 import {
   walletOf, printsOf, unopenedPacks, openOwnedPack, replayPack, buyPack,
   payOutMatch, scrapSpares, craftPrint,
-  type ScrapAction,
+  decksOf, saveDeck, deleteDeck, grantStarter,
+  type ScrapAction, type StoredDeck,
 } from "./packs.js";
 import { PACKS, PRINTS, type PackId, type PrintId } from "@cg/meta";
 import { LobbyBook } from "./lobbies.js";
@@ -51,7 +52,9 @@ app.get("/health", async () => ({ ok: true, matches: liveMatchIds.size, lobbies:
 app.post("/auth/register", async (req, reply) => {
   const { username, password } = (req.body ?? {}) as { username?: string; password?: string };
   try {
-    return register(username ?? "", password ?? "");
+    const out = register(username ?? "", password ?? "");
+    grantStarter(out.user.id);
+    return out;
   } catch (err) {
     return reply.code(400).send({ error: err instanceof AuthError ? err.message : "Could not register" });
   }
@@ -105,6 +108,7 @@ app.get("/collection", async (req, reply) =>
       prints: printsOf(user.id),
       wallet: walletOf(user.id),
       packs: unopenedPacks(user.id),
+      decks: decksOf(user.id),
     };
   }),
 );
@@ -162,6 +166,31 @@ app.post("/collection/craft", async (req, reply) =>
     if (!print || !(PRINTS as readonly string[]).includes(print)) throw new Error("No such print");
     craftPrint(user.id, cardId, print as PrintId);
     return { wallet: walletOf(user.id) };
+  }),
+);
+
+app.post("/decks", async (req, reply) =>
+  guarded(reply, () => {
+    const user = requireUser(req);
+    const deck = (req.body ?? {}) as Partial<StoredDeck>;
+    if (!deck.id || typeof deck.name !== "string") throw new Error("That is not a deck");
+    saveDeck(user.id, {
+      id: deck.id,
+      name: deck.name.slice(0, 60),
+      leaderId: deck.leaderId ?? null,
+      cardIds: Array.isArray(deck.cardIds) ? deck.cardIds.slice(0, 60) : [],
+      prints: deck.prints ?? {},
+      updatedAt: Date.now(),
+    });
+    return { ok: true };
+  }),
+);
+
+app.delete("/decks/:id", async (req, reply) =>
+  guarded(reply, () => {
+    const user = requireUser(req);
+    deleteDeck(user.id, (req.params as { id: string }).id);
+    return { ok: true };
   }),
 );
 

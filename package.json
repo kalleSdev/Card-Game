@@ -9,7 +9,7 @@
     "server"
   ],
   "scripts": {
-    "dev": "npm -w @cg/app-web run dev",
+    "dev": "npm -w @cg/app-grandline run dev",
     "build": "npm -w @cg/app-web run build && npm -w @cg/app-grandline run build",
     "typecheck": "npm -w @cg/app-web run typecheck && npm -w @cg/app-grandline run typecheck",
     "test": "vitest run",
@@ -18,8 +18,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "verify": "npm run typecheck && npm run lint && npm run test",
-    "server": "npm -w @cg/server run dev",
-    "dev:grandline": "npm -w @cg/app-grandline run dev"
+    "dev:jjk": "npm -w @cg/app-web run dev",
+    "dev:server": "npm -w @cg/server run dev"
   },
   "dependencies": {
     "framer-motion": "^12.40.0",

@@ -97,6 +97,16 @@ db.exec(`
     at       INTEGER NOT NULL
   );
 
+  -- A saved deck. Stored as JSON because a deck is only ever read and written
+  -- whole, and there is nothing to query inside it.
+  CREATE TABLE IF NOT EXISTS decks (
+    id         TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    body       TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_decks_user    ON decks(user_id);
   CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
   CREATE INDEX IF NOT EXISTS idx_results_user  ON results(user_id);
   CREATE INDEX IF NOT EXISTS idx_prints_user   ON prints(user_id);

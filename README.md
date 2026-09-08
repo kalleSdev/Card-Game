@@ -2,48 +2,66 @@
 
 A turn based card game I've been building in React and TypeScript. Two players
 draft a deck, then fight it out on a board with leaders, abilities and spells.
+There's an authoritative game server behind it, and a second client I'm building
+now for a new card set with packs, a collection and a ranked ladder.
 
 The main thing I wanted out of this was keeping the game rules completely
 separate from the interface. All the combat logic sits in one pure function, and
-the UI just renders whatever comes back out of it.
+both the UI and the server just call it.
 
 ## Running it
 
 ```bash
 npm install
-npm run dev       # dev server
-npm test          # engine tests
-npm run verify    # typecheck, lint and tests
-npm run build     # production build
+```
+
+There are two clients and one server. Each is its own command:
+
+```bash
+npm run dev           # Grand Line client   → localhost:5180
+npm run dev:jjk       # the original client → localhost:5173
+npm run dev:server    # game server         → localhost:8787
+```
+
+The Grand Line client needs the server running, since accounts, packs and the
+collection all live there. The original client runs standalone, and only needs
+the server for online play.
+
+```bash
+npm test              # engine, rules and server tests
+npm run verify        # typecheck, lint and tests
+npm run build         # production build of both clients
 ```
 
 ## How it's put together
 
 ```
 client/
-  apps/web/            the React app
-    src/
-      screens/         one file per screen
-      components/      shared bits
-      battleEngine.ts  all the combat rules
-      profiles.ts      saved profiles and collection
+  apps/
+    web/               the original client
+    grandline/         the new client: design system, binder, decks, shop
   packages/
     engine/            card database and scoring
     render/            render helpers
 shared/
-  contracts/           types shared across packages
+  contracts/           types shared everywhere
+  battle/              the combat rules, used by client and server alike
+  meta/                everything around a match: prints, packs, money, ranks
+server/                Fastify + websockets, SQLite
 ```
 
-Everything goes through one function:
+Everything in a match goes through one function:
 
 ```
 click ─> BattleIntent ─> applyBattleIntent(state, intent) ─> { state, events }
 ```
 
 State never gets mutated. The function returns a new state plus a list of what
-happened, and the screen uses that list to fire off animations. That means the
-rules don't know anything about React, and I could drop the same engine on a
-server later without touching it.
+happened, and the screen uses that list to fire off animations. The rules don't
+know anything about React, which is what let me drop the same engine on the
+server without touching it. The engine's random rolls come from a seed carried
+in the state, so the server and both clients always agree, and a match can be
+replayed exactly.
 
 Cards, abilities, perks and synergies are all just data in lookup tables, so
 adding a character is a data change rather than a code change. New kinds of
@@ -52,12 +70,38 @@ that needs handling.
 
 The background and card effects are all CSS and SVG rather than images.
 
+## Online play
+
+The server owns the match. Clients send intents and get back a redacted view of
+the state, so a client is never sent the opponent's hand and can't read it out
+of memory. You play a friend by opening a lobby and passing them a five
+character code or an invite link. Dropping out doesn't end the match: the seat
+is held for 45 seconds and the client reconnects into it.
+
+There's also a computer opponent that sends the same intents a person does, so
+it goes through the same rules and can't cheat.
+
+## Grand Line
+
+The second card set, built as its own client rather than bolted onto the first.
+Same server, same engine, its own design system.
+
+Every card has six prints, from a plain base up to a signed secret. They all
+play identically — a print only changes how the card looks on the board, so
+opening packs never buys an advantage. Packs are rolled on the server when
+they're opened, never when they're earned, and the seed is kept so an opening
+can be replayed exactly.
+
+Spare copies can be scrapped for Stardust to craft a specific card, or sold for
+Berries to buy more packs. Scrapping never takes your last copy.
+
 ## What's in it
 
 - Quick match, drafted deck battles, and a collection mode
 - 34 characters, 18 leader abilities, 26 activatable perks, 13 deck synergies
 - Shields, Block, stuns, counterattacks, targeting restrictions
-- Card collection with duplicate based ascension, profiles and a leaderboard
+- Online play with lobbies, reconnect, surrender and a computer opponent
+- Accounts, a card collection, packs, two currencies and a ranked ladder
 
 ## Testing
 
@@ -71,13 +115,16 @@ const result = apply(selected, { type: "ATTACK_LEADER", pid: "P1" });
 expect(result.state.winner).toBe("P1");
 ```
 
+The pack tests open a hundred thousand cards and check the distribution matches
+the published odds. The server tests run against the real schema in memory.
+
 Typecheck, lint, tests and build run on every push.
 
 ## Still to do
 
-- Server side multiplayer using the same engine
+- The pack opening screen, trading, and the ladder pages
 - Sound
-- A second card set
+- Art for the new set
 
 ## Note
 

@@ -13,8 +13,8 @@ export const NAV: NavItem[] = [
   { id: "play", label: "Play", soon: true },
   { id: "collection", label: "Collection" },
   { id: "decks", label: "Decks" },
-  { id: "packs", label: "Packs", soon: true },
-  { id: "shop", label: "Shop", soon: true },
+  { id: "packs", label: "Packs" },
+  { id: "shop", label: "Shop" },
   { id: "trade", label: "Trade", soon: true },
   { id: "ladder", label: "Ladder", soon: true },
   { id: "profile", label: "Profile", soon: true },
@@ -30,11 +30,17 @@ export default function Shell({
   active,
   onNavigate,
   wallet,
+  username,
+  packsWaiting,
+  onSignOut,
   children,
 }: {
   active: string;
   onNavigate: (id: string) => void;
   wallet: { berries: number; stardust: number };
+  username: string;
+  packsWaiting: number;
+  onSignOut: () => void;
   children: ReactNode;
 }) {
   return (
@@ -105,6 +111,15 @@ export default function Shell({
                   }}
                 />
                 {item.label}
+                {item.id === "packs" && packsWaiting > 0 && (
+                  <span style={{
+                    ...text("data"), fontSize: 11, marginLeft: "auto",
+                    color: COLOR.abyss, background: COLOR.doubloon,
+                    borderRadius: RADIUS.pill, padding: "1px 7px", fontWeight: 600,
+                  }}>
+                    {packsWaiting}
+                  </span>
+                )}
                 {item.soon && (
                   <span style={{ ...text("label"), fontSize: 9, color: COLOR.fathom, marginLeft: "auto" }}>
                     soon
@@ -115,10 +130,19 @@ export default function Shell({
           })}
         </div>
 
-        <div style={{ marginTop: "auto", padding: `0 ${SPACE.sm}px` }}>
-          <div style={{ ...text("small"), color: COLOR.fathom }}>
-            Design draft. Screens arrive in build order.
+        <div style={{ marginTop: "auto", padding: `0 ${SPACE.sm}px`, display: "flex", flexDirection: "column", gap: SPACE.sm }}>
+          <div style={{ ...text("small"), color: COLOR.mist, overflow: "hidden", textOverflow: "ellipsis" }}>
+            {username}
           </div>
+          <button
+            onClick={onSignOut}
+            style={{
+              ...text("label"), textAlign: "left", padding: 0,
+              background: "none", border: "none", color: COLOR.fathom,
+            }}
+          >
+            Sign out
+          </button>
         </div>
       </nav>
 

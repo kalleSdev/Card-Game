@@ -193,6 +193,22 @@ export function payOutMatch(userId: string, won: boolean, universe: UniverseId =
   })();
 }
 
+/**
+ * What a new account starts with. Without this the first thing a player sees is
+ * an empty binder and a shop they cannot afford, which is a poor way in.
+ */
+export const STARTER = {
+  packs: ["goldCard", "goldCard", "goldCard", "goldCosmetic"] as PackId[],
+  berries: 500,
+};
+
+export function grantStarter(userId: string, universe: UniverseId = DEFAULT_UNIVERSE): void {
+  db.transaction(() => {
+    for (const packId of STARTER.packs) grantPack(userId, packId, "purchase", universe);
+    moveCurrency(userId, "berries", STARTER.berries, "matchReward", "welcome");
+  })();
+}
+
 export function buyPack(
   userId: string,
   packId: PackId,
@@ -254,4 +270,41 @@ export function replayPack(userId: string, packRowId: string): OpenedPack | null
     pulls: result.pulls,
     isNew: result.pulls.map(() => false),
   };
+}
+
+// ── Decks ────────────────────────────────────────────────────────────────────
+
+export interface StoredDeck {
+  id: string;
+  name: string;
+  leaderId: string | null;
+  cardIds: string[];
+  prints: Record<string, PrintId>;
+  updatedAt: number;
+}
+
+export function decksOf(userId: string): StoredDeck[] {
+  const rows = db.prepare("SELECT body FROM decks WHERE user_id = ? ORDER BY updated_at")
+    .all(userId) as { body: string }[];
+  return rows.flatMap(r => {
+    try {
+      return [JSON.parse(r.body) as StoredDeck];
+    } catch {
+      // A row that will not parse is worth skipping rather than crashing a load
+      return [];
+    }
+  });
+}
+
+export function saveDeck(userId: string, deck: StoredDeck): void {
+  const body = JSON.stringify({ ...deck, updatedAt: Date.now() });
+  db.prepare(
+    `INSERT INTO decks (id, user_id, body, updated_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT (id) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at
+     WHERE decks.user_id = excluded.user_id`,
+  ).run(deck.id, userId, body, Date.now());
+}
+
+export function deleteDeck(userId: string, id: string): void {
+  db.prepare("DELETE FROM decks WHERE id = ? AND user_id = ?").run(id, userId);
 }

@@ -40,10 +40,10 @@ export function isCraftable(print: PrintId): boolean {
 // ── Match payouts ────────────────────────────────────────────────────────────
 
 export const PAYOUT = {
-  /** Paid to both players for finishing. */
-  finish: 40,
+  /** Paid to both players for finishing. A loss is still worth playing. */
+  finish: 80,
   /** On top of the finish payout, for the winner. */
-  winBonus: 110,
+  winBonus: 20,
   /** Once a day, on the first win. */
   firstWinOfDay: 150,
 } as const;
