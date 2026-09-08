@@ -1,42 +1,45 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  COST, ENERGY_PER_TURN, MISPLACED_PENALTY, TEAM,
-  applyScoreIntent, available, createScoreMatch, playScoreTurn, scores, seatOf, valueOf,
-  type ScoreCard, type ScoreIntent, type ScorePlayer, type ScoreState, type Seat, type SeatRef,
+  COST, ENERGY_PER_TURN, MISPLACED_PENALTY, TEAM, TEAM_SIZE,
+  applyScoreIntent, createScoreMatch, playScoreTurn, scores, seatOf, valueOf,
+  type ScoreCard as ScoreCardDef, type ScoreIntent, type ScorePlayer, type ScoreState,
+  type Seat, type SeatRef, type Team,
 } from "@cg/score";
 import { ARENA_CARD, ARENA_GAP, ARENA_SLOT, ARENA_WIDTH, TABLE_COLUMNS } from "../../design/arena";
-import { COLOR, RADIUS, SPACE, text } from "../../design/tokens";
-import PrintCard from "../../components/PrintCard";
+import { COLOR, RADIUS, SPACE, cardSlotHeight, text } from "../../design/tokens";
+import ScoreCard from "../../components/ScoreCard";
 import CardBack from "../../components/CardBack";
 import { Button, Panel, Text } from "../../components/primitives";
-import { SCORE_POOL, cardFace, scoreCard } from "../../data/pool";
+import { SCORE_POOL, cardName, cardShortName, scoreCard } from "../../data/pool";
 
 /**
  * Score Battle.
  *
- * Three bands, from the arena tokens: their team, the table, your team. Every
- * size on this screen comes from design/arena.ts, so the rows line up with each
- * other rather than with whatever looked right on the day.
+ * Two phases, and the screen is really two screens sharing a frame.
  *
- * The rules live in @cg/score and are not restated here. This screen only
- * decides what a click means: pick a card, pick an action, and if the action is
- * a take, pick the seat it goes in.
+ * The draft is about the table: look at a card, lock one away, and take one a
+ * turn into a hand nobody else can read. Placement is about your own board:
+ * everything anybody drafted turns face up, and you sit your seven wherever you
+ * think they are worth the most.
+ *
+ * Every size comes from design/arena.ts. The cards are the Score face, which
+ * exists only in this mode.
  */
 
 const YOU: ScorePlayer = "P1";
 const THEM: ScorePlayer = "P2";
 const BOT_THINKING_MS = 700;
-
-type Pending = { index: number } | null;
+const HAND_CARD = ARENA_CARD.yours;
 
 export default function ScoreBattle({ onLeave }: { onLeave: () => void }) {
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 2 ** 31));
   const [state, setState] = useState<ScoreState>(() => createScoreMatch(SCORE_POOL, seed));
-  const [selected, setSelected] = useState<number | null>(null);
-  const [placing, setPlacing] = useState<Pending>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
-  const table = useMemo(() => scores(state, SCORE_POOL), [state]);
+  const total = useMemo(() => scores(state, SCORE_POOL), [state]);
+  const yourTurn = state.phase === "draft" && state.turn === YOU;
 
   const play = useCallback((intent: ScoreIntent) => {
     setState(current => {
@@ -45,68 +48,62 @@ export default function ScoreBattle({ onLeave }: { onLeave: () => void }) {
       setNote(refused && "reason" in refused ? refused.reason : null);
       return next;
     });
-    setSelected(null);
-    setPlacing(null);
+    setSelectedIndex(null);
+    setSelectedCard(null);
   }, []);
 
-  // The opponent takes its turn on its own, after long enough to watch
+  // The opponent drafts on its own turn, and sits its hand as soon as it can
   useEffect(() => {
-    if (state.over || state.turn !== THEM) return;
+    if (state.over) return;
+    const theirMove =
+      (state.phase === "draft" && state.turn === THEM) ||
+      (state.phase === "placement" && state.hands[THEM].length > 0);
+    if (!theirMove) return;
+
     const timer = setTimeout(() => {
-      setState(current =>
-        current.turn === THEM && !current.over
-          ? playScoreTurn(current, THEM, SCORE_POOL).state
-          : current,
-      );
+      setState(current => playScoreTurn(current, THEM, SCORE_POOL).state);
     }, BOT_THINKING_MS);
     return () => clearTimeout(timer);
   }, [state]);
-
-  const yours = state.turn === YOU && !state.over;
 
   const restart = () => {
     const next = Math.floor(Math.random() * 2 ** 31);
     setSeed(next);
     setState(createScoreMatch(SCORE_POOL, next));
-    setSelected(null);
-    setPlacing(null);
+    setSelectedIndex(null);
+    setSelectedCard(null);
     setNote(null);
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: ARENA_GAP.band }}>
-      <div style={{ width: ARENA_WIDTH, display: "flex", alignItems: "center", gap: SPACE.lg }}>
-        <Text as="h2" role="title">Score Battle</Text>
-        <span style={{ ...text("label"), fontSize: 9, color: COLOR.fathom }}>
-          seed {seed.toString(36)}
-        </span>
-        <div style={{ marginLeft: "auto", display: "flex", gap: SPACE.sm }}>
-          <Button size="sm" tone="ghost" onClick={restart}>New table</Button>
-          <Button size="sm" tone="ghost" onClick={onLeave}>Leave</Button>
-        </div>
-      </div>
+      <Header seed={seed} phase={state.phase} onRestart={restart} onLeave={onLeave} />
 
       {/* ── Their side ── */}
-      <TeamBand
-        heading="Opponent"
-        team={state.teams[THEM]}
-        total={table[THEM]}
-        card={ARENA_CARD.theirs}
-        slot={ARENA_SLOT.theirs}
-        active={state.turn === THEM && !state.over}
-      />
+      {state.phase === "draft" ? (
+        <HandBand
+          heading="Opponent"
+          count={state.hands[THEM].length}
+          active={state.turn === THEM}
+        />
+      ) : (
+        <TeamBand
+          heading="Opponent"
+          team={state.teams[THEM]}
+          total={total[THEM]}
+          card={ARENA_CARD.theirs}
+          waiting={state.hands[THEM].length}
+        />
+      )}
 
-      {/* ── The turn bar ── */}
-      <TurnBar
+      <StatusBar
         state={state}
-        yours={yours}
         note={note}
-        selected={selected}
-        placing={placing !== null}
-        onReveal={() => selected !== null && play({ type: "REVEAL", index: selected })}
-        onDeny={() => selected !== null && play({ type: "DENY", index: selected })}
-        onTake={() => selected !== null && setPlacing({ index: selected })}
-        onCancel={() => { setSelected(null); setPlacing(null); }}
+        selectedIndex={selectedIndex}
+        selectedCard={selectedCard}
+        onReveal={() => selectedIndex !== null && play({ type: "REVEAL", index: selectedIndex })}
+        onDeny={() => selectedIndex !== null && play({ type: "DENY", index: selectedIndex })}
+        onTake={() => selectedIndex !== null && play({ type: "TAKE", index: selectedIndex })}
         onEndTurn={() => play({ type: "END_TURN" })}
       />
 
@@ -119,38 +116,43 @@ export default function ScoreBattle({ onLeave }: { onLeave: () => void }) {
           width: ARENA_WIDTH,
         }}
       >
-        {state.table.map((slot, index) => (
+        {state.table.map((_, index) => (
           <TableCard
             key={index}
             state={state}
             index={index}
-            selected={selected === index}
-            live={yours && placing === null && !slot.denied && !slot.takenBy}
-            onSelect={() => setSelected(selected === index ? null : index)}
+            selected={selectedIndex === index}
+            live={yourTurn}
+            onSelect={() => setSelectedIndex(selectedIndex === index ? null : index)}
           />
         ))}
       </div>
 
       {/* ── Your side ── */}
-      <TeamBand
-        heading="Your team"
-        team={state.teams[YOU]}
-        total={table[YOU]}
-        card={ARENA_CARD.yours}
-        slot={ARENA_SLOT.yours}
-        active={yours}
-        placing={placing !== null}
-        placingCard={placing !== null ? knownCard(state, placing.index) : null}
-        onSeat={ref => placing !== null && play({ type: "TAKE", index: placing.index, seat: ref })}
-      />
+      {state.phase === "draft" ? (
+        <YourHand cards={state.hands[YOU]} />
+      ) : (
+        <TeamBand
+          heading="Your team"
+          team={state.teams[YOU]}
+          total={total[YOU]}
+          card={ARENA_CARD.yours}
+          placing={selectedCard}
+          onSeat={ref => selectedCard && play({ type: "PLACE", cardId: selectedCard, seat: ref })}
+          onUnseat={ref => play({ type: "UNPLACE", seat: ref })}
+          hand={state.hands[YOU]}
+          selectedCard={selectedCard}
+          onPick={id => setSelectedCard(selectedCard === id ? null : id)}
+        />
+      )}
 
       {state.over && (
         <Panel padding={SPACE.xl} style={{ width: ARENA_WIDTH, textAlign: "center" }}>
           <Text as="h3" role="title">
             {state.winner === "draw" ? "A draw" : state.winner === YOU ? "You win" : "You lose"}
           </Text>
-          <p style={{ ...text("data"), fontSize: 18, color: COLOR.mist, margin: `${SPACE.md}px 0 ${SPACE.lg}px` }}>
-            {table[YOU]} — {table[THEM]}
+          <p style={{ ...text("data"), fontSize: 20, color: COLOR.mist, margin: `${SPACE.md}px 0 ${SPACE.lg}px` }}>
+            {total[YOU]} — {total[THEM]}
           </p>
           <Button tone="primary" onClick={restart}>Play again</Button>
         </Panel>
@@ -159,74 +161,110 @@ export default function ScoreBattle({ onLeave }: { onLeave: () => void }) {
   );
 }
 
-// ── The bar that says what you can do ────────────────────────────────────────
+// ── Frame ────────────────────────────────────────────────────────────────────
 
-function TurnBar({
-  state, yours, note, selected, placing, onReveal, onDeny, onTake, onCancel, onEndTurn,
+function Header({ seed, phase, onRestart, onLeave }: {
+  seed: number;
+  phase: ScoreState["phase"];
+  onRestart: () => void;
+  onLeave: () => void;
+}) {
+  const label = phase === "draft" ? "Draft" : phase === "placement" ? "Placement" : "Finished";
+  return (
+    <div style={{ width: ARENA_WIDTH, display: "flex", alignItems: "center", gap: SPACE.lg }}>
+      <Text as="h2" role="title">Score Battle</Text>
+      <span
+        style={{
+          ...text("label"),
+          fontSize: 9,
+          color: COLOR.current,
+          border: `1px solid ${COLOR.rope}`,
+          borderRadius: RADIUS.sm,
+          padding: "3px 8px",
+        }}
+      >
+        {label}
+      </span>
+      <span style={{ ...text("label"), fontSize: 9, color: COLOR.fathom }}>seed {seed.toString(36)}</span>
+      <div style={{ marginLeft: "auto", display: "flex", gap: SPACE.sm }}>
+        <Button size="sm" tone="ghost" onClick={onRestart}>New table</Button>
+        <Button size="sm" tone="ghost" onClick={onLeave}>Leave</Button>
+      </div>
+    </div>
+  );
+}
+
+function StatusBar({
+  state, note, selectedIndex, selectedCard, onReveal, onDeny, onTake, onEndTurn,
 }: {
   state: ScoreState;
-  yours: boolean;
   note: string | null;
-  selected: number | null;
-  placing: boolean;
+  selectedIndex: number | null;
+  selectedCard: string | null;
   onReveal: () => void;
   onDeny: () => void;
   onTake: () => void;
-  onCancel: () => void;
   onEndTurn: () => void;
 }) {
-  const slot = selected !== null ? state.table[selected] : null;
-  const canReveal = Boolean(slot && !slot.revealed && state.energy >= COST.reveal);
-  const canDeny = Boolean(slot && slot.revealed && state.energy >= COST.deny);
-  const canTake = Boolean(slot && state.takesLeft > 0);
+  const drafting = state.phase === "draft";
+  const yours = drafting && state.turn === YOU;
+  const slot = selectedIndex !== null ? state.table[selectedIndex] : null;
+
+  const message = note
+    ? note
+    : !drafting
+      ? state.over
+        ? "Every card is placed."
+        : state.hands[YOU].length > 0
+          ? selectedCard
+            ? "Pick a seat. A card in the wrong seat costs 2."
+            : "Pick a card from your hand."
+          : "Waiting for them to finish placing."
+      : !yours
+        ? "They are thinking."
+        : selectedIndex === null
+          ? "Pick a card on the table."
+          : slot?.revealed
+            ? "Take it, or deny it so nobody can."
+            : "Look at it, or take it blind.";
 
   return (
     <Panel padding={0} style={{ width: ARENA_WIDTH }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: SPACE.lg,
-          padding: `0 ${SPACE.lg}px`,
-          height: 56,
-        }}
-      >
+      <div style={{ display: "flex", alignItems: "center", gap: SPACE.lg, padding: `0 ${SPACE.lg}px`, height: 56 }}>
         <span style={{ ...text("label"), fontSize: 10, color: yours ? COLOR.current : COLOR.fathom }}>
-          {state.over ? "Finished" : yours ? "Your turn" : "Their turn"}
+          {state.over ? "Finished" : drafting ? (yours ? "Your turn" : "Their turn") : "Placement"}
         </span>
 
-        <Pips filled={state.energy} of={ENERGY_PER_TURN} label="energy" colour={COLOR.current} />
-        <Pips filled={state.takesLeft} of={1} label="take" colour={COLOR.doubloon} />
+        {drafting && (
+          <>
+            <Pips filled={state.energy} of={ENERGY_PER_TURN} label="energy" colour={COLOR.current} />
+            <Pips filled={state.takesLeft} of={1} label="take" colour={COLOR.doubloon} />
+            <span style={{ ...text("data"), fontSize: 12, color: COLOR.fathom }}>
+              {state.hands[YOU].length}/{TEAM_SIZE} drafted
+            </span>
+          </>
+        )}
 
         <span style={{ ...text("small"), fontSize: 12, color: COLOR.fathom, flex: 1, minWidth: 0 }}>
-          {note
-            ? note
-            : placing
-              ? "Pick a seat for it. A card in the wrong seat costs 2."
-              : selected === null
-                ? "Pick a card on the table."
-                : slot?.revealed
-                  ? "Take it, or deny it so nobody can."
-                  : "Look at it, or take it blind."}
+          {message}
         </span>
 
-        {yours && selected !== null && !placing && (
+        {yours && selectedIndex !== null && (
           <>
             {!slot?.revealed && (
-              <Button size="sm" tone="secondary" onClick={onReveal} disabled={!canReveal}>
+              <Button size="sm" tone="secondary" onClick={onReveal} disabled={state.energy < COST.reveal}>
                 Reveal · {COST.reveal}
               </Button>
             )}
             {slot?.revealed && (
-              <Button size="sm" tone="secondary" onClick={onDeny} disabled={!canDeny}>
+              <Button size="sm" tone="secondary" onClick={onDeny} disabled={state.energy < COST.deny}>
                 Deny · {COST.deny}
               </Button>
             )}
-            <Button size="sm" tone="primary" onClick={onTake} disabled={!canTake}>Take</Button>
+            <Button size="sm" tone="primary" onClick={onTake} disabled={state.takesLeft < 1}>Take</Button>
           </>
         )}
-        {yours && placing && <Button size="sm" tone="ghost" onClick={onCancel}>Cancel</Button>}
-        {yours && selected === null && (
+        {yours && selectedIndex === null && (
           <Button size="sm" tone="ghost" onClick={onEndTurn}>End turn</Button>
         )}
       </div>
@@ -269,109 +307,117 @@ function TableCard({ state, index, selected, live, onSelect }: {
   onSelect: () => void;
 }) {
   const slot = state.table[index];
-  const card = knownCard(state, index);
+  const card = faceOf(state, index);
   const width = ARENA_CARD.table;
   const height = ARENA_SLOT.table;
-
-  if (slot.takenBy) {
-    return (
-      <Empty width={width} height={height} label={slot.takenBy === "P1" ? "yours" : "theirs"} />
-    );
-  }
+  const gone = Boolean(slot.takenBy) || slot.denied;
+  const clickable = live && !gone;
 
   return (
     <div
-      onClick={live ? onSelect : undefined}
+      onClick={clickable ? onSelect : undefined}
       style={{
         height,
         display: "flex",
         alignItems: "flex-end",
         justifyContent: "center",
-        cursor: live ? "pointer" : "default",
+        position: "relative",
+        cursor: clickable ? "pointer" : "default",
         outline: selected ? `2px solid ${COLOR.current}` : "none",
         outlineOffset: 4,
         borderRadius: RADIUS.lg,
-        position: "relative",
       }}
     >
-      {slot.revealed && card ? (
-        <div style={{ position: "relative" }}>
-          <PrintCard card={cardFace(card.id)} print="base" width={width} interactive={false} />
-          <Worth card={card} />
-        </div>
+      {card ? (
+        <ScoreCard
+          card={card}
+          name={cardShortName(card.id)}
+          width={width}
+          spent={gone}
+          interactive={clickable}
+        />
       ) : (
-        <CardBack width={width} height={Math.round(width * 1.4)} dim={slot.denied} />
+        <CardBack width={width} height={Math.round(width * 1.4)} dim={gone} />
       )}
 
-      {slot.denied && (
-        <span
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            ...text("label"),
-            fontSize: 10,
-            color: COLOR.signal,
-            letterSpacing: "0.2em",
-          }}
-        >
-          Denied
-        </span>
+      {slot.denied && <Stamp label="Denied" colour={COLOR.signal} />}
+      {slot.takenBy && (
+        <Stamp
+          label={slot.takenBy === YOU ? "Yours" : "Theirs"}
+          colour={slot.takenBy === YOU ? COLOR.current : COLOR.fathom}
+        />
       )}
     </div>
   );
 }
 
-/** The one number that matters, on any card whose face is known. */
-function Worth({ card }: { card: ScoreCard }) {
+function Stamp({ label, colour }: { label: string; colour: string }) {
   return (
     <span
       style={{
         position: "absolute",
-        top: 6,
-        right: 6,
-        minWidth: 22,
-        padding: "2px 5px",
-        borderRadius: RADIUS.sm,
-        textAlign: "center",
-        background: "rgba(7,12,19,0.86)",
-        border: `1px solid ${COLOR.cable}`,
-        ...text("data"),
-        fontSize: 12,
-        color: COLOR.doubloon,
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        ...text("label"),
+        fontSize: 9,
+        letterSpacing: "0.2em",
+        color: colour,
+        background: "rgba(7,12,19,0.45)",
+        borderRadius: RADIUS.lg,
       }}
     >
-      {card.points}
+      {label}
     </span>
   );
 }
 
-function Empty({ width, height, label }: { width: number; height: number; label?: string }) {
+// ── Hands, during the draft ──────────────────────────────────────────────────
+
+function HandBand({ heading, count, active }: { heading: string; count: number; active: boolean }) {
+  const width = ARENA_CARD.theirs;
   return (
-    <div style={{ height, display: "flex", alignItems: "flex-end" }}>
-      <div
-        style={{
-          width,
-          height: Math.round(width * 1.4),
-          borderRadius: RADIUS.lg,
-          border: `1px dashed ${COLOR.rope}`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          ...text("label"),
-          fontSize: 8,
-          color: COLOR.fathom,
-        }}
-      >
-        {label ?? ""}
+    <Panel padding={SPACE.lg} style={{ width: ARENA_WIDTH, borderColor: active ? COLOR.cable : COLOR.rope }}>
+      <BandHead heading={heading} right={`${count} / ${TEAM_SIZE} drafted`} active={active} />
+      <div style={{ display: "flex", gap: ARENA_GAP.card, minHeight: Math.round(width * 1.4) }}>
+        {Array.from({ length: TEAM_SIZE }, (_, i) =>
+          i < count ? (
+            <CardBack key={i} width={width} height={Math.round(width * 1.4)} />
+          ) : (
+            <EmptySlot key={i} width={width} height={Math.round(width * 1.4)} />
+          ),
+        )}
       </div>
-    </div>
+    </Panel>
   );
 }
 
-// ── A team ───────────────────────────────────────────────────────────────────
+function YourHand({ cards }: { cards: string[] }) {
+  const width = HAND_CARD;
+  return (
+    <Panel padding={SPACE.lg} style={{ width: ARENA_WIDTH }}>
+      <BandHead heading="Your hand" right={`${cards.length} / ${TEAM_SIZE} drafted`} active />
+      <div style={{ display: "flex", gap: ARENA_GAP.card, minHeight: cardSlotHeight(width) }}>
+        {Array.from({ length: TEAM_SIZE }, (_, i) => {
+          const id = cards[i];
+          const card = id ? scoreCard(id) : null;
+          return (
+            <div key={i} style={{ height: cardSlotHeight(width), display: "flex", alignItems: "flex-end" }}>
+              {card ? (
+                <ScoreCard card={card} name={cardShortName(card.id)} width={width} />
+              ) : (
+                <EmptySlot width={width} height={Math.round(width * 1.4)} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
+// ── Teams, during placement ──────────────────────────────────────────────────
 
 const ROWS: { row: Seat; count: number }[] = [
   { row: "captain", count: TEAM.captain },
@@ -380,27 +426,32 @@ const ROWS: { row: Seat; count: number }[] = [
 ];
 
 function TeamBand({
-  heading, team, total, card, slot, active, placing = false, placingCard = null, onSeat,
+  heading, team, total, card, placing = null, onSeat, onUnseat, waiting = 0,
+  hand = [], selectedCard = null, onPick,
 }: {
   heading: string;
-  team: { captain: string | null; combat: (string | null)[]; support: (string | null)[] };
+  team: Team;
   total: number;
   card: number;
-  slot: number;
-  active: boolean;
-  placing?: boolean;
-  placingCard?: ScoreCard | null;
+  placing?: string | null;
   onSeat?: (ref: SeatRef) => void;
+  onUnseat?: (ref: SeatRef) => void;
+  /** Cards they have drafted but not yet placed. */
+  waiting?: number;
+  hand?: string[];
+  selectedCard?: string | null;
+  onPick?: (id: string) => void;
 }) {
+  const placingCard = placing ? scoreCard(placing) : null;
+  const slot = cardSlotHeight(card);
+
   return (
-    <Panel padding={SPACE.lg} style={{ width: ARENA_WIDTH, borderColor: active ? COLOR.cable : COLOR.rope }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: SPACE.md, marginBottom: SPACE.md }}>
-        <span style={{ ...text("label"), fontSize: 9, color: active ? COLOR.current : COLOR.fathom }}>
-          {heading}
-        </span>
-        <span style={{ ...text("data"), fontSize: 16, color: COLOR.foam, marginLeft: "auto" }}>{total}</span>
-        <span style={{ ...text("label"), fontSize: 8, color: COLOR.fathom }}>points</span>
-      </div>
+    <Panel padding={SPACE.lg} style={{ width: ARENA_WIDTH }}>
+      <BandHead
+        heading={heading}
+        right={waiting > 0 ? `${waiting} still to place` : `${total} points`}
+        active={Boolean(onSeat)}
+      />
 
       <div style={{ display: "flex", gap: ARENA_GAP.row, flexWrap: "wrap" }}>
         {ROWS.map(({ row, count }) => (
@@ -409,32 +460,36 @@ function TeamBand({
             <div style={{ display: "flex", gap: ARENA_GAP.card }}>
               {Array.from({ length: count }, (_, i) => {
                 const ref: SeatRef = { row, index: i };
-                const held = seatOf(team as never, ref);
-                const open = !held;
-                const offering = placing && open;
+                const held = seatOf(team, ref);
+                const heldCard = held ? scoreCard(held) : null;
+                const offering = Boolean(placingCard) && !held;
                 return (
                   <div
                     key={i}
-                    onClick={offering && onSeat ? () => onSeat(ref) : undefined}
+                    onClick={
+                      offering && onSeat
+                        ? () => onSeat(ref)
+                        : held && onUnseat
+                          ? () => onUnseat(ref)
+                          : undefined
+                    }
                     style={{
                       height: slot,
                       display: "flex",
                       alignItems: "flex-end",
-                      cursor: offering ? "pointer" : "default",
+                      position: "relative",
+                      cursor: offering || (held && onUnseat) ? "pointer" : "default",
                       borderRadius: RADIUS.lg,
                       outline: offering ? `2px solid ${COLOR.current}` : "none",
                       outlineOffset: 3,
-                      position: "relative",
                     }}
                   >
-                    {held ? (
-                      <PrintCard card={cardFace(held)} print="base" width={card} interactive={false} />
+                    {heldCard ? (
+                      <ScoreCard card={heldCard} name={cardShortName(heldCard.id)} width={card} />
                     ) : (
-                      <Empty width={card} height={slot} />
+                      <EmptySlot width={card} height={Math.round(card * 1.4)} />
                     )}
-                    {offering && placingCard && (
-                      <SeatHint card={placingCard} row={row} />
-                    )}
+                    {offering && placingCard && <SeatHint card={placingCard} row={row} />}
                   </div>
                 );
               })}
@@ -442,12 +497,49 @@ function TeamBand({
           </div>
         ))}
       </div>
+
+      {/* The cards still waiting for a seat, on your own band only */}
+      {onPick && hand.length > 0 && (
+        <div style={{ marginTop: SPACE.lg, paddingTop: SPACE.md, borderTop: `1px solid ${COLOR.rope}` }}>
+          <span style={{ ...text("label"), fontSize: 8, color: COLOR.fathom }}>
+            In hand · click one, then a seat
+          </span>
+          <div style={{ display: "flex", gap: ARENA_GAP.card, marginTop: 6 }}>
+            {hand.map(id => {
+              const held = scoreCard(id);
+              if (!held) return null;
+              return (
+                <ScoreCard
+                  key={id}
+                  card={held}
+                  name={cardShortName(id)}
+                  width={card}
+                  interactive
+                  selected={selectedCard === id}
+                  onClick={() => onPick(id)}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
     </Panel>
   );
 }
 
+function BandHead({ heading, right, active }: { heading: string; right: string; active: boolean }) {
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", gap: SPACE.md, marginBottom: SPACE.md }}>
+      <span style={{ ...text("label"), fontSize: 9, color: active ? COLOR.current : COLOR.fathom }}>
+        {heading}
+      </span>
+      <span style={{ ...text("data"), fontSize: 13, color: COLOR.mist, marginLeft: "auto" }}>{right}</span>
+    </div>
+  );
+}
+
 /** What this card would actually score in this seat, before you commit to it. */
-function SeatHint({ card, row }: { card: ScoreCard; row: Seat }) {
+function SeatHint({ card, row }: { card: ScoreCardDef; row: Seat }) {
   const value = valueOf(card, row);
   const wrong = card.role !== row;
   return (
@@ -463,31 +555,39 @@ function SeatHint({ card, row }: { card: ScoreCard; row: Seat }) {
         borderRadius: RADIUS.lg,
         background: "rgba(7,12,19,0.72)",
         ...text("data"),
-        fontSize: 15,
+        fontSize: 16,
         color: wrong ? COLOR.signal : COLOR.kelp,
       }}
     >
       {value}
-      {wrong && (
-        <span style={{ ...text("label"), fontSize: 7, color: COLOR.signal }}>
-          −{MISPLACED_PENALTY}
-        </span>
-      )}
+      {wrong && <span style={{ ...text("label"), fontSize: 7 }}>−{MISPLACED_PENALTY}</span>}
     </span>
+  );
+}
+
+function EmptySlot({ width, height }: { width: number; height: number }) {
+  return (
+    <div
+      style={{
+        width,
+        height,
+        borderRadius: RADIUS.lg,
+        border: `1px dashed ${COLOR.rope}`,
+      }}
+    />
   );
 }
 
 // ── Reading the state ────────────────────────────────────────────────────────
 
-/** The card at a table position, when the state says it is known. */
-function knownCard(state: ScoreState, index: number): ScoreCard | null {
-  const slot = state.table[index];
-  if (!slot?.revealed && !slot?.takenBy) return null;
+/** The Score card at a table position, when the state says it is known. */
+function faceOf(state: ScoreState, index: number): ScoreCardDef | null {
+  if (!state.table[index].revealed) return null;
   const id = state.cards[index];
   return id ? scoreCard(id) : null;
 }
 
-/** Exported for the hub, so it can say how big a table is without importing rules. */
-export function tableSize(state: ScoreState): number {
-  return available(state).length;
+/** The character name, for anywhere a Score card needs one at full size. */
+export function scoreCardName(id: string): string {
+  return cardName(id);
 }

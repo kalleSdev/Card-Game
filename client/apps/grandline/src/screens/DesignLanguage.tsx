@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { GRADES, GRADE_POINTS, TEAM, type Grade } from "@cg/score";
 import {
   PRINTS, PRINT_INFO, PACKS, STANDARD_RATES, DIAMOND_RATES,
   effectiveRate, DUPLICATE_VALUE, RANKS, craftCost, packContents,
@@ -6,6 +7,7 @@ import {
 } from "@cg/meta";
 import { CARD_SIZE, COLOR, PRINT_COLOR, RADIUS, SPACE, TEXT, cardSlotHeight, text } from "../design/tokens";
 import PrintCard, { type CardFace } from "../components/PrintCard";
+import ScoreCard, { GRADE_LABEL, GRADE_TONE } from "../components/ScoreCard";
 import {
   Button, Chip, Currency, Divider, Panel, RankBadge, SectionHead, Stat, Text, TierPip,
 } from "../components/primitives";
@@ -160,9 +162,56 @@ export default function DesignLanguage() {
         </div>
       </section>
 
+      {/* ── The Score card ── */}
+      <section>
+        <SectionHead eyebrow="04" title="Score card" />
+        <p style={{ ...text("body"), color: COLOR.mist, maxWidth: 620, marginBottom: SPACE.xl }}>
+          The same characters, drawn a second way for Score Battle and used nowhere else. Everything
+          that says how a card plays is gone — no print name, no attack, health or cost — because
+          none of it means anything in that mode. What is left is a star with nothing written beside
+          it, the character, and the points. Colour carries the grade, since the only question anyone
+          asks at that table is what a card is worth. Your collection card is untouched: two faces,
+          one character.
+        </p>
+
+        <div style={{ display: "flex", gap: SPACE.xl, flexWrap: "wrap" }}>
+          {GRADES.map((grade: Grade) => {
+            const band = GRADE_POINTS[grade];
+            const demo = { id: `demo-${grade}`, role: "combat" as const, grade, points: band.max };
+            return (
+              <div key={grade} style={{ display: "flex", flexDirection: "column", gap: SPACE.md, width: CARD_SIZE.lg }}>
+                <div style={{ height: cardSlotHeight(CARD_SIZE.lg), display: "flex", alignItems: "flex-end" }}>
+                  <ScoreCard card={demo} name={DEMO.name} width={CARD_SIZE.lg} />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                    <span
+                      style={{ width: 9, height: 9, borderRadius: "50%", background: GRADE_TONE[grade].tone }}
+                    />
+                    <span style={{ ...text("small"), fontWeight: 600, color: GRADE_TONE[grade].tone }}>
+                      {GRADE_LABEL[grade]}
+                    </span>
+                  </div>
+                  <span style={{ ...text("data"), fontSize: 12, color: COLOR.fathom }}>
+                    {band.min} – {band.max} points
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <p style={{ ...text("small"), color: COLOR.fathom, marginTop: SPACE.xl, maxWidth: 620 }}>
+          A team is {TEAM.captain} captain, {TEAM.combat} combat and {TEAM.support} support. The
+          captain seat doubles what sits in it, and a card in the wrong seat costs 2 — which is why
+          the seat a card belongs to is written on the card nowhere: you are meant to know it, or
+          take the penalty.
+        </p>
+      </section>
+
       {/* ── Packs ── */}
       <section>
-        <SectionHead eyebrow="04" title="Packs" />
+        <SectionHead eyebrow="05" title="Packs" />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: SPACE.lg }}>
           {(Object.keys(PACKS) as PackId[]).map(id => {
             const pack = PACKS[id];
@@ -194,7 +243,7 @@ export default function DesignLanguage() {
 
       {/* ── Collection row ── */}
       <section>
-        <SectionHead eyebrow="05" title="Collection" />
+        <SectionHead eyebrow="06" title="Collection" />
         <Panel padding={SPACE.xl}>
           <div style={{ display: "flex", gap: SPACE.xl, flexWrap: "wrap" }}>
             {BINDER.map(entry => (
@@ -218,7 +267,7 @@ export default function DesignLanguage() {
 
       {/* ── Controls ── */}
       <section>
-        <SectionHead eyebrow="06" title="Controls" />
+        <SectionHead eyebrow="07" title="Controls" />
         <Panel>
           <div style={{ display: "flex", flexDirection: "column", gap: SPACE.xl }}>
             <div style={{ display: "flex", gap: SPACE.md, alignItems: "center", flexWrap: "wrap" }}>
@@ -258,7 +307,7 @@ export default function DesignLanguage() {
 
       {/* ── Ladder ── */}
       <section>
-        <SectionHead eyebrow="07" title="Ladder" />
+        <SectionHead eyebrow="08" title="Ladder" />
         <div style={{ display: "flex", gap: SPACE.md, flexWrap: "wrap", alignItems: "center" }}>
           {RANKS.map(rank => (
             <RankBadge key={rank.id} rank={rank.id} label={rank.name} mmr={rank.floor} />
@@ -274,7 +323,7 @@ export default function DesignLanguage() {
 
       {/* ── Pack opening preview ── */}
       <section>
-        <SectionHead eyebrow="08" title="A pack, opened" />
+        <SectionHead eyebrow="09" title="A pack, opened" />
         <Panel padding={SPACE.xxl} lifted>
           <div style={{ display: "flex", gap: SPACE.lg, flexWrap: "wrap", justifyContent: "center" }}>
             {(

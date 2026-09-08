@@ -1,0 +1,182 @@
+/* The Score Battle card.
+
+   A second face for the same characters, used nowhere but this mode. It is
+   built from the same geometry as a collection card so the two read as the same
+   family, and then stripped: no print name, no attack, no health, no cost. A
+   star with nothing written next to it, the character, and the one number that
+   decides the game.
+
+   Colour is the whole grading system here. A collection card is told apart by
+   its treatment; a Score card is told apart by its band, because in this mode
+   the only question anybody is asking is what a card is worth. */
+
+.sc {
+  position: relative;
+  width: var(--sc-w);
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--hull);
+  border: 1px solid var(--sc-edge);
+  box-shadow: inset 0 0 0 1px var(--sc-inner);
+  transition:
+    transform 150ms cubic-bezier(0.2, 0, 0.2, 1),
+    box-shadow 150ms cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+.sc--interactive {
+  cursor: pointer;
+}
+.sc--interactive:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    inset 0 0 0 1px var(--sc-inner),
+    0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+.sc--selected {
+  box-shadow:
+    inset 0 0 0 1px var(--sc-tone),
+    0 0 0 2px var(--sc-tone);
+}
+
+/* ── The star, and nothing beside it ─────────────────────────────────────── */
+
+.sc__star {
+  position: absolute;
+  top: 7px;
+  left: 8px;
+  z-index: 3;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--sc-tone);
+  text-shadow: 0 1px 4px rgba(4, 7, 12, 0.9);
+}
+
+/* ── Art ─────────────────────────────────────────────────────────────────── */
+
+.sc__art {
+  position: relative;
+  aspect-ratio: 5 / 4;
+  overflow: hidden;
+  background: var(--deck);
+}
+
+.sc__art-fill {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 120% 80% at 50% 118%, var(--sc-art-b), transparent 72%),
+    linear-gradient(165deg, var(--sc-art-a), var(--sc-art-b));
+}
+
+/* The same horizon the collection card draws, so a character reads as the same
+   picture in both modes even before there is any real art. */
+.sc__horizon {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 34%;
+  height: 1px;
+  background: rgba(242, 236, 223, 0.22);
+}
+.sc__sun {
+  position: absolute;
+  left: 50%;
+  bottom: 34%;
+  width: 38%;
+  aspect-ratio: 1;
+  transform: translate(-50%, 50%);
+  border-radius: 50%;
+  background: rgba(242, 236, 223, 0.14);
+  border: 1px solid rgba(242, 236, 223, 0.26);
+}
+
+/* A band of the card's own colour across the bottom of the art, so the grade is
+   readable at table size from the colour alone. */
+.sc__band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--sc-tone);
+  opacity: 0.9;
+}
+
+/* ── The plate ───────────────────────────────────────────────────────────── */
+
+.sc__body {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 10px 10px;
+  background: linear-gradient(180deg, rgba(7, 12, 19, 0.4), transparent);
+}
+
+.sc__name {
+  flex: 1;
+  min-width: 0;
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--foam);
+  /* Two lines of room whether the name needs them or not, so a row of cards
+     keeps one baseline rather than stepping with name length. The same rule the
+     collection card follows, since they sit next to each other in the design. */
+  min-height: 2.3em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* The only number on the card. */
+.sc__value {
+  flex: none;
+  min-width: 26px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-align: center;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--sc-tone);
+  background: rgba(7, 12, 19, 0.55);
+  border: 1px solid var(--sc-inner);
+}
+
+/* ── Compact ─────────────────────────────────────────────────────────────── */
+
+.sc--compact .sc__name {
+  font-size: 11.5px;
+  /* One line at table size: at 92px there is no room for two, and the short
+     name is what is drawn there anyway. */
+  min-height: 0;
+  -webkit-line-clamp: 1;
+}
+.sc--compact .sc__body {
+  padding: 7px 8px 8px;
+  gap: 6px;
+}
+.sc--compact .sc__value {
+  font-size: 13px;
+  min-width: 22px;
+  padding: 1px 5px;
+}
+.sc--compact .sc__star {
+  font-size: 10px;
+  top: 5px;
+  left: 6px;
+}
+
+/* ── Out of play ─────────────────────────────────────────────────────────── */
+
+.sc--spent {
+  opacity: 0.36;
+  filter: saturate(0.5);
+}

@@ -11,6 +11,15 @@ import {
  * plain data and never mutated, so the same call runs on the client for the
  * board, on the server for the truth, and in a loop for the bot.
  *
+ * The game runs in two phases. In the draft you take cards to your hand, one a
+ * turn, and spend energy looking at the table or locking cards out of it. When
+ * both hands are full the placement phase begins: every card anybody drafted
+ * turns face up, and each player sits their seven in the seats they choose.
+ *
+ * Splitting it that way is what makes a blind take a real gamble. You commit to
+ * a card before you know what it is, and only later find out what you have to
+ * build a team out of.
+ *
  * The only hidden information is which card is face-down where. That lives in
  * `cards`, and `viewFor()` strips it before anything leaves the server, so a
  * blind take is genuinely blind rather than blind in the interface.
@@ -38,10 +47,15 @@ export interface Team {
   support: (string | null)[];
 }
 
+export type ScorePhase = "draft" | "placement" | "over";
+
 export interface ScoreState {
+  phase: ScorePhase;
   /** Card ids by table position. The server holds this; a client view does not. */
   cards: (string | null)[];
   table: TableSlot[];
+  /** What each player drafted, before any of it is placed. */
+  hands: Record<ScorePlayer, string[]>;
   teams: Record<ScorePlayer, Team>;
   turn: ScorePlayer;
   energy: number;
@@ -55,13 +69,21 @@ export interface ScoreState {
 export type ScoreIntent =
   | { type: "REVEAL"; index: number }
   | { type: "DENY"; index: number }
-  | { type: "TAKE"; index: number; seat: SeatRef }
+  /** Draft phase. The card goes to your hand; where it sits is decided later. */
+  | { type: "TAKE"; index: number }
+  /** Placement phase. Sits one card you drafted in one of your seats. */
+  | { type: "PLACE"; cardId: string; seat: SeatRef }
+  /** Placement phase. Takes a card back out of a seat, before you are done. */
+  | { type: "UNPLACE"; seat: SeatRef }
   | { type: "END_TURN" };
 
 export type ScoreEvent =
   | { type: "REVEALED"; index: number; by: ScorePlayer; cardId: string }
   | { type: "DENIED"; index: number; by: ScorePlayer }
-  | { type: "TAKEN"; index: number; by: ScorePlayer; cardId: string; seat: SeatRef; blind: boolean }
+  | { type: "TAKEN"; index: number; by: ScorePlayer; cardId: string; blind: boolean }
+  | { type: "PLACED"; by: ScorePlayer; cardId: string; seat: SeatRef }
+  | { type: "UNPLACED"; by: ScorePlayer; cardId: string; seat: SeatRef }
+  | { type: "PLACEMENT_BEGAN"; hands: Record<ScorePlayer, string[]> }
   | { type: "TURN_ENDED"; by: ScorePlayer; next: ScorePlayer }
   | { type: "GAME_OVER"; winner: ScorePlayer | "draw"; scores: Record<ScorePlayer, number> }
   | { type: "REJECTED"; reason: string };
@@ -93,8 +115,10 @@ export function createScoreMatch(pool: ScoreCard[], seed: number, size = TABLE_S
   const cards = shuffled.slice(0, size);
 
   return {
+    phase: "draft",
     cards,
     table: cards.map(() => ({ revealed: false, denied: false, takenBy: null })),
+    hands: { P1: [], P2: [] },
     teams: { P1: emptyTeam(), P2: emptyTeam() },
     // The seed decides who starts, so neither seat is the better one to sit in
     turn: seed % 2 === 0 ? "P1" : "P2",
@@ -126,10 +150,20 @@ export function available(state: ScoreState): number[] {
   return state.table.flatMap((slot, i) => (slot.takenBy || slot.denied ? [] : [i]));
 }
 
-/** True once neither player can take anything, whether or not the seats are full. */
-export function isFinished(state: ScoreState): boolean {
-  const bothFull = PLAYERS.every(p => seatsFilled(state.teams[p]) >= TEAM_SIZE);
-  return bothFull || available(state).length === 0;
+/** True once nobody can draft any more: hands full, or nothing left to take. */
+export function draftIsDone(state: ScoreState): boolean {
+  const handsFull = PLAYERS.every(p => state.hands[p].length >= TEAM_SIZE);
+  return handsFull || available(state).length === 0;
+}
+
+/** True once both players have sat every card they drafted. */
+export function placementIsDone(state: ScoreState): boolean {
+  return PLAYERS.every(p => state.hands[p].length === 0);
+}
+
+/** What is still in a hand, waiting for a seat. */
+export function unplaced(state: ScoreState, player: ScorePlayer): string[] {
+  return state.hands[player];
 }
 
 export function scoreOf(state: ScoreState, player: ScorePlayer, pool: ScoreCard[]): number {
@@ -158,12 +192,17 @@ export function scores(state: ScoreState, pool: ScoreCard[]): Record<ScorePlayer
  * and nothing else. Everything hidden comes back as null rather than as a card
  * id the browser could read out of a network response.
  */
-export function viewFor(state: ScoreState, _player: ScorePlayer): ScoreState {
+export function viewFor(state: ScoreState, player: ScorePlayer): ScoreState {
+  const hidden = state.phase === "draft";
   return {
     ...state,
-    cards: state.cards.map((id, i) =>
-      state.table[i].revealed || state.table[i].takenBy ? id : null,
-    ),
+    cards: state.cards.map((id, i) => (state.table[i].revealed ? id : null)),
+    hands: {
+      ...state.hands,
+      // During the draft a hand is private, right down to its length being the
+      // only thing the other player can count.
+      [other(player)]: hidden ? state.hands[other(player)].map(() => "") : state.hands[other(player)],
+    },
   };
 }
 
@@ -181,10 +220,13 @@ export function applyScoreIntent(
   });
 
   if (state.over) return reject("The game is over");
-  if (actor !== state.turn) return reject("Not your turn");
+  // Placement is not taken in turns: both players sit their own cards at once,
+  // and neither can see the other's board until everybody is done.
+  if (state.phase === "draft" && actor !== state.turn) return reject("Not your turn");
 
   switch (intent.type) {
     case "REVEAL": {
+      if (state.phase !== "draft") return reject("The draft is over");
       const slot = state.table[intent.index];
       if (!slot) return reject("No such card");
       if (slot.takenBy) return reject("That card has been taken");
@@ -200,6 +242,7 @@ export function applyScoreIntent(
     }
 
     case "DENY": {
+      if (state.phase !== "draft") return reject("The draft is over");
       const slot = state.table[intent.index];
       if (!slot) return reject("No such card");
       if (slot.takenBy) return reject("That card has been taken");
@@ -215,11 +258,31 @@ export function applyScoreIntent(
     }
 
     case "TAKE": {
+      if (state.phase !== "draft") return reject("The draft is over");
       const slot = state.table[intent.index];
       if (!slot) return reject("No such card");
       if (slot.takenBy) return reject("That card has been taken");
       if (slot.denied) return reject("That card is locked");
       if (state.takesLeft < 1) return reject("You have already taken a card this turn");
+      if (state.hands[actor].length >= TEAM_SIZE) return reject("Your hand is full");
+
+      const cardId = state.cards[intent.index] as string;
+      const blind = !slot.revealed;
+
+      // Taken cards stay face down on the table until the placement phase: a
+      // blind take is only a gamble if the other player cannot read it either.
+      const next = withSlot(state, intent.index, { takenBy: actor });
+      next.takesLeft -= 1;
+      next.hands = { ...next.hands, [actor]: [...next.hands[actor], cardId] };
+
+      return settle(next, pool, [
+        { type: "TAKEN", index: intent.index, by: actor, cardId, blind },
+      ]);
+    }
+
+    case "PLACE": {
+      if (state.phase !== "placement") return reject("Nothing to place yet");
+      if (!state.hands[actor].includes(intent.cardId)) return reject("That card is not yours to place");
 
       const ref = intent.seat;
       if (ref.row === "captain" ? ref.index !== 0 : ref.index < 0 || ref.index >= TEAM[ref.row]) {
@@ -227,19 +290,31 @@ export function applyScoreIntent(
       }
       if (seatOf(state.teams[actor], ref)) return reject("That seat is taken");
 
-      const cardId = state.cards[intent.index] as string;
-      const blind = !slot.revealed;
-
-      const next = withSlot(state, intent.index, { takenBy: actor, revealed: true });
-      next.takesLeft -= 1;
-      next.teams = { ...next.teams, [actor]: place(next.teams[actor], ref, cardId) };
-
+      const next: ScoreState = {
+        ...state,
+        hands: { ...state.hands, [actor]: state.hands[actor].filter(id => id !== intent.cardId) },
+        teams: { ...state.teams, [actor]: place(state.teams[actor], ref, intent.cardId) },
+      };
       return settle(next, pool, [
-        { type: "TAKEN", index: intent.index, by: actor, cardId, seat: ref, blind },
+        { type: "PLACED", by: actor, cardId: intent.cardId, seat: ref },
       ]);
     }
 
+    case "UNPLACE": {
+      if (state.phase !== "placement") return reject("Nothing to move");
+      const cardId = seatOf(state.teams[actor], intent.seat);
+      if (!cardId) return reject("That seat is empty");
+
+      const next: ScoreState = {
+        ...state,
+        hands: { ...state.hands, [actor]: [...state.hands[actor], cardId] },
+        teams: { ...state.teams, [actor]: place(state.teams[actor], intent.seat, null) },
+      };
+      return { state: next, events: [{ type: "UNPLACED", by: actor, cardId, seat: intent.seat }] };
+    }
+
     case "END_TURN": {
+      if (state.phase !== "draft") return reject("There are no turns to end");
       const next = { ...state, ...freshTurn(state, other(actor)) };
       return settle(next, pool, [{ type: "TURN_ENDED", by: actor, next: next.turn }]);
     }
@@ -250,14 +325,13 @@ export function applyScoreIntent(
 }
 
 /**
- * Hands the turn over. A player with a full team is skipped: they have nothing
- * left to do, and making them pass would only be a button to press. Both are
- * full means the game is over, which settle() picks up.
+ * Hands the turn over. A player whose hand is already full is skipped: they
+ * have nothing left to draft, and making them pass would only be a button to
+ * press. Both full ends the draft, which settle() picks up.
  */
 function freshTurn(state: ScoreState, next: ScorePlayer): Partial<ScoreState> {
-  const to = seatsFilled(state.teams[next]) >= TEAM_SIZE && seatsFilled(state.teams[other(next)]) < TEAM_SIZE
-    ? other(next)
-    : next;
+  const full = (p: ScorePlayer) => state.hands[p].length >= TEAM_SIZE;
+  const to = full(next) && !full(other(next)) ? other(next) : next;
   const bumped = to === "P1" ? state.round + 1 : state.round;
   return { turn: to, energy: ENERGY_PER_TURN, takesLeft: TAKES_PER_TURN, round: bumped };
 }
@@ -269,7 +343,7 @@ function withSlot(state: ScoreState, index: number, patch: Partial<TableSlot>): 
   };
 }
 
-function place(team: Team, ref: SeatRef, cardId: string): Team {
+function place(team: Team, ref: SeatRef, cardId: string | null): Team {
   if (ref.row === "captain") return { ...team, captain: cardId };
   return { ...team, [ref.row]: team[ref.row].map((id, i) => (i === ref.index ? cardId : id)) };
 }
@@ -278,18 +352,42 @@ function other(player: ScorePlayer): ScorePlayer {
   return player === "P1" ? "P2" : "P1";
 }
 
-/** Ends the game if there is nothing left to play for, and works out who won. */
+/**
+ * Moves the game on when a phase has nothing left in it.
+ *
+ * The draft ends when both hands are full or the table is empty; that turns
+ * every drafted card face up and opens the placement phase. The game ends when
+ * both players have sat everything they drafted.
+ */
 function settle(state: ScoreState, pool: ScoreCard[], events: ScoreEvent[]): ScoreResult {
-  if (!isFinished(state)) return { state, events };
+  if (state.phase === "draft") {
+    if (!draftIsDone(state)) return { state, events };
 
-  const table = scores(state, pool);
-  const winner: ScorePlayer | "draw" =
-    table.P1 === table.P2 ? "draw" : table.P1 > table.P2 ? "P1" : "P2";
+    // Everything anybody drafted is now public, and so is everything still on
+    // the table: there is nothing left to hide once nobody can take.
+    const opened: ScoreState = {
+      ...state,
+      phase: "placement",
+      table: state.table.map(slot => (slot.denied ? slot : { ...slot, revealed: true })),
+    };
+    return {
+      state: opened,
+      events: [...events, { type: "PLACEMENT_BEGAN", hands: opened.hands }],
+    };
+  }
 
-  return {
-    state: { ...state, over: true, winner },
-    events: [...events, { type: "GAME_OVER", winner, scores: table }],
-  };
+  if (state.phase === "placement" && placementIsDone(state)) {
+    const table = scores(state, pool);
+    const winner: ScorePlayer | "draw" =
+      table.P1 === table.P2 ? "draw" : table.P1 > table.P2 ? "P1" : "P2";
+
+    return {
+      state: { ...state, phase: "over", over: true, winner },
+      events: [...events, { type: "GAME_OVER", winner, scores: table }],
+    };
+  }
+
+  return { state, events };
 }
 
 // ── The shuffle ──────────────────────────────────────────────────────────────

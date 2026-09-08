@@ -7,8 +7,9 @@ import {
 import { CARD_SIZE, COLOR, PRINT_COLOR, RADIUS, SPACE, cardSlotHeight, text } from "../design/tokens";
 import PrintCard from "../components/PrintCard";
 import Inspect from "../components/Inspect";
+import ScoreCard, { GRADE_LABEL, GRADE_TONE } from "../components/ScoreCard";
 import { Button, Chip, Currency, Panel, SectionHead, Stat, Text, TierPip } from "../components/primitives";
-import { POOL, cardFace, cardName } from "../data/pool";
+import { POOL, cardFace, cardName, scoreCard } from "../data/pool";
 import type { Store } from "../data/store";
 
 type Filter = "all" | "owned" | "missing" | "spares" | PrintId;
@@ -211,6 +212,8 @@ function CardSheet({
 }) {
   const { collection } = store;
   const [inspecting, setInspecting] = useState<PrintId | null>(null);
+  const [face, setFace] = useState<"collection" | "score">("collection");
+  const score = scoreCard(cardId);
   return (
     <div
       onClick={onClose}
@@ -229,9 +232,49 @@ function CardSheet({
               <div style={{ ...text("label"), color: COLOR.current, marginBottom: 6 }}>Card</div>
               <Text as="h3" role="title">{cardName(cardId)}</Text>
             </div>
-            <Button tone="ghost" size="sm" onClick={onClose}>Close</Button>
+            <div style={{ display: "flex", gap: SPACE.sm }}>
+              {score && (
+                <Button
+                  tone={face === "score" ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setFace(face === "score" ? "collection" : "score")}
+                >
+                  {face === "score" ? "Back to prints" : "Score battle version"}
+                </Button>
+              )}
+              <Button tone="ghost" size="sm" onClick={onClose}>Close</Button>
+            </div>
           </div>
 
+          {face === "score" && score ? (
+            <div style={{ display: "flex", gap: SPACE.xxl, flexWrap: "wrap", marginTop: SPACE.xl, alignItems: "flex-start" }}>
+              <ScoreCard card={score} name={cardName(cardId)} width={CARD_SIZE.xl} />
+
+              <div style={{ flex: 1, minWidth: 260, display: "flex", flexDirection: "column", gap: SPACE.md }}>
+                <div style={{ display: "flex", alignItems: "center", gap: SPACE.sm }}>
+                  <span
+                    style={{ width: 9, height: 9, borderRadius: "50%", background: GRADE_TONE[score.grade].tone }}
+                  />
+                  <span style={{ ...text("heading"), color: GRADE_TONE[score.grade].tone }}>
+                    {GRADE_LABEL[score.grade]}
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", gap: SPACE.sm, flexWrap: "wrap" }}>
+                  <Chip color={GRADE_TONE[score.grade].tone}>{score.points} points</Chip>
+                  <Chip color={COLOR.mist}>{score.role}</Chip>
+                </div>
+
+                <p style={{ ...text("small"), color: COLOR.mist, maxWidth: 420 }}>
+                  This is the face this character wears in Score Battle, and nowhere else. There is no
+                  print, no attack, health or cost, because none of it is used in that mode: a card is
+                  worth its points, the captain seat doubles them, and a card in the wrong seat costs
+                  2. Your collection card is untouched.
+                </p>
+              </div>
+            </div>
+          ) : (
+          <>
           <div style={{ display: "flex", gap: SPACE.lg, flexWrap: "wrap", marginTop: SPACE.xl }}>
             {PRINTS.map(print => {
               const count = countOf(collection, cardId, print);
@@ -305,6 +348,8 @@ function CardSheet({
               Every print plays identically. Only the look changes.
             </span>
           </div>
+          </>
+          )}
         </Panel>
       </div>
 

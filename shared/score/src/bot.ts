@@ -15,6 +15,10 @@ import {
  *   3. Otherwise take a blind card, because a free take is free.
  *   4. Spend anything left denying the best card still on the table.
  *
+ * Placement is a separate job and a simpler one: it seats its best card as
+ * captain and then puts everything else where it belongs, taking the mismatch
+ * penalty only when it runs out of the right kind of seat.
+ *
  * A bot that plays perfectly here would be a bot that counts cards, and this
  * mode is supposed to be a gamble. The one number worth tuning is GOOD_ENOUGH.
  */
@@ -30,6 +34,8 @@ export function playScoreTurn(
   me: ScorePlayer,
   pool: ScoreCard[],
 ): { state: ScoreState; intents: ScoreIntent[] } {
+  if (state.phase === "placement") return placeHand(state, me, pool);
+
   const by = new Map(pool.map(card => [card.id, card]));
   let current = state;
   const played: ScoreIntent[] = [];
@@ -52,21 +58,7 @@ export function playScoreTurn(
   const faceUp = () => available(current).filter(i => current.table[i].revealed);
   const faceDown = () => available(current).filter(i => !current.table[i].revealed);
 
-  /** The best seat for a card: its own row if free, else the cheapest mistake. */
-  const bestSeat = (card: ScoreCard | null): SeatRef | null => {
-    const team = current.teams[me];
-    const open = openSeats(team);
-    if (open.length === 0) return null;
-    if (!card) return open[0];
-    return open.reduce((best, seat) =>
-      valueOf(card, seat.row) > valueOf(card, best.row) ? seat : best,
-    );
-  };
-
-  const takeIndex = (index: number) => {
-    const seat = bestSeat(cardAt(index));
-    return seat ? run({ type: "TAKE", index, seat }) : false;
-  };
+  const takeIndex = (index: number) => run({ type: "TAKE", index });
 
   // 1. Something good already face up
   if (current.takesLeft > 0) {
@@ -122,4 +114,55 @@ function pickBest(indexes: number[], cardAt: (i: number) => ScoreCard | null): n
     }
   }
   return best;
+}
+
+/**
+ * Sits a whole hand at once. Highest value first, so the biggest number gets
+ * the captain seat, and the rest fall into their own rows while there is room.
+ */
+export function placeHand(
+  state: ScoreState,
+  me: ScorePlayer,
+  pool: ScoreCard[],
+): { state: ScoreState; intents: ScoreIntent[] } {
+  const by = new Map(pool.map(card => [card.id, card]));
+  let current = state;
+  const intents: ScoreIntent[] = [];
+
+  const hand = () =>
+    current.hands[me]
+      .map(id => by.get(id))
+      .filter((card): card is ScoreCard => Boolean(card))
+      .sort((a, b) => b.points - a.points);
+
+  let guard = 0;
+  while (current.hands[me].length > 0 && guard++ < 32) {
+    const cards = hand();
+    if (cards.length === 0) break;
+
+    const open = openSeats(current.teams[me]);
+    if (open.length === 0) break;
+
+    // Take the best pairing available: every card against every free seat
+    let best: { card: ScoreCard; seat: SeatRef; value: number } | null = null;
+    for (const card of cards) {
+      for (const seat of open) {
+        const value = valueOf(card, seat.row);
+        if (!best || value > best.value) best = { card, seat, value };
+      }
+    }
+    if (!best) break;
+
+    const result = applyScoreIntent(
+      current,
+      { type: "PLACE", cardId: best.card.id, seat: best.seat },
+      me,
+      pool,
+    );
+    if (result.events.some(e => e.type === "REJECTED")) break;
+    current = result.state;
+    intents.push({ type: "PLACE", cardId: best.card.id, seat: best.seat });
+  }
+
+  return { state: current, intents };
 }
