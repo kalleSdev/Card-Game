@@ -132,8 +132,7 @@ export interface Standing {
 }
 
 export interface Profile {
-  iconCard: string | null;
-  iconPrint: string | null;
+  iconId: string | null;
   titleId: string | null;
   bannerId: string | null;
   borderId: string | null;
@@ -141,7 +140,7 @@ export interface Profile {
 }
 
 export const EMPTY_PROFILE: Profile = {
-  iconCard: null, iconPrint: null, titleId: null, bannerId: null, borderId: null, showcase: [],
+  iconId: null, titleId: null, bannerId: null, borderId: null, showcase: [],
 };
 
 export interface Everything {
@@ -195,3 +194,59 @@ export const saveDeck = (deck: ServerDeck) =>
 
 export const deleteDeck = (id: string) =>
   call<{ ok: true }>(`/decks/${id}`, { method: "DELETE" });
+
+// ── Trading ─────────────────────────────────────────────────────────────────
+
+export interface OfferLine {
+  cardId: string;
+  print: PrintId;
+  count: number;
+}
+
+export interface Offer {
+  prints: OfferLine[];
+  berries: number;
+}
+
+export interface TradeSide {
+  userId: string;
+  username: string;
+  offer: Offer;
+  confirmed: boolean;
+}
+
+export interface Trade {
+  id: string;
+  code: string;
+  state: "open" | "done" | "cancelled";
+  /** Always your own side, whichever seat you took. */
+  you: TradeSide;
+  them: TradeSide | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface TradeLogEntry {
+  id: string;
+  at: number;
+  gave: Offer;
+  got: Offer;
+  withName: string;
+}
+
+export const fetchTrades = () =>
+  call<{ trade: Trade | null; history: TradeLogEntry[] }>("/trades");
+
+export const openTrade = () => call<{ trade: Trade }>("/trades", { method: "POST" });
+
+export const joinTrade = (code: string) =>
+  call<{ trade: Trade }>("/trades/join", { method: "POST", body: { code } });
+
+export const setOffer = (id: string, offer: Offer) =>
+  call<{ trade: Trade }>(`/trades/${id}/offer`, { method: "POST", body: offer });
+
+export const confirmTrade = (id: string) =>
+  call<{ trade: Trade }>(`/trades/${id}/confirm`, { method: "POST" });
+
+export const cancelTrade = (id: string) =>
+  call<{ ok: true }>(`/trades/${id}/cancel`, { method: "POST" });

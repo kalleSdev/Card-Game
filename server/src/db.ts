@@ -139,8 +139,7 @@ db.exec(`
   -- nothing and that is a valid profile rather than a broken one.
   CREATE TABLE IF NOT EXISTS profiles (
     user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    icon_card  TEXT,
-    icon_print TEXT,
+    icon_id    TEXT,
     title_id   TEXT,
     banner_id  TEXT,
     border_id  TEXT,
@@ -148,6 +147,43 @@ db.exec(`
     updated_at INTEGER NOT NULL
   );
 
+  -- A trade in progress. Both offers live here rather than in memory so a
+  -- restart cannot lose one halfway through, and so the confirmations are
+  -- stored next to the offer they were given for.
+  CREATE TABLE IF NOT EXISTS trades (
+    id         TEXT PRIMARY KEY,
+    code       TEXT NOT NULL,
+    a_user     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    b_user     TEXT REFERENCES users(id) ON DELETE CASCADE,
+    a_offer    TEXT NOT NULL,
+    b_offer    TEXT NOT NULL,
+    a_ok       INTEGER NOT NULL DEFAULT 0,
+    b_ok       INTEGER NOT NULL DEFAULT 0,
+    state      TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    closed_at  INTEGER
+  );
+
+  -- Every completed trade, written once and never touched again. A trade moves
+  -- things that took real time to get, so what was swapped has to outlive the
+  -- trade row itself.
+  CREATE TABLE IF NOT EXISTS trade_log (
+    id       TEXT PRIMARY KEY,
+    trade_id TEXT NOT NULL,
+    a_user   TEXT NOT NULL,
+    b_user   TEXT NOT NULL,
+    a_name   TEXT NOT NULL,
+    b_name   TEXT NOT NULL,
+    a_offer  TEXT NOT NULL,
+    b_offer  TEXT NOT NULL,
+    at       INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_trades_a      ON trades(a_user, state);
+  CREATE INDEX IF NOT EXISTS idx_trades_b      ON trades(b_user, state);
+  CREATE INDEX IF NOT EXISTS idx_trade_log_a   ON trade_log(a_user, at);
+  CREATE INDEX IF NOT EXISTS idx_trade_log_b   ON trade_log(b_user, at);
   CREATE INDEX IF NOT EXISTS idx_cosmetics_user ON cosmetics(user_id);
   CREATE INDEX IF NOT EXISTS idx_ranking_mmr   ON ranking(mmr DESC);
   CREATE INDEX IF NOT EXISTS idx_decks_user    ON decks(user_id);
@@ -157,6 +193,20 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_packs_user    ON packs(user_id, opened_at);
   CREATE INDEX IF NOT EXISTS idx_ledger_user   ON ledger(user_id, at);
 `);
+
+/**
+ * Adds a column to a table that already exists. CREATE TABLE IF NOT EXISTS
+ * only ever runs once, so a schema change needs saying twice: in the statement
+ * above for a new database, and here for one that is already on disk.
+ */
+function addColumn(table: string, column: string, type: string): void {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!columns.some(c => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
+}
+
+addColumn("profiles", "icon_id", "TEXT");
 
 export interface UserRow {
   id: string;
@@ -197,13 +247,27 @@ export interface WalletRow {
 
 export interface ProfileRow {
   user_id: string;
-  icon_card: string | null;
-  icon_print: string | null;
+  icon_id: string | null;
   title_id: string | null;
   banner_id: string | null;
   border_id: string | null;
   showcase: string | null;
   updated_at: number;
+}
+
+export interface TradeRow {
+  id: string;
+  code: string;
+  a_user: string;
+  b_user: string | null;
+  a_offer: string;
+  b_offer: string;
+  a_ok: number;
+  b_ok: number;
+  state: string;
+  created_at: number;
+  updated_at: number;
+  closed_at: number | null;
 }
 
 export interface RankingRow {

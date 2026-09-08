@@ -10,9 +10,13 @@ import {
   cosmeticsOwned, profileOf, saveProfile,
   type ScrapAction, type StoredDeck, type Profile,
 } from "./packs.js";
-import { PACKS, PRINTS, RANKS, COSMETIC_BY_ID, type PackId, type PrintId } from "@cg/meta";
+import { PACKS, PRINTS, RANKS, COSMETIC_BY_ID, isProfileIcon, type PackId, type PrintId } from "@cg/meta";
 import { applyResult, leaderboard, standingOf } from "./ranking.js";
 import { LobbyBook } from "./lobbies.js";
+import {
+  openTrade, joinTrade, cancelTrade, setOffer, confirmTrade, openTradeFor, historyFor,
+  type Offer,
+} from "./trades.js";
 import {
   createMatch, validateDraft, runBotIfItsTurn, getMatch, endMatch, broadcast, submitIntent,
   forfeit, rebindSeat, forceEndTurn, type Match,
@@ -129,6 +133,61 @@ app.get("/leaderboard", async () => {
   };
 });
 
+// ── Trading ─────────────────────────────────────────────────────────────────
+// One table at a time per player, opened with a code the way a lobby is. Every
+// route reads the trade from the id and checks the caller is actually sitting
+// at it, so nobody can look at or touch somebody else's table.
+
+app.get("/trades", async (req, reply) =>
+  guarded(reply, () => {
+    const user = requireUser(req);
+    return { trade: openTradeFor(user.id), history: historyFor(user.id) };
+  }),
+);
+
+app.post("/trades", async (req, reply) =>
+  guarded(reply, () => ({ trade: openTrade(requireUser(req).id) })),
+);
+
+app.post("/trades/join", async (req, reply) =>
+  guarded(reply, () => {
+    const user = requireUser(req);
+    const { code } = (req.body ?? {}) as { code?: string };
+    return { trade: joinTrade(user.id, code ?? "") };
+  }),
+);
+
+app.post("/trades/:id/offer", async (req, reply) =>
+  guarded(reply, () => {
+    const user = requireUser(req);
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as Partial<Offer>;
+    return {
+      trade: setOffer(user.id, id, {
+        prints: body.prints ?? [],
+        berries: body.berries ?? 0,
+      }),
+    };
+  }),
+);
+
+app.post("/trades/:id/confirm", async (req, reply) =>
+  guarded(reply, () => {
+    const user = requireUser(req);
+    const { id } = req.params as { id: string };
+    return { trade: confirmTrade(user.id, id) };
+  }),
+);
+
+app.post("/trades/:id/cancel", async (req, reply) =>
+  guarded(reply, () => {
+    const user = requireUser(req);
+    const { id } = req.params as { id: string };
+    cancelTrade(user.id, id);
+    return { ok: true };
+  }),
+);
+
 /**
  * What a player is wearing. Only what is actually owned is accepted, so a
  * client cannot equip a title it never pulled by asking nicely.
@@ -147,16 +206,11 @@ app.post("/profile", async (req, reply) =>
       return id;
     };
 
-    // The icon has to be a print the player actually holds
-    let iconCard: string | null = null;
-    let iconPrint: string | null = null;
-    if (typeof body.iconCard === "string" && typeof body.iconPrint === "string") {
-      if (!(PRINTS as readonly string[]).includes(body.iconPrint)) throw new Error("No such print");
-      if (copiesOf(user.id, body.iconCard, body.iconPrint as PrintId) < 1) {
-        throw new Error("You do not own that card in that print");
-      }
-      iconCard = body.iconCard;
-      iconPrint = body.iconPrint;
+    // Icons are the same short list for everyone until they become cosmetics
+    let iconId: string | null = null;
+    if (typeof body.iconId === "string" && body.iconId !== "") {
+      if (!isProfileIcon(body.iconId)) throw new Error("No such icon");
+      iconId = body.iconId;
     }
 
     const showcase = Array.isArray(body.showcase)
@@ -164,8 +218,7 @@ app.post("/profile", async (req, reply) =>
       : [];
 
     saveProfile(user.id, {
-      iconCard,
-      iconPrint,
+      iconId,
       titleId: wearable(body.titleId, "title"),
       bannerId: wearable(body.bannerId, "banner"),
       borderId: wearable(body.borderId, "border"),

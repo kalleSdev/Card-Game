@@ -166,3 +166,28 @@ export function rollCosmetic(rng: Rng): CosmeticRoll {
     berries: null,
   };
 }
+
+/**
+ * Profile icons, for now.
+ *
+ * Placeholders on purpose: icons will become cosmetics of their own once there
+ * is art for them, and until then everybody picks from the same short list of
+ * symbols rather than from cards they happen to own. The drawing lives in the
+ * client; this is only the list of what exists.
+ */
+export const PROFILE_ICONS = [
+  { id: "icon.compass", name: "Compass" },
+  { id: "icon.anchor", name: "Anchor" },
+  { id: "icon.wheel", name: "Helm" },
+  { id: "icon.skull", name: "Jolly Roger" },
+  { id: "icon.sail", name: "Sail" },
+  { id: "icon.lantern", name: "Lantern" },
+  { id: "icon.wave", name: "Swell" },
+  { id: "icon.star", name: "Log Star" },
+] as const;
+
+export type ProfileIconId = (typeof PROFILE_ICONS)[number]["id"];
+
+export function isProfileIcon(id: string): id is ProfileIconId {
+  return PROFILE_ICONS.some(icon => icon.id === id);
+}

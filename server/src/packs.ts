@@ -120,8 +120,8 @@ function addCosmetic(userId: string, cosmeticId: string): boolean {
 }
 
 export interface Profile {
-  iconCard: string | null;
-  iconPrint: string | null;
+  /** One of the symbols in the meta icon list, until icons become cosmetics. */
+  iconId: string | null;
   titleId: string | null;
   bannerId: string | null;
   borderId: string | null;
@@ -130,7 +130,7 @@ export interface Profile {
 }
 
 const EMPTY_PROFILE: Profile = {
-  iconCard: null, iconPrint: null, titleId: null, bannerId: null, borderId: null, showcase: [],
+  iconId: null, titleId: null, bannerId: null, borderId: null, showcase: [],
 };
 
 export function profileOf(userId: string): Profile {
@@ -145,8 +145,7 @@ export function profileOf(userId: string): Profile {
     // A row that will not parse is worth an empty showcase rather than a crash
   }
   return {
-    iconCard: row.icon_card,
-    iconPrint: row.icon_print,
+    iconId: row.icon_id,
     titleId: row.title_id,
     bannerId: row.banner_id,
     borderId: row.border_id,
@@ -156,11 +155,10 @@ export function profileOf(userId: string): Profile {
 
 export function saveProfile(userId: string, next: Profile): void {
   db.prepare(
-    `INSERT INTO profiles (user_id, icon_card, icon_print, title_id, banner_id, border_id, showcase, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO profiles (user_id, icon_id, title_id, banner_id, border_id, showcase, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (user_id) DO UPDATE SET
-       icon_card = excluded.icon_card,
-       icon_print = excluded.icon_print,
+       icon_id = excluded.icon_id,
        title_id = excluded.title_id,
        banner_id = excluded.banner_id,
        border_id = excluded.border_id,
@@ -168,8 +166,7 @@ export function saveProfile(userId: string, next: Profile): void {
        updated_at = excluded.updated_at`,
   ).run(
     userId,
-    next.iconCard,
-    next.iconPrint,
+    next.iconId,
     next.titleId,
     next.bannerId,
     next.borderId,

@@ -6,6 +6,7 @@ import DecksScreen from "./screens/Decks";
 import ShopScreen, { PacksScreen } from "./screens/Shop";
 import LadderScreen from "./screens/Ladder";
 import ProfileScreen from "./screens/Profile";
+import TradeScreen from "./screens/Trade";
 import SignIn from "./screens/SignIn";
 import { useStore } from "./data/store";
 import { COLOR, SPACE, text } from "./design/tokens";
@@ -42,6 +43,7 @@ export default function App() {
         : page === "packs" ? <PacksScreen store={store} onSignIn={goSignIn} />
         : page === "ladder" ? <LadderScreen store={store} />
         : page === "profile" ? <ProfileScreen store={store} onSignIn={goSignIn} />
+        : page === "trade" ? <TradeScreen store={store} onSignIn={goSignIn} />
         : page === "design" ? <DesignLanguage />
         : <NotBuiltYet id={page} />}
     </Shell>

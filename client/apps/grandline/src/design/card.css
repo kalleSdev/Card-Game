@@ -555,7 +555,11 @@
   mix-blend-mode: overlay;
 }
 .pc--holoOne .pc__body {
-  margin-top: -46px;
+  /* Deeper overlap than the other prints so the picture runs well past the
+     name, but the art box itself is the standard one: a Holo One has to be the
+     same object as a Black Label, not a taller card. The overlap is set so the
+     finished card measures exactly what a Black Label does. */
+  margin-top: -43px;
   z-index: 4;
   padding-top: 38px;
   /* A long ramp that never reaches full black, so the picture keeps running
@@ -568,11 +572,8 @@
     rgba(10, 13, 18, 0.9) 100%
   );
 }
-/* The art runs to the bottom edge, with a vignette holding the corners so the
-   stats stay readable over it. */
-.pc--holoOne .pc__art {
-  aspect-ratio: 5 / 6.1;
-}
+/* The art runs past the plate, held by a vignette so the stats stay readable
+   over it. */
 .pc--holoOne .pc__art::before,
 .pc--holoOne .pc__hue {
   mask-image: linear-gradient(180deg, #000 0%, #000 72%, rgba(0, 0, 0, 0.55) 100%);

@@ -16,7 +16,7 @@ export const NAV: NavItem[] = [
   { id: "decks", label: "Decks" },
   { id: "packs", label: "Packs" },
   { id: "shop", label: "Shop" },
-  { id: "trade", label: "Trade", soon: true },
+  { id: "trade", label: "Trade" },
   { id: "ladder", label: "Ladder" },
   { id: "profile", label: "Profile" },
   { id: "design", label: "Design" },

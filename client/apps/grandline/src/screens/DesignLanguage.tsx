@@ -117,7 +117,7 @@ export default function DesignLanguage() {
       <section>
         <SectionHead
           eyebrow="03"
-          title="Six prints, one card"
+          title="Seven prints, one card"
           right={
             <div style={{ display: "flex", gap: SPACE.sm }}>
               <Button tone={tone === "standard" ? "secondary" : "ghost"} size="sm" onClick={() => setTone("standard")}>
@@ -130,9 +130,10 @@ export default function DesignLanguage() {
           }
         />
         <p style={{ ...text("body"), color: COLOR.mist, maxWidth: 620, marginBottom: SPACE.xl }}>
-          Identical stats, six treatments. Each one changes the card's shape or colour rather than
+          Identical stats, seven treatments. Each one changes the card's shape or colour rather than
           just its trim, so it reads from across the table. Art is placeholder — the treatments are
-          real.
+          real. Alt art and everything above it is hand picked per character rather than drawn for
+          the whole pool, so not every card will exist in every print.
         </p>
 
         <div style={{ display: "flex", gap: SPACE.xl, flexWrap: "wrap" }}>
