@@ -11,7 +11,7 @@ import type { Store } from "../data/store";
 /** Packs a match hands out for free, on top of being buyable. */
 const ALSO_EARNED = new Set<PackId>(["goldCard", "goldCosmetic", "silverCard"]);
 
-export default function ShopScreen({ store }: { store: Store }) {
+export default function ShopScreen({ store, onSignIn }: { store: Store; onSignIn: () => void }) {
   const [busy, setBusy] = useState<PackId | null>(null);
   const [showOdds, setShowOdds] = useState(false);
 
@@ -28,7 +28,7 @@ export default function ShopScreen({ store }: { store: Store }) {
         title="Packs"
         right={
           <div style={{ display: "flex", alignItems: "center", gap: SPACE.lg }}>
-            <Currency kind="berries" amount={store.wallet.berries} />
+            {store.signedIn && <Currency kind="berries" amount={store.wallet.berries} />}
             <Button size="sm" tone="ghost" onClick={() => setShowOdds(v => !v)}>
               {showOdds ? "Hide odds" : "Show odds"}
             </Button>
@@ -42,12 +42,14 @@ export default function ShopScreen({ store }: { store: Store }) {
         </Panel>
       )}
 
+      {!store.signedIn && <GuestNotice what="buy packs" onSignIn={onSignIn} />}
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: SPACE.lg }}>
         {(Object.keys(PACKS) as PackId[]).map(id => {
           const pack = PACKS[id];
           const diamond = id.startsWith("diamond");
           const accent = diamond ? COLOR.current : id.startsWith("gold") ? COLOR.doubloon : COLOR.mist;
-          const affordable = pack.price !== null && store.wallet.berries >= pack.price;
+          const affordable = store.signedIn && pack.price !== null && store.wallet.berries >= pack.price;
           return (
             <Panel
               key={id}
@@ -73,10 +75,13 @@ export default function ShopScreen({ store }: { store: Store }) {
                     <Button
                       size="sm"
                       tone={affordable ? "primary" : "ghost"}
-                      disabled={!affordable || busy !== null}
+                      disabled={!store.signedIn || !affordable || busy !== null}
                       onClick={() => buy(id)}
                     >
-                      {busy === id ? "Buying" : affordable ? "Buy" : "Not enough"}
+                      {!store.signedIn ? "Log in to buy"
+                        : busy === id ? "Buying"
+                        : affordable ? "Buy"
+                        : "Not enough"}
                     </Button>
                   </div>
                 </div>
@@ -124,8 +129,24 @@ function ExactRate({ print }: { print: (typeof PRINTS)[number] }) {
   );
 }
 
+/** A guest can look at anything and spend nothing. Said once, plainly. */
+function GuestNotice({ what, onSignIn }: { what: string; onSignIn: () => void }) {
+  return (
+    <Panel padding={SPACE.lg} style={{ borderColor: "rgba(62,143,160,0.4)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: SPACE.lg, flexWrap: "wrap" }}>
+        <span style={{ ...text("body"), color: COLOR.mist }}>
+          You are looking around without an account. Log in to {what}.
+        </span>
+        <div style={{ marginLeft: "auto" }}>
+          <Button size="sm" tone="primary" onClick={onSignIn}>Log in</Button>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
 /** Unopened packs. Opening one hands off to the reveal. */
-export function PacksScreen({ store }: { store: Store }) {
+export function PacksScreen({ store, onSignIn }: { store: Store; onSignIn: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [opened, setOpened] = useState<Opened | null>(null);
 
@@ -152,7 +173,9 @@ export function PacksScreen({ store }: { store: Store }) {
         </Panel>
       )}
 
-      {store.packs.length === 0 ? (
+      {!store.signedIn ? (
+        <GuestNotice what="earn and open packs" onSignIn={onSignIn} />
+      ) : store.packs.length === 0 ? (
         <Panel padding={SPACE.xxxl}>
           <Text role="heading">Nothing to open</Text>
           <p style={{ ...text("body"), color: COLOR.mist, marginTop: SPACE.sm, maxWidth: 460 }}>

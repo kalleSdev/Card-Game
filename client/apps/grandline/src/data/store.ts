@@ -16,6 +16,8 @@ import * as api from "./api";
 
 export interface Store {
   account: api.Account | null;
+  /** False while browsing without an account: everything shows, nothing acts. */
+  signedIn: boolean;
   loading: boolean;
   error: string | null;
 
@@ -176,7 +178,7 @@ export function useStore(): Store {
   }, []);
 
   return {
-    account, loading, error,
+    account, signedIn: account !== null, loading, error,
     collection, wallet, packs, decks,
     signIn, register, signOut,
     buy, open, scrap,

@@ -10,7 +10,7 @@ import { Button, Panel, SectionHead, Text, TierPip } from "../components/primiti
 import { LEADER_POOL, POOL, cardFace, cardName } from "../data/pool";
 import type { Store } from "../data/store";
 
-export default function DecksScreen({ store }: { store: Store }) {
+export default function DecksScreen({ store, onSignIn }: { store: Store; onSignIn: () => void }) {
   const [editing, setEditing] = useState<string | null>(null);
   const deck = store.decks.find(d => d.id === editing) ?? null;
 
@@ -26,9 +26,10 @@ export default function DecksScreen({ store }: { store: Store }) {
         right={
           <Button
             tone="primary"
+            disabled={!store.signedIn}
             onClick={() => setEditing(store.newDeck(`Deck ${store.decks.length + 1}`).id)}
           >
-            New deck
+            {store.signedIn ? "New deck" : "Log in to build"}
           </Button>
         }
       />
@@ -38,7 +39,18 @@ export default function DecksScreen({ store }: { store: Store }) {
         card in more than one print you pick which one takes the board.
       </p>
 
-      {store.decks.length === 0 ? (
+      {!store.signedIn ? (
+        <Panel padding={SPACE.lg} style={{ borderColor: "rgba(62,143,160,0.4)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: SPACE.lg, flexWrap: "wrap" }}>
+            <span style={{ ...text("body"), color: COLOR.mist }}>
+              You are looking around without an account. Log in to build decks.
+            </span>
+            <div style={{ marginLeft: "auto" }}>
+              <Button size="sm" tone="primary" onClick={onSignIn}>Log in</Button>
+            </div>
+          </div>
+        </Panel>
+      ) : store.decks.length === 0 ? (
         <Panel padding={SPACE.xxxl}>
           <Text role="heading">No decks yet</Text>
           <p style={{ ...text("body"), color: COLOR.mist, marginTop: SPACE.sm, maxWidth: 460 }}>

@@ -11,44 +11,32 @@ import { Panel, Text } from "./components/primitives";
 
 export default function App() {
   const [page, setPage] = useState("collection");
-  // The design page is a showcase as much as a reference, so it does not need
-  // an account to look at.
-  const [designOnly, setDesignOnly] = useState(false);
   const store = useStore();
 
   if (store.loading) return <Loading />;
 
-  if (!store.account) {
-    if (!designOnly) return <SignIn store={store} onViewDesign={() => setDesignOnly(true)} />;
-    return (
-      <div style={{ position: "relative", zIndex: 1, padding: `${SPACE.xl}px ${SPACE.xl}px ${SPACE.xxxl}px`, maxWidth: 1180, margin: "0 auto" }}>
-        <button
-          onClick={() => setDesignOnly(false)}
-          style={{
-            ...text("small"), background: "none", border: "none",
-            color: COLOR.current, padding: 0, marginBottom: SPACE.xl,
-          }}
-        >
-          Back to sign in
-        </button>
-        <DesignLanguage />
-      </div>
-    );
+  // Signing in is a page like any other rather than a wall in front of the app.
+  // Everything can be looked at without an account; nothing can be spent.
+  if (page === "signin") {
+    return <SignIn store={store} onBack={() => setPage("collection")} />;
   }
+
+  const goSignIn = () => setPage("signin");
 
   return (
     <Shell
       active={page}
       onNavigate={setPage}
       wallet={store.wallet}
-      username={store.account.username}
+      username={store.account?.username ?? null}
       packsWaiting={store.packs.length}
       onSignOut={() => void store.signOut()}
+      onSignIn={goSignIn}
     >
       {page === "collection" ? <CollectionScreen store={store} />
-        : page === "decks" ? <DecksScreen store={store} />
-        : page === "shop" ? <ShopScreen store={store} />
-        : page === "packs" ? <PacksScreen store={store} />
+        : page === "decks" ? <DecksScreen store={store} onSignIn={goSignIn} />
+        : page === "shop" ? <ShopScreen store={store} onSignIn={goSignIn} />
+        : page === "packs" ? <PacksScreen store={store} onSignIn={goSignIn} />
         : page === "design" ? <DesignLanguage />
         : <NotBuiltYet id={page} />}
     </Shell>

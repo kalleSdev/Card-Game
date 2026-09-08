@@ -5,6 +5,7 @@ import {
 } from "@cg/meta";
 import { CARD_SIZE, COLOR, PRINT_COLOR, SPACE, cardSlotHeight, text } from "../design/tokens";
 import PrintCard from "../components/PrintCard";
+import Inspect from "../components/Inspect";
 import { Button, Currency, TierPip } from "../components/primitives";
 import { cardFace } from "../data/pool";
 import "../design/opening.css";
@@ -54,6 +55,7 @@ export default function PackOpening({ opened, onDone }: { opened: Opened; onDone
   const { pulls, isNew, packId } = opened;
   const [revealed, setRevealed] = useState<Set<number>>(() => new Set());
   const [auto, setAuto] = useState(false);
+  const [inspecting, setInspecting] = useState<number | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const done = revealed.size >= pulls.length;
@@ -160,6 +162,7 @@ export default function PackOpening({ opened, onDone }: { opened: Opened; onDone
                     revealed={revealed.has(i)}
                     isNew={isNew[i]}
                     onReveal={() => reveal(i)}
+                    onInspect={() => setInspecting(i)}
                   />
                 </div>
               ))}
@@ -203,6 +206,14 @@ export default function PackOpening({ opened, onDone }: { opened: Opened; onDone
           </div>
         )}
       </div>
+
+      {inspecting !== null && pulls[inspecting].kind === "card" && (
+        <Inspect
+          card={cardFace((pulls[inspecting] as { cardId: string }).cardId)}
+          print={(pulls[inspecting] as { print: PrintId }).print}
+          onClose={() => setInspecting(null)}
+        />
+      )}
     </div>
   );
 }
@@ -217,12 +228,14 @@ function Tally({ label, value, color }: { label: string; value: number; color: s
 }
 
 function Slot({
-  pull, revealed, isNew, onReveal,
+  pull, revealed, isNew, onReveal, onInspect,
 }: {
   pull: Pull;
   revealed: boolean;
   isNew: boolean;
   onReveal: () => void;
+  /** A turned card opens for a closer look rather than doing nothing. */
+  onInspect: () => void;
 }) {
   const height = cardSlotHeight(WIDTH);
   const classes = [
@@ -238,8 +251,12 @@ function Slot({
     <>
       <div
         className={classes}
-        style={{ height, position: "relative", cursor: revealed ? "default" : "pointer" }}
-        onClick={revealed ? undefined : onReveal}
+        style={{
+          height,
+          position: "relative",
+          cursor: revealed && pull.kind === "card" ? "zoom-in" : revealed ? "default" : "pointer",
+        }}
+        onClick={revealed ? (pull.kind === "card" ? onInspect : undefined) : onReveal}
       >
         <div className="po__burst" />
 
@@ -250,7 +267,7 @@ function Slot({
               print={pull.print}
               width={WIDTH}
               duplicate={!isNew}
-              interactive={false}
+              interactive={revealed}
             />
           ) : (
             <div className="po__cosmetic" style={{ height: WIDTH * 1.4 }}>

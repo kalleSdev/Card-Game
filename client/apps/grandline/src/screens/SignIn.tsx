@@ -4,7 +4,7 @@ import { Button, Panel, Text } from "../components/primitives";
 import type { Store } from "../data/store";
 
 /** The gate. Nothing a player owns exists on this machine, so there is one. */
-export default function SignIn({ store, onViewDesign }: { store: Store; onViewDesign: () => void }) {
+export default function SignIn({ store, onBack }: { store: Store; onBack: () => void }) {
   const [mode, setMode] = useState<"in" | "new">("in");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -18,6 +18,8 @@ export default function SignIn({ store, onViewDesign }: { store: Store; onViewDe
     setProblem(null);
     try {
       await (mode === "in" ? store.signIn(username, password) : store.register(username, password));
+      // Signing in is a page now, so it has to hand the app back afterwards
+      onBack();
     } catch (err) {
       setProblem(err instanceof Error ? err.message : "That did not work");
     } finally {
@@ -121,13 +123,13 @@ export default function SignIn({ store, onViewDesign }: { store: Store; onViewDe
 
         <div style={{ marginTop: SPACE.lg, display: "flex", flexDirection: "column", gap: SPACE.sm }}>
           <button
-            onClick={onViewDesign}
+            onClick={onBack}
             style={{
               ...text("small"), background: "none", border: "none",
               color: COLOR.current, padding: 0, textAlign: "left",
             }}
           >
-            Look at the design language without an account
+            Keep looking around without an account
           </button>
           <p style={{ ...text("small"), color: COLOR.fathom, margin: 0 }}>
             The server runs separately. If sign in cannot reach it, start it with{" "}

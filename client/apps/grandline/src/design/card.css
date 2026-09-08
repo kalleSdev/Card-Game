@@ -222,7 +222,7 @@
   transition: background-position 700ms cubic-bezier(0.16, 1, 0.3, 1);
   mix-blend-mode: screen;
 }
-.pc--foil:hover .pc__art::after {
+.pc--foil.pc--interactive:hover .pc__art::after {
   background-position: 0 0;
 }
 
@@ -518,11 +518,11 @@
   z-index: 1;
   background: linear-gradient(
     148deg,
-    rgba(255, 176, 200, 0.95) 0%,
-    rgba(255, 226, 168, 0.9) 22%,
-    rgba(178, 255, 214, 0.9) 45%,
-    rgba(168, 216, 255, 0.92) 68%,
-    rgba(216, 180, 255, 0.95) 100%
+    rgba(255, 176, 200, 0.4) 0%,
+    rgba(255, 226, 168, 0.36) 22%,
+    rgba(178, 255, 214, 0.34) 45%,
+    rgba(168, 216, 255, 0.38) 68%,
+    rgba(216, 180, 255, 0.4) 100%
   );
   mix-blend-mode: color;
 }
@@ -534,12 +534,12 @@
   z-index: 2;
   background: linear-gradient(
     122deg,
-    rgba(255, 190, 210, 0.3) 0%,
-    rgba(255, 240, 190, 0.26) 20%,
-    rgba(190, 255, 226, 0.26) 42%,
-    rgba(190, 226, 255, 0.3) 64%,
-    rgba(226, 196, 255, 0.3) 86%,
-    rgba(255, 190, 210, 0.28) 100%
+    rgba(255, 190, 210, 0.15) 0%,
+    rgba(255, 240, 190, 0.13) 20%,
+    rgba(190, 255, 226, 0.13) 42%,
+    rgba(190, 226, 255, 0.15) 64%,
+    rgba(226, 196, 255, 0.15) 86%,
+    rgba(255, 190, 210, 0.14) 100%
   );
   mix-blend-mode: soft-light;
   pointer-events: none;
@@ -555,25 +555,47 @@
   mix-blend-mode: overlay;
 }
 .pc--holoOne .pc__body {
-  margin-top: -34px;
+  margin-top: -46px;
   z-index: 4;
-  background: linear-gradient(180deg, transparent, #0a0d12 46%);
-  padding-top: 24px;
+  padding-top: 38px;
+  /* A long ramp that never reaches full black, so the picture keeps running
+     under the name rather than stopping at a hard edge. */
+  background: linear-gradient(
+    180deg,
+    rgba(10, 13, 18, 0) 0%,
+    rgba(10, 13, 18, 0.35) 32%,
+    rgba(10, 13, 18, 0.72) 62%,
+    rgba(10, 13, 18, 0.9) 100%
+  );
+}
+/* The art runs to the bottom edge, with a vignette holding the corners so the
+   stats stay readable over it. */
+.pc--holoOne .pc__art {
+  aspect-ratio: 5 / 6.1;
+}
+.pc--holoOne .pc__art::before,
+.pc--holoOne .pc__hue {
+  mask-image: linear-gradient(180deg, #000 0%, #000 72%, rgba(0, 0, 0, 0.55) 100%);
 }
 .pc--holoOne .pc__name {
   color: #f6f9ff;
+  text-shadow: 0 1px 6px rgba(6, 9, 14, 0.9);
+}
+.pc--holoOne .pc__stats,
+.pc--holoOne .pc__stats b {
+  text-shadow: 0 1px 5px rgba(6, 9, 14, 0.9);
 }
 .pc--holoOne .pc__leaf {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 24%),
     linear-gradient(
       102deg,
-      rgba(255, 202, 220, 0.15) 0%,
-      rgba(255, 244, 196, 0.16) 18%,
-      rgba(200, 255, 232, 0.15) 38%,
-      rgba(198, 230, 255, 0.16) 58%,
-      rgba(226, 202, 255, 0.15) 78%,
-      rgba(255, 208, 226, 0.15) 100%
+      rgba(255, 214, 228, 0.095) 0%,
+      rgba(255, 248, 214, 0.1) 18%,
+      rgba(214, 255, 240, 0.095) 38%,
+      rgba(212, 236, 255, 0.1) 58%,
+      rgba(234, 214, 255, 0.095) 78%,
+      rgba(255, 218, 232, 0.095) 100%
     ),
     repeating-linear-gradient(102deg, transparent 0 3px, rgba(255, 255, 255, 0.035) 3px 4px);
 }
@@ -594,13 +616,8 @@
   background-position: 0 0;
 }
 
-/* A duplicate is dimmed back, so its foiling goes with it and nothing sweeps
-   across it under the pointer. */
+/* A duplicate is dimmed back and its foiling dims with it, but it still sweeps:
+   it is the same print, just one you already had. */
 .pc--duplicate .pc__leaf {
   opacity: 0.35;
-}
-.pc--duplicate .pc__leaf::after,
-.pc--duplicate:hover .pc__leaf::after {
-  background-image: none;
-  transition: none;
 }

@@ -33,14 +33,17 @@ export default function Shell({
   username,
   packsWaiting,
   onSignOut,
+  onSignIn,
   children,
 }: {
   active: string;
   onNavigate: (id: string) => void;
   wallet: { berries: number; stardust: number };
-  username: string;
+  /** Null while browsing without an account. */
+  username: string | null;
   packsWaiting: number;
   onSignOut: () => void;
+  onSignIn: () => void;
   children: ReactNode;
 }) {
   return (
@@ -131,18 +134,24 @@ export default function Shell({
         </div>
 
         <div style={{ marginTop: "auto", padding: `0 ${SPACE.sm}px`, display: "flex", flexDirection: "column", gap: SPACE.sm }}>
-          <div style={{ ...text("small"), color: COLOR.mist, overflow: "hidden", textOverflow: "ellipsis" }}>
-            {username}
-          </div>
-          <button
-            onClick={onSignOut}
-            style={{
-              ...text("label"), textAlign: "left", padding: 0,
-              background: "none", border: "none", color: COLOR.fathom,
-            }}
-          >
-            Sign out
-          </button>
+          {username ? (
+            <>
+              <div style={{ ...text("small"), color: COLOR.mist, overflow: "hidden", textOverflow: "ellipsis" }}>
+                {username}
+              </div>
+              <button
+                onClick={onSignOut}
+                style={{
+                  ...text("label"), textAlign: "left", padding: 0,
+                  background: "none", border: "none", color: COLOR.fathom,
+                }}
+              >
+                Sign out
+              </button>
+            </>
+          ) : (
+            <div style={{ ...text("small"), color: COLOR.fathom }}>Browsing as a guest</div>
+          )}
         </div>
       </nav>
 
@@ -164,19 +173,35 @@ export default function Shell({
             zIndex: 10,
           }}
         >
-          <RankBadge rank="diamond" label="Diamond" mmr={194} />
+          {username && <RankBadge rank="diamond" label="Diamond" mmr={194} />}
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: SPACE.lg }}>
-            <Currency kind="berries" amount={wallet.berries} />
-            <Currency kind="stardust" amount={wallet.stardust} />
-            <div
-              style={{
-                width: 30,
-                height: 30,
-                borderRadius: RADIUS.sm,
-                background: "linear-gradient(150deg, #2A3B52, #101A26)",
-                border: `1px solid ${COLOR.doubloon}`,
-              }}
-            />
+            {username ? (
+              <>
+                <Currency kind="berries" amount={wallet.berries} />
+                <Currency kind="stardust" amount={wallet.stardust} />
+                <div
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: RADIUS.sm,
+                    background: "linear-gradient(150deg, #2A3B52, #101A26)",
+                    border: `1px solid ${COLOR.doubloon}`,
+                  }}
+                />
+              </>
+            ) : (
+              <button
+                onClick={onSignIn}
+                style={{
+                  ...text("body"), fontWeight: 600,
+                  padding: "7px 16px", borderRadius: RADIUS.md,
+                  background: COLOR.signal, border: `1px solid ${COLOR.signal}`,
+                  color: "#0B0507", cursor: "pointer",
+                }}
+              >
+                Log in
+              </button>
+            )}
           </div>
         </header>
 

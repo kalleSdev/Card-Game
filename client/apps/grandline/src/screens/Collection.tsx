@@ -6,6 +6,7 @@ import {
 } from "@cg/meta";
 import { CARD_SIZE, COLOR, PRINT_COLOR, RADIUS, SPACE, cardSlotHeight, text } from "../design/tokens";
 import PrintCard from "../components/PrintCard";
+import Inspect from "../components/Inspect";
 import { Button, Chip, Currency, Panel, SectionHead, Stat, Text, TierPip } from "../components/primitives";
 import { POOL, cardFace, cardName } from "../data/pool";
 import type { Store } from "../data/store";
@@ -209,6 +210,7 @@ function CardSheet({
   onClose: () => void;
 }) {
   const { collection } = store;
+  const [inspecting, setInspecting] = useState<PrintId | null>(null);
   return (
     <div
       onClick={onClose}
@@ -237,13 +239,22 @@ function CardSheet({
               const value = DUPLICATE_VALUE[print];
               return (
                 <div key={print} style={{ width: CARD_SIZE.md, display: "flex", flexDirection: "column", gap: SPACE.sm }}>
-                  <div style={{ height: cardSlotHeight(CARD_SIZE.md), display: "flex", alignItems: "flex-end", opacity: count ? 1 : 0.28 }}>
+                  <div
+                    style={{
+                      height: cardSlotHeight(CARD_SIZE.md),
+                      display: "flex",
+                      alignItems: "flex-end",
+                      opacity: count ? 1 : 0.28,
+                      cursor: count ? "zoom-in" : "default",
+                    }}
+                  >
                     <PrintCard
                       card={cardFace(cardId)}
                       print={print}
                       width={CARD_SIZE.md}
                       count={count}
                       interactive={count > 0}
+                      onClick={count ? () => setInspecting(print) : undefined}
                     />
                   </div>
 
@@ -257,7 +268,7 @@ function CardSheet({
                     </span>
                   </div>
 
-                  {spares > 0 ? (
+                  {spares > 0 && store.signedIn ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       <span style={{ ...text("small"), fontSize: 11, color: COLOR.fathom }}>
                         {spares} spare{spares === 1 ? "" : "s"}
@@ -296,6 +307,15 @@ function CardSheet({
           </div>
         </Panel>
       </div>
+
+      {inspecting && (
+        <Inspect
+          card={cardFace(cardId)}
+          print={inspecting}
+          count={countOf(collection, cardId, inspecting)}
+          onClose={() => setInspecting(null)}
+        />
+      )}
     </div>
   );
 }
