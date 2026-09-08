@@ -25,6 +25,19 @@ function artColors(id: string): { a: string; b: string } {
   };
 }
 
+/**
+ * Which prints carry foiling. Base is the plain one by definition, and foil
+ * already has its own treatment across the art.
+ */
+const FOILED: Record<PrintId, boolean> = {
+  base: false,
+  foil: false,
+  altArt: true,
+  blackLabel: true,
+  secret: true,
+  signed: true,
+};
+
 export default function PrintCard({
   card,
   print,
@@ -88,6 +101,8 @@ export default function PrintCard({
           </svg>
         )}
       </div>
+
+      {FOILED[print] && <div className="pc__leaf" />}
 
       <div className="pc__body">
         <div className="pc__name">{card.name}</div>

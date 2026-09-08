@@ -93,7 +93,7 @@
   position: absolute;
   top: 8px;
   left: 8px;
-  z-index: 3;
+  z-index: 7;
   padding: 3px 7px;
   border-radius: 3px;
   font-family: "IBM Plex Mono", ui-monospace, monospace;
@@ -110,7 +110,7 @@
   position: absolute;
   top: 8px;
   right: 8px;
-  z-index: 3;
+  z-index: 7;
   padding: 3px 7px;
   border-radius: 3px;
   font-family: "IBM Plex Mono", ui-monospace, monospace;
@@ -119,6 +119,23 @@
   border: 1px solid var(--rope);
   color: var(--mist);
   backdrop-filter: blur(4px);
+}
+
+/* ── The foiling ───────────────────────────────────────────────────────────
+   A single static layer laid over the whole card, the way real foiling covers a
+   card rather than sitting inside the frame. It does not move and it does not
+   react: it is a property of the print, not an interaction. Every value here is
+   deliberately low, because on these dark grounds a screen blend shows up fast
+   and the difference between prestige and tacky is about four percent of alpha.
+
+   Base and foil have none — base is the plain one, and foil already has its own
+   sweep across the art. */
+.pc__leaf {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  mix-blend-mode: screen;
 }
 
 /* ── 3★ base ──────────────────────────────────────────────────────────────
@@ -295,4 +312,72 @@
 .pc--duplicate {
   opacity: 0.42;
   filter: saturate(0.5);
+}
+
+/* 5★ alt art — gold leaf. Warm, off centre so it does not read as symmetrical,
+   with a fine grain running with the light rather than across it. */
+.pc--altArt .pc__leaf {
+  background:
+    linear-gradient(
+      118deg,
+      transparent 28%,
+      rgba(255, 226, 170, 0.09) 45%,
+      rgba(255, 242, 216, 0.13) 51%,
+      rgba(224, 169, 59, 0.07) 57%,
+      transparent 70%
+    ),
+    repeating-linear-gradient(118deg, transparent 0 3px, rgba(255, 214, 140, 0.026) 3px 4px);
+}
+
+/* 5★ black label — graphite. No colour at all, wider and softer than the gold,
+   like spot varnish catching a room light on a matte black card. */
+.pc--blackLabel .pc__leaf {
+  background:
+    linear-gradient(
+      122deg,
+      transparent 32%,
+      rgba(214, 222, 232, 0.05) 47%,
+      rgba(244, 248, 252, 0.075) 52%,
+      rgba(214, 222, 232, 0.04) 58%,
+      transparent 72%
+    ),
+    repeating-linear-gradient(122deg, transparent 0 5px, rgba(214, 222, 232, 0.016) 5px 6px);
+}
+
+/* 6★ secret — ambient holographic. Spread edge to edge rather than banded, so it
+   reads as an iridescent film over the whole print instead of a stripe across
+   it. Hues are pulled well down: a saturated rainbow would fight the red. */
+.pc--secret .pc__leaf {
+  background:
+    linear-gradient(
+      105deg,
+      rgba(255, 150, 110, 0.06) 0%,
+      rgba(255, 214, 160, 0.072) 22%,
+      rgba(140, 220, 214, 0.065) 45%,
+      rgba(165, 140, 224, 0.072) 68%,
+      rgba(255, 160, 120, 0.06) 100%
+    ),
+    repeating-linear-gradient(105deg, transparent 0 6px, rgba(255, 255, 255, 0.024) 6px 7px);
+}
+
+/* 6★ signed — the same film, a shade richer and finer grained, plus the faintest
+   lift along the top edge. One in five thousand should feel like the better
+   object without announcing itself. */
+.pc--signed .pc__leaf {
+  background:
+    linear-gradient(180deg, rgba(255, 236, 214, 0.05), transparent 22%),
+    linear-gradient(
+      105deg,
+      rgba(255, 150, 110, 0.07) 0%,
+      rgba(255, 220, 168, 0.085) 20%,
+      rgba(150, 228, 222, 0.075) 44%,
+      rgba(178, 150, 232, 0.085) 68%,
+      rgba(255, 170, 130, 0.07) 100%
+    ),
+    repeating-linear-gradient(105deg, transparent 0 4px, rgba(255, 255, 255, 0.026) 4px 5px);
+}
+
+/* A duplicate is dimmed back, so its foiling goes with it. */
+.pc--duplicate .pc__leaf {
+  opacity: 0.35;
 }
