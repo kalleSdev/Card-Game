@@ -122,21 +122,21 @@
 }
 
 /* ── The foiling ───────────────────────────────────────────────────────────
-   Three layers over the whole card, the way real foiling covers a card rather
+   Two layers over the whole card, the way real foiling covers a card rather
    than sitting inside the frame.
 
      .pc__leaf          the still foiling: tone and grain, always there
-     .pc__leaf::after   the sweep, a quieter cousin of the 4★ streak
-     .pc__leaf::before  a light that follows the pointer across the surface
+     .pc__leaf::after   a streak that sweeps across on hover
 
-   Only the light moves with you. The card itself never tilts or shifts under
-   the pointer — this is a surface, not an object being picked up.
+   The streak is the 4★ foil's, shared by every print above it and tinted for
+   each. Nothing here follows the pointer and nothing tilts: hovering a card
+   turns it under a light, it does not pick it up.
 
-   Every value is low on purpose: on these dark grounds a screen blend shows up
+   Every value is low on purpose. On these dark grounds a screen blend shows up
    fast, and the difference between prestige and tacky is a few percent of alpha.
 
-   Base and foil have none — base is the plain one, and foil already has its own
-   sweep across the art. */
+   Base has none, and foil keeps its own sweep across the art rather than this
+   one, since it is the print the others are quoting. */
 .pc__leaf {
   position: absolute;
   inset: 0;
@@ -145,26 +145,17 @@
   mix-blend-mode: screen;
 }
 
-/* The sweep. Same shape as the 4★ foil, dialled down. */
+/* The streak. Sits off the card at rest and crosses it on hover. Note the
+   geometry lives here and the colour lives per print, so a print must set
+   background-image and never the background shorthand — the shorthand would
+   reset the size and position and the streak would just sit there. */
 .pc__leaf::after {
   content: "";
   position: absolute;
   inset: 0;
   background-size: 260% 100%;
   background-position: 100% 0;
-  transition: background-position 780ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-/* The travelling light. Sits where the pointer is, fades in on hover. */
-.pc__leaf::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  transition: opacity 300ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-.pc--interactive:hover .pc__leaf::before {
-  opacity: 1;
+  transition: background-position 820ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ── 3★ base ──────────────────────────────────────────────────────────────
@@ -344,14 +335,14 @@
 }
 
 /* 5★ alt art — gold leaf.
-   Still tone plus a warm sweep, and a soft gold light under the pointer. The
-   quietest of the four trackers: gold reads bright long before it reads loud. */
+   Still warm tone and grain, with a gold streak washing over it. Translucent
+   enough that the illustration stays the thing you are looking at. */
 .pc--altArt .pc__leaf {
   background:
     linear-gradient(
       118deg,
       rgba(224, 169, 59, 0.05) 0%,
-      rgba(255, 240, 208, 0.10) 26%,
+      rgba(255, 240, 208, 0.1) 26%,
       rgba(224, 169, 59, 0.045) 50%,
       rgba(255, 232, 190, 0.09) 74%,
       rgba(224, 169, 59, 0.055) 100%
@@ -362,27 +353,19 @@
   background-image: linear-gradient(
     115deg,
     transparent 30%,
-    rgba(224, 169, 59, 0.2) 42%,
-    rgba(255, 242, 214, 0.3) 50%,
-    rgba(214, 155, 60, 0.18) 58%,
+    rgba(224, 169, 59, 0.1) 42%,
+    rgba(255, 242, 214, 0.16) 50%,
+    rgba(214, 155, 60, 0.09) 58%,
     transparent 70%
   );
 }
 .pc--altArt.pc--interactive:hover .pc__leaf::after {
   background-position: 0 0;
 }
-.pc--altArt .pc__leaf::before {
-  background-image: radial-gradient(
-    ellipse 42% 42% at var(--pc-mx, 50%) var(--pc-my, 50%),
-    rgba(255, 228, 170, 0.1),
-    rgba(224, 169, 59, 0.038) 44%,
-    transparent 72%
-  );
-}
 
 /* 5★ black label — graphite.
-   No colour anywhere. The sweep is white rather than silver, which on a matte
-   black card reads as varnish catching a light instead of as metal. */
+   No colour anywhere. White rather than silver, so on a matte black card it
+   reads as varnish catching a light instead of as metal. */
 .pc--blackLabel .pc__leaf {
   background:
     linear-gradient(
@@ -399,29 +382,20 @@
   background-image: linear-gradient(
     115deg,
     transparent 30%,
-    rgba(214, 222, 232, 0.16) 42%,
-    rgba(255, 255, 255, 0.27) 50%,
-    rgba(214, 222, 232, 0.14) 58%,
+    rgba(214, 222, 232, 0.075) 42%,
+    rgba(255, 255, 255, 0.14) 50%,
+    rgba(214, 222, 232, 0.065) 58%,
     transparent 70%
   );
 }
 .pc--blackLabel.pc--interactive:hover .pc__leaf::after {
   background-position: 0 0;
 }
-.pc--blackLabel .pc__leaf::before {
-  background-image: radial-gradient(
-    ellipse 40% 40% at var(--pc-mx, 50%) var(--pc-my, 50%),
-    rgba(250, 253, 255, 0.115),
-    rgba(214, 222, 232, 0.042) 42%,
-    transparent 70%
-  );
-}
 
 /* 6★ secret — ambient holographic.
-   No sweep here: a streak crossing a 6★ would read as the same trick the lower
-   prints do. Instead the still film sits edge to edge, and the pointer drags a
-   small iridescence across it — warm at the centre, turning through green and
-   violet at its edge, which is what a holographic card actually does. */
+   The still film sits edge to edge, and the streak turns through its hues as it
+   crosses rather than being one bright line. Fainter and slower than the 5★
+   streaks, because a 6★ should not look like it is trying harder. */
 .pc--secret .pc__leaf {
   background:
     linear-gradient(
@@ -434,17 +408,24 @@
     ),
     repeating-linear-gradient(105deg, transparent 0 6px, rgba(255, 255, 255, 0.024) 6px 7px);
 }
-.pc--secret .pc__leaf::before {
-  background-image: radial-gradient(
-    ellipse 46% 46% at var(--pc-mx, 50%) var(--pc-my, 50%),
-    rgba(255, 196, 152, 0.125),
-    rgba(146, 226, 214, 0.085) 30%,
-    rgba(172, 148, 236, 0.095) 56%,
-    transparent 78%
+.pc--secret .pc__leaf::after {
+  background-image: linear-gradient(
+    112deg,
+    transparent 26%,
+    rgba(255, 150, 110, 0.055) 38%,
+    rgba(255, 226, 178, 0.085) 45%,
+    rgba(140, 226, 216, 0.075) 52%,
+    rgba(170, 145, 236, 0.07) 59%,
+    transparent 72%
   );
+  transition-duration: 980ms;
+}
+.pc--secret.pc--interactive:hover .pc__leaf::after {
+  background-position: 0 0;
 }
 
-/* 6★ signed — the same, a shade richer and a touch wider. */
+/* 6★ signed — the same film and the same turning streak, a shade richer and a
+   touch wider. The only print that gets to be slightly more than subtle. */
 .pc--signed .pc__leaf {
   background:
     linear-gradient(180deg, rgba(255, 236, 214, 0.05), transparent 22%),
@@ -458,26 +439,30 @@
     ),
     repeating-linear-gradient(105deg, transparent 0 4px, rgba(255, 255, 255, 0.026) 4px 5px);
 }
-.pc--signed .pc__leaf::before {
-  background-image: radial-gradient(
-    ellipse 50% 50% at var(--pc-mx, 50%) var(--pc-my, 50%),
-    rgba(255, 208, 166, 0.155),
-    rgba(156, 232, 222, 0.1) 30%,
-    rgba(186, 158, 244, 0.115) 56%,
-    transparent 80%
+.pc--signed .pc__leaf::after {
+  background-image: linear-gradient(
+    112deg,
+    transparent 22%,
+    rgba(255, 150, 110, 0.075) 35%,
+    rgba(255, 232, 190, 0.115) 43%,
+    rgba(150, 232, 222, 0.1) 51%,
+    rgba(182, 152, 242, 0.095) 59%,
+    rgba(255, 170, 130, 0.06) 66%,
+    transparent 78%
   );
+  transition-duration: 980ms;
+}
+.pc--signed.pc--interactive:hover .pc__leaf::after {
+  background-position: 0 0;
 }
 
-/* A duplicate is dimmed back, so its foiling goes with it and none of it lights
-   up or sweeps under the pointer. */
+/* A duplicate is dimmed back, so its foiling goes with it and nothing sweeps
+   across it under the pointer. */
 .pc--duplicate .pc__leaf {
   opacity: 0.35;
 }
 .pc--duplicate .pc__leaf::after,
 .pc--duplicate:hover .pc__leaf::after {
-  background: none;
+  background-image: none;
   transition: none;
-}
-.pc--duplicate:hover .pc__leaf::before {
-  opacity: 0;
 }

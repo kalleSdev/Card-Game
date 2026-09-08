@@ -1,5 +1,4 @@
-import { useCallback, useRef } from "react";
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import type { CSSProperties } from "react";
 import type { PrintId } from "@cg/meta";
 import { PRINT_INFO } from "@cg/meta";
 import "../design/card.css";
@@ -60,27 +59,6 @@ export default function PrintCard({
 }) {
   const info = PRINT_INFO[print];
   const art = artColors(card.id);
-  const ref = useRef<HTMLDivElement>(null);
-  const foiled = FOILED[print] && interactive && !duplicate;
-
-  // Writes the pointer position straight onto the node as CSS variables. The
-  // card itself is never transformed: only the light on its surface moves. Set
-  // directly rather than through state, since this fires on every pointer move
-  // and a re-render per frame would be waste.
-  const onMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
-    const el = ref.current;
-    if (!el) return;
-    const box = el.getBoundingClientRect();
-    el.style.setProperty("--pc-mx", `${(((e.clientX - box.left) / box.width) * 100).toFixed(1)}%`);
-    el.style.setProperty("--pc-my", `${(((e.clientY - box.top) / box.height) * 100).toFixed(1)}%`);
-  }, []);
-
-  const onLeave = useCallback(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.setProperty("--pc-mx", "50%");
-    el.style.setProperty("--pc-my", "50%");
-  }, []);
 
   const style = {
     "--pc-w": `${width}px`,
@@ -98,14 +76,7 @@ export default function PrintCard({
     .join(" ");
 
   return (
-    <div
-      ref={ref}
-      className={classes}
-      style={style}
-      onClick={onClick}
-      onPointerMove={foiled ? onMove : undefined}
-      onPointerLeave={foiled ? onLeave : undefined}
-    >
+    <div className={classes} style={style} onClick={onClick}>
       <div className="pc__ribbon">
         {info.tier}
         {"★"} {info.name}
@@ -131,7 +102,7 @@ export default function PrintCard({
         )}
       </div>
 
-      {foiled && <div className="pc__leaf" />}
+      {FOILED[print] && <div className="pc__leaf" />}
 
       <div className="pc__body">
         <div className="pc__name">{card.name}</div>
