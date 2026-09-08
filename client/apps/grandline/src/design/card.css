@@ -359,7 +359,7 @@
     repeating-linear-gradient(118deg, transparent 0 3px, rgba(255, 214, 140, 0.03) 3px 4px);
 }
 .pc--altArt .pc__leaf::after {
-  background: linear-gradient(
+  background-image: linear-gradient(
     115deg,
     transparent 30%,
     rgba(224, 169, 59, 0.2) 42%,
@@ -372,8 +372,8 @@
   background-position: 0 0;
 }
 .pc--altArt .pc__leaf::before {
-  background: radial-gradient(
-    circle 42% at var(--pc-mx, 50%) var(--pc-my, 50%),
+  background-image: radial-gradient(
+    ellipse 42% 42% at var(--pc-mx, 50%) var(--pc-my, 50%),
     rgba(255, 228, 170, 0.1),
     rgba(224, 169, 59, 0.038) 44%,
     transparent 72%
@@ -396,7 +396,7 @@
     repeating-linear-gradient(122deg, transparent 0 5px, rgba(214, 222, 232, 0.02) 5px 6px);
 }
 .pc--blackLabel .pc__leaf::after {
-  background: linear-gradient(
+  background-image: linear-gradient(
     115deg,
     transparent 30%,
     rgba(214, 222, 232, 0.16) 42%,
@@ -409,8 +409,8 @@
   background-position: 0 0;
 }
 .pc--blackLabel .pc__leaf::before {
-  background: radial-gradient(
-    circle 40% at var(--pc-mx, 50%) var(--pc-my, 50%),
+  background-image: radial-gradient(
+    ellipse 40% 40% at var(--pc-mx, 50%) var(--pc-my, 50%),
     rgba(250, 253, 255, 0.115),
     rgba(214, 222, 232, 0.042) 42%,
     transparent 70%
@@ -435,8 +435,8 @@
     repeating-linear-gradient(105deg, transparent 0 6px, rgba(255, 255, 255, 0.024) 6px 7px);
 }
 .pc--secret .pc__leaf::before {
-  background: radial-gradient(
-    circle 46% at var(--pc-mx, 50%) var(--pc-my, 50%),
+  background-image: radial-gradient(
+    ellipse 46% 46% at var(--pc-mx, 50%) var(--pc-my, 50%),
     rgba(255, 196, 152, 0.125),
     rgba(146, 226, 214, 0.085) 30%,
     rgba(172, 148, 236, 0.095) 56%,
@@ -459,8 +459,8 @@
     repeating-linear-gradient(105deg, transparent 0 4px, rgba(255, 255, 255, 0.026) 4px 5px);
 }
 .pc--signed .pc__leaf::before {
-  background: radial-gradient(
-    circle 50% at var(--pc-mx, 50%) var(--pc-my, 50%),
+  background-image: radial-gradient(
+    ellipse 50% 50% at var(--pc-mx, 50%) var(--pc-my, 50%),
     rgba(255, 208, 166, 0.155),
     rgba(156, 232, 222, 0.1) 30%,
     rgba(186, 158, 244, 0.115) 56%,

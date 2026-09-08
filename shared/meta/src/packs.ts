@@ -52,7 +52,7 @@ export interface PackDef {
   contents: "cards" | "cosmetics";
   pulls: number;
   rates: RateTable;
-  /** Berries, or null when the pack is only ever earned. */
+  /** Berries. Null only for a pack that cannot be bought at all. */
   price: number | null;
 }
 
@@ -60,7 +60,7 @@ export const PACKS: Record<PackId, PackDef> = {
   silverCard:      { id: "silverCard",      name: "Silver Card Pack",      contents: "cards",     pulls: 5,  rates: STANDARD_RATES, price: 90  },
   goldCard:        { id: "goldCard",        name: "Gold Card Pack",        contents: "cards",     pulls: 10, rates: STANDARD_RATES, price: 170 },
   diamondCard:     { id: "diamondCard",     name: "Diamond Card Pack",     contents: "cards",     pulls: 10, rates: DIAMOND_RATES,  price: 300 },
-  goldCosmetic:    { id: "goldCosmetic",    name: "Gold Cosmetic Pack",    contents: "cosmetics", pulls: 1,  rates: STANDARD_RATES, price: null },
+  goldCosmetic:    { id: "goldCosmetic",    name: "Gold Cosmetic Pack",    contents: "cosmetics", pulls: 1,  rates: STANDARD_RATES, price: 100 },
   diamondCosmetic: { id: "diamondCosmetic", name: "Diamond Cosmetic Pack", contents: "cosmetics", pulls: 5,  rates: DIAMOND_RATES,  price: 450 },
 };
 

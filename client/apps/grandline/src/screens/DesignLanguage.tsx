@@ -10,6 +10,9 @@ import {
   Button, Chip, Currency, Divider, Panel, RankBadge, SectionHead, Stat, Text, TierPip,
 } from "../components/primitives";
 
+/** Packs a match hands out for free, on top of being buyable. */
+const EARNED = new Set<PackId>(["goldCard", "goldCosmetic", "silverCard"]);
+
 const DEMO: CardFace = { id: "monkey-d-luffy", name: "Monkey D. Luffy", atk: 6, hp: 7, cost: 5 };
 
 const BINDER: { card: CardFace; print: PrintId; count: number }[] = [
@@ -172,11 +175,13 @@ export default function DesignLanguage() {
                   <div style={{ ...text("data"), fontSize: 12, color: COLOR.fathom }}>
                     {pack.pulls} {pack.contents === "cards" ? "cards" : "cosmetics"}
                   </div>
-                  <div style={{ marginTop: "auto", paddingTop: SPACE.md, borderTop: `1px solid ${COLOR.rope}` }}>
-                    {pack.price === null ? (
-                      <span style={{ ...text("label"), color: COLOR.kelp }}>Earned</span>
-                    ) : (
-                      <Currency kind="berries" amount={pack.price} size="sm" />
+                  <div style={{
+                    marginTop: "auto", paddingTop: SPACE.md, borderTop: `1px solid ${COLOR.rope}`,
+                    display: "flex", alignItems: "center", gap: SPACE.md,
+                  }}>
+                    {pack.price !== null && <Currency kind="berries" amount={pack.price} size="sm" />}
+                    {EARNED.has(id) && (
+                      <span style={{ ...text("label"), fontSize: 9, color: COLOR.kelp }}>Also earned</span>
                     )}
                   </div>
                 </div>

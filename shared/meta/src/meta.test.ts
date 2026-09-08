@@ -156,6 +156,16 @@ describe("opening packs", () => {
     expect(seen.signed ?? 0).toBeGreaterThan(5);
   });
 
+  it("prices every pack, and bundles the diamond cosmetics", () => {
+    for (const pack of Object.values(PACKS)) {
+      expect(pack.price).not.toBeNull();
+      expect(pack.price as number).toBeGreaterThan(0);
+    }
+    // Five single cosmetic packs cost more than the five pack, so the bundle is
+    // the better buy on odds and on price
+    expect((PACKS.goldCosmetic.price as number) * 5).toBeGreaterThan(PACKS.diamondCosmetic.price as number);
+  });
+
   it("gives the winner two packs and the loser one", () => {
     expect(MATCH_REWARDS.winner).toEqual(["goldCard", "goldCosmetic"]);
     expect(MATCH_REWARDS.loser).toEqual(["silverCard"]);
