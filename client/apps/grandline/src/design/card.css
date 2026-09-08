@@ -122,20 +122,36 @@
 }
 
 /* ── The foiling ───────────────────────────────────────────────────────────
-   A single static layer laid over the whole card, the way real foiling covers a
-   card rather than sitting inside the frame. It does not move and it does not
-   react: it is a property of the print, not an interaction. Every value here is
-   deliberately low, because on these dark grounds a screen blend shows up fast
-   and the difference between prestige and tacky is about four percent of alpha.
+   One layer laid over the whole card, the way real foiling covers a card rather
+   than sitting inside the frame. At rest it is a still property of the print;
+   on hover it answers, the way a foil does when you turn it under a light.
 
-   Base and foil have none — base is the plain one, and foil already has its own
-   sweep across the art. */
+   Every value here is deliberately low, because on these dark grounds a screen
+   blend shows up fast and the difference between prestige and tacky is about
+   four percent of alpha.
+
+   Two behaviours, not one. The 5★ prints carry a broad gradient that drifts
+   across the card, so the light shifts rather than a beam crossing it. The 6★
+   prints do not move at all: their holographic film simply blooms, which is
+   what iridescence does when it catches you.
+
+   Base and foil have neither — base is the plain one, and foil already has its
+   own sweep across the art. */
 .pc__leaf {
   position: absolute;
   inset: 0;
   z-index: 6;
   pointer-events: none;
   mix-blend-mode: screen;
+}
+
+/* The 6★ bloom. Sits inside the leaf so it is blended with it as one surface. */
+.pc__leaf::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 620ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ── 3★ base ──────────────────────────────────────────────────────────────
@@ -320,13 +336,19 @@
   background:
     linear-gradient(
       118deg,
-      transparent 28%,
-      rgba(255, 226, 170, 0.09) 45%,
-      rgba(255, 242, 216, 0.13) 51%,
-      rgba(224, 169, 59, 0.07) 57%,
-      transparent 70%
+      rgba(224, 169, 59, 0.045) 0%,
+      rgba(255, 240, 208, 0.095) 24%,
+      rgba(224, 169, 59, 0.04) 47%,
+      rgba(255, 232, 190, 0.085) 71%,
+      rgba(224, 169, 59, 0.05) 100%
     ),
     repeating-linear-gradient(118deg, transparent 0 3px, rgba(255, 214, 140, 0.026) 3px 4px);
+  background-size: 210% 210%, auto;
+  background-position: 84% 16%, 0 0;
+  transition: background-position 1100ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.pc--altArt.pc--interactive:hover .pc__leaf {
+  background-position: 16% 84%, 0 0;
 }
 
 /* 5★ black label — graphite. No colour at all, wider and softer than the gold,
@@ -335,13 +357,19 @@
   background:
     linear-gradient(
       122deg,
-      transparent 32%,
-      rgba(214, 222, 232, 0.05) 47%,
-      rgba(244, 248, 252, 0.075) 52%,
-      rgba(214, 222, 232, 0.04) 58%,
-      transparent 72%
+      rgba(214, 222, 232, 0.026) 0%,
+      rgba(246, 250, 255, 0.058) 26%,
+      rgba(214, 222, 232, 0.022) 50%,
+      rgba(240, 246, 252, 0.05) 74%,
+      rgba(214, 222, 232, 0.026) 100%
     ),
     repeating-linear-gradient(122deg, transparent 0 5px, rgba(214, 222, 232, 0.016) 5px 6px);
+  background-size: 220% 220%, auto;
+  background-position: 86% 14%, 0 0;
+  transition: background-position 1300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.pc--blackLabel.pc--interactive:hover .pc__leaf {
+  background-position: 14% 86%, 0 0;
 }
 
 /* 6★ secret — ambient holographic. Spread edge to edge rather than banded, so it
@@ -358,6 +386,18 @@
       rgba(255, 160, 120, 0.06) 100%
     ),
     repeating-linear-gradient(105deg, transparent 0 6px, rgba(255, 255, 255, 0.024) 6px 7px);
+}
+.pc--secret .pc__leaf::after {
+  background:
+    radial-gradient(
+      ellipse 95% 72% at 50% 42%,
+      rgba(255, 196, 156, 0.075),
+      rgba(168, 146, 226, 0.045) 46%,
+      transparent 74%
+    );
+}
+.pc--secret.pc--interactive:hover .pc__leaf::after {
+  opacity: 1;
 }
 
 /* 6★ signed — the same film, a shade richer and finer grained, plus the faintest
@@ -376,8 +416,29 @@
     ),
     repeating-linear-gradient(105deg, transparent 0 4px, rgba(255, 255, 255, 0.026) 4px 5px);
 }
+.pc--signed .pc__leaf::after {
+  background:
+    radial-gradient(
+      ellipse 98% 76% at 50% 40%,
+      rgba(255, 212, 172, 0.105),
+      rgba(184, 158, 240, 0.062) 46%,
+      transparent 76%
+    );
+}
+.pc--signed.pc--interactive:hover .pc__leaf::after {
+  opacity: 1;
+}
 
-/* A duplicate is dimmed back, so its foiling goes with it. */
+/* A duplicate is dimmed back, so its foiling goes with it and it never lights
+   up under the pointer. */
 .pc--duplicate .pc__leaf {
   opacity: 0.35;
+}
+.pc--duplicate .pc__leaf,
+.pc--duplicate:hover .pc__leaf {
+  background-position: 50% 50%, 0 0;
+  transition: none;
+}
+.pc--duplicate:hover .pc__leaf::after {
+  opacity: 0;
 }
