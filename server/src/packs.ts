@@ -4,7 +4,7 @@ import {
   DUPLICATE_VALUE, craftCost, PRINT_INFO,
   type PackId, type PrintId, type Pull, type Currency,
 } from "@cg/meta";
-import { db, type PackRow, type PrintRow, type WalletRow } from "./db.js";
+import { db, type PackRow, type PrintRow, type ProfileRow, type WalletRow } from "./db.js";
 import { cardsFor, DEFAULT_UNIVERSE, type UniverseId } from "./universes.js";
 
 /**
@@ -98,6 +98,84 @@ function addPrint(userId: string, cardId: string, print: PrintId): boolean {
      ON CONFLICT (user_id, card_id, print_id) DO UPDATE SET copies = copies + 1`,
   ).run(userId, cardId, print, Date.now());
   return before === 0;
+}
+
+// ── Cosmetics ────────────────────────────────────────────────────────────────
+
+export function cosmeticsOwned(userId: string): string[] {
+  return (db
+    .prepare("SELECT cosmetic_id FROM cosmetics WHERE user_id = ? ORDER BY earned_at")
+    .all(userId) as { cosmetic_id: string }[]).map(r => r.cosmetic_id);
+}
+
+/** Adds one. Returns true when it is the first time, for the opening. */
+function addCosmetic(userId: string, cosmeticId: string): boolean {
+  const before = db
+    .prepare("SELECT 1 FROM cosmetics WHERE user_id = ? AND cosmetic_id = ?")
+    .get(userId, cosmeticId);
+  db.prepare(
+    "INSERT OR IGNORE INTO cosmetics (user_id, cosmetic_id, earned_at) VALUES (?, ?, ?)",
+  ).run(userId, cosmeticId, Date.now());
+  return !before;
+}
+
+export interface Profile {
+  iconCard: string | null;
+  iconPrint: string | null;
+  titleId: string | null;
+  bannerId: string | null;
+  borderId: string | null;
+  /** Card ids the player has pinned, best first. */
+  showcase: string[];
+}
+
+const EMPTY_PROFILE: Profile = {
+  iconCard: null, iconPrint: null, titleId: null, bannerId: null, borderId: null, showcase: [],
+};
+
+export function profileOf(userId: string): Profile {
+  const row = db.prepare("SELECT * FROM profiles WHERE user_id = ?").get(userId) as
+    | ProfileRow
+    | undefined;
+  if (!row) return { ...EMPTY_PROFILE };
+  let showcase: string[] = [];
+  try {
+    showcase = row.showcase ? (JSON.parse(row.showcase) as string[]) : [];
+  } catch {
+    // A row that will not parse is worth an empty showcase rather than a crash
+  }
+  return {
+    iconCard: row.icon_card,
+    iconPrint: row.icon_print,
+    titleId: row.title_id,
+    bannerId: row.banner_id,
+    borderId: row.border_id,
+    showcase,
+  };
+}
+
+export function saveProfile(userId: string, next: Profile): void {
+  db.prepare(
+    `INSERT INTO profiles (user_id, icon_card, icon_print, title_id, banner_id, border_id, showcase, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (user_id) DO UPDATE SET
+       icon_card = excluded.icon_card,
+       icon_print = excluded.icon_print,
+       title_id = excluded.title_id,
+       banner_id = excluded.banner_id,
+       border_id = excluded.border_id,
+       showcase = excluded.showcase,
+       updated_at = excluded.updated_at`,
+  ).run(
+    userId,
+    next.iconCard,
+    next.iconPrint,
+    next.titleId,
+    next.bannerId,
+    next.borderId,
+    JSON.stringify(next.showcase.slice(0, 6)),
+    Date.now(),
+  );
 }
 
 export type ScrapAction = "dust" | "sell";
@@ -240,8 +318,11 @@ export function openOwnedPack(userId: string, packRowId: string): OpenedPack {
     const result = openPack(row.pack_id as PackId, Object.keys(cardsFor(universe)), seed);
 
     const isNew = result.pulls.map(pull => {
-      if (pull.kind !== "card") return false;
-      return addPrint(userId, pull.cardId, pull.print);
+      if (pull.kind === "card") return addPrint(userId, pull.cardId, pull.print);
+      // A cosmetic pull is either something to wear or a handful of Berries
+      if (pull.cosmeticId) return addCosmetic(userId, pull.cosmeticId);
+      if (pull.berries) moveCurrency(userId, "berries", pull.berries, "packReward", "cosmetic pull");
+      return false;
     });
 
     db.prepare("UPDATE packs SET opened_at = ?, seed = ?, contents = ? WHERE id = ?")

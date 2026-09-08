@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  PACKS, PRINTS, PRINT_INFO, STANDARD_RATES, DIAMOND_RATES, effectiveRate,
+  PACKS, PRINTS, PRINT_INFO, STANDARD_RATES, DIAMOND_RATES, effectiveRate, packContents,
   type PackId,
 } from "@cg/meta";
 import { COLOR, PRINT_COLOR, SPACE, text } from "../design/tokens";
@@ -60,7 +60,7 @@ export default function ShopScreen({ store, onSignIn }: { store: Store; onSignIn
                 <div style={{ width: 34, height: 3, borderRadius: 2, background: accent }} />
                 <Text role="heading">{pack.name}</Text>
                 <div style={{ ...text("data"), fontSize: 12, color: COLOR.fathom }}>
-                  {pack.pulls} {pack.contents === "cards" ? "cards" : "cosmetics"}
+                  {packContents(pack)}
                   {diamond ? " · better odds" : ""}
                 </div>
                 {ALSO_EARNED.has(id) && (
@@ -196,7 +196,7 @@ export function PacksScreen({ store, onSignIn }: { store: Store; onSignIn: () =>
                   <div style={{ width: 34, height: 3, borderRadius: 2, background: accent }} />
                   <Text role="heading">{def.name}</Text>
                   <span style={{ ...text("data"), fontSize: 12, color: COLOR.fathom }}>
-                    {def.pulls} {def.contents === "cards" ? "cards" : "cosmetics"} · {sourceLabel(pack.source)}
+                    {packContents(def)} · {sourceLabel(pack.source)}
                   </span>
                   <Button
                     tone="primary"

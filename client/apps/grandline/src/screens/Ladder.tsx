@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { RANKS, WIN_VALUE, breakEvenWinRate, type RankId } from "@cg/meta";
 import { COLOR, RADIUS, RANK_COLOR, SPACE, text } from "../design/tokens";
 import { Panel, RankBadge, SectionHead, Stat, Text } from "../components/primitives";
-import { fetchLeaderboard, type Standing } from "../data/api";
+import { fetchLeaderboard, EMPTY_PROFILE, type Profile, type Standing } from "../data/api";
+import { ProfileChip } from "./Profile";
 import type { Store } from "../data/store";
 
 export default function LadderScreen({ store }: { store: Store }) {
-  const [standings, setStandings] = useState<Standing[] | null>(null);
+  const [standings, setStandings] = useState<(Standing & { profile?: Profile })[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
@@ -131,7 +132,11 @@ export default function LadderScreen({ store }: { store: Store }) {
   );
 }
 
-function Row({ standing, place, isYou }: { standing: Standing; place: number; isYou: boolean }) {
+function Row({ standing, place, isYou }: {
+  standing: Standing & { profile?: Profile };
+  place: number;
+  isYou: boolean;
+}) {
   const top = standing.topRank;
   const label = top === "pirateKing" ? "Pirate King" : top === "emperor" ? "Emperor" : standing.rankName;
   const rankId: RankId = top ?? standing.rank;
@@ -153,17 +158,7 @@ function Row({ standing, place, isYou }: { standing: Standing; place: number; is
         {place}
       </span>
       <span style={{ display: "flex", alignItems: "center", gap: SPACE.md, minWidth: 0 }}>
-        <span
-          style={{
-            ...text("body"),
-            fontWeight: isYou ? 700 : 500,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {standing.username}
-        </span>
+        <ProfileChip username={standing.username} profile={standing.profile ?? EMPTY_PROFILE} />
         {isYou && <span style={{ ...text("label"), fontSize: 9, color: COLOR.current }}>You</span>}
         {standing.streak >= 3 && (
           <span style={{ ...text("label"), fontSize: 9, color: COLOR.kelp }}>

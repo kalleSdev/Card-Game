@@ -131,12 +131,27 @@ export interface Standing {
   position: number | null;
 }
 
+export interface Profile {
+  iconCard: string | null;
+  iconPrint: string | null;
+  titleId: string | null;
+  bannerId: string | null;
+  borderId: string | null;
+  showcase: string[];
+}
+
+export const EMPTY_PROFILE: Profile = {
+  iconCard: null, iconPrint: null, titleId: null, bannerId: null, borderId: null, showcase: [],
+};
+
 export interface Everything {
   prints: PrintRow[];
   wallet: Wallet;
   packs: OwnedPack[];
   decks: ServerDeck[];
   standing: Standing;
+  cosmetics: string[];
+  profile: Profile;
 }
 
 export interface ServerDeck {
@@ -151,7 +166,11 @@ export interface ServerDeck {
 export const fetchEverything = () => call<Everything>("/collection");
 
 /** The ladder is public, so this works signed out. */
-export const fetchLeaderboard = () => call<{ standings: Standing[] }>("/leaderboard");
+export const fetchLeaderboard = () =>
+  call<{ standings: (Standing & { profile: Profile })[] }>("/leaderboard");
+
+export const saveProfile = (profile: Profile) =>
+  call<{ profile: Profile }>("/profile", { method: "POST", body: profile });
 
 export const buyPack = (packId: PackId) =>
   call<OwnedPack>("/packs/buy", { method: "POST", body: { packId } });

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   PRINTS, PRINT_INFO, PRINTS_BY_TIER, printKey, parsePrintKey, printRank,
   STANDARD_RATES, DIAMOND_RATES, PACKS, openPack, effectiveRate, tierRates,
-  CATEGORY_WEIGHTS, MATCH_REWARDS,
+  COSMETIC_RATES, KIND_WEIGHTS, COSMETIC_BY_ID, cosmeticsOfTier, MATCH_REWARDS,
   DUPLICATE_VALUE, craftCost, isCraftable, berriesForMatch, applyToWallet, canAfford, EMPTY_WALLET,
   RANKS, rankForMmr, nextMmr, breakEvenWinRate, displayRank, leaderboardRank,
   makeRng, assertSumsTo100,
@@ -47,10 +47,20 @@ describe("rate tables", () => {
     expect(() => assertSumsTo100("diamond", Object.values(DIAMOND_RATES))).not.toThrow();
   });
 
-  it("sums every cosmetic category table to 100", () => {
-    for (const [tier, weights] of Object.entries(CATEGORY_WEIGHTS)) {
+  it("sums the cosmetic table and every kind table to 100", () => {
+    expect(() => assertSumsTo100("cosmetic", Object.values(COSMETIC_RATES))).not.toThrow();
+    for (const [tier, weights] of Object.entries(KIND_WEIGHTS)) {
       expect(() => assertSumsTo100(tier, Object.values(weights) as number[])).not.toThrow();
     }
+  });
+
+  it("rolls cosmetics on their own table, not the card one", () => {
+    expect(COSMETIC_RATES[6]).toBe(2);
+    expect(COSMETIC_RATES[5]).toBe(6);
+    expect(COSMETIC_RATES[4]).toBe(15);
+    expect(COSMETIC_RATES[3]).toBe(77);
+    // No 7 star cosmetic exists yet, so it can never come out of a pack
+    expect(COSMETIC_RATES[7]).toBe(0);
   });
 
   it("makes diamond better than standard on every print above base", () => {
@@ -149,21 +159,43 @@ describe("opening packs", () => {
     expect(() => openPack("goldCard", [], 1)).toThrow(/empty pool/);
   });
 
-  it("only produces categories the tier is allowed to hold", () => {
+  it("gives a cosmetic pull either something to wear or some Berries, never both", () => {
     for (let seed = 1; seed <= 500; seed++) {
       for (const pull of openPack("diamondCosmetic", POOL, seed).pulls) {
         if (pull.kind !== "cosmetic") throw new Error("cosmetic pack gave a card");
-        expect(Object.keys(CATEGORY_WEIGHTS[pull.tier])).toContain(pull.category);
+        const gotCosmetic = pull.cosmeticId !== null;
+        const gotBerries = pull.berries !== null;
+        expect(gotCosmetic !== gotBerries).toBe(true);
+        if (gotCosmetic) {
+          const def = COSMETIC_BY_ID[pull.cosmeticId as string];
+          expect(def).toBeDefined();
+          // The thing handed over has to actually belong to the tier that rolled
+          expect(def.tier).toBe(pull.tier);
+        }
       }
     }
   });
 
-  it("never puts a finisher or an arena below 5 stars", () => {
+  it("never pays Berries above the common tier", () => {
     for (let seed = 1; seed <= 2000; seed++) {
       for (const pull of openPack("goldCosmetic", POOL, seed).pulls) {
-        if (pull.kind === "cosmetic" && (pull.category === "finisher" || pull.category === "arena")) {
-          expect(pull.tier).toBeGreaterThanOrEqual(5);
-        }
+        if (pull.kind === "cosmetic" && pull.berries !== null) expect(pull.tier).toBe(3);
+      }
+    }
+  });
+
+  it("never rolls a 7 star cosmetic, because none exists", () => {
+    for (let seed = 1; seed <= 3000; seed++) {
+      for (const pull of openPack("diamondCosmetic", POOL, seed).pulls) {
+        if (pull.kind === "cosmetic") expect(pull.tier).toBeLessThan(7);
+      }
+    }
+  });
+
+  it("has something of every kind at every tier it can roll", () => {
+    for (const tier of [3, 4, 5, 6] as const) {
+      for (const kind of ["title", "banner", "border"] as const) {
+        expect(cosmeticsOfTier(tier, kind).length).toBeGreaterThan(0);
       }
     }
   });

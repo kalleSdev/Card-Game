@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   PRINTS, PRINT_INFO, PACKS, STANDARD_RATES, DIAMOND_RATES,
-  effectiveRate, DUPLICATE_VALUE, RANKS, craftCost,
+  effectiveRate, DUPLICATE_VALUE, RANKS, craftCost, packContents,
   type PackId, type PrintId,
 } from "@cg/meta";
 import { CARD_SIZE, COLOR, PRINT_COLOR, RADIUS, SPACE, TEXT, cardSlotHeight, text } from "../design/tokens";
@@ -173,7 +173,7 @@ export default function DesignLanguage() {
                   <div style={{ width: 34, height: 3, borderRadius: 2, background: accent }} />
                   <Text role="heading">{pack.name}</Text>
                   <div style={{ ...text("data"), fontSize: 12, color: COLOR.fathom }}>
-                    {pack.pulls} {pack.contents === "cards" ? "cards" : "cosmetics"}
+                    {packContents(pack)}
                   </div>
                   <div style={{
                     marginTop: "auto", paddingTop: SPACE.md, borderTop: `1px solid ${COLOR.rope}`,

@@ -125,6 +125,30 @@ db.exec(`
     updated_at  INTEGER NOT NULL
   );
 
+  -- Cosmetics a player owns. No count: a title is a title, you either have it
+  -- or you do not, and a second copy would mean nothing.
+  CREATE TABLE IF NOT EXISTS cosmetics (
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    cosmetic_id TEXT NOT NULL,
+    earned_at   INTEGER NOT NULL,
+    PRIMARY KEY (user_id, cosmetic_id)
+  );
+
+  -- What a player is currently wearing, plus the cards they are showing off.
+  -- One row per player, all columns nullable, because a fresh account wears
+  -- nothing and that is a valid profile rather than a broken one.
+  CREATE TABLE IF NOT EXISTS profiles (
+    user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    icon_card  TEXT,
+    icon_print TEXT,
+    title_id   TEXT,
+    banner_id  TEXT,
+    border_id  TEXT,
+    showcase   TEXT,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_cosmetics_user ON cosmetics(user_id);
   CREATE INDEX IF NOT EXISTS idx_ranking_mmr   ON ranking(mmr DESC);
   CREATE INDEX IF NOT EXISTS idx_decks_user    ON decks(user_id);
   CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
@@ -169,6 +193,17 @@ export interface PackRow {
 export interface WalletRow {
   berries: number;
   stardust: number;
+}
+
+export interface ProfileRow {
+  user_id: string;
+  icon_card: string | null;
+  icon_print: string | null;
+  title_id: string | null;
+  banner_id: string | null;
+  border_id: string | null;
+  showcase: string | null;
+  updated_at: number;
 }
 
 export interface RankingRow {

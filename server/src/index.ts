@@ -4,12 +4,13 @@ import type { PlayerId, PlayerDraftResult } from "@cg/contracts";
 import type { ClientMessage, ServerMessage } from "./protocol.js";
 import { cardsFor, botFor, DEFAULT_UNIVERSE, type UniverseId } from "./universes.js";
 import {
-  walletOf, printsOf, unopenedPacks, openOwnedPack, replayPack, buyPack,
+  walletOf, printsOf, copiesOf, unopenedPacks, openOwnedPack, replayPack, buyPack,
   payOutMatch, scrapSpares, craftPrint,
   decksOf, saveDeck, deleteDeck, grantStarter,
-  type ScrapAction, type StoredDeck,
+  cosmeticsOwned, profileOf, saveProfile,
+  type ScrapAction, type StoredDeck, type Profile,
 } from "./packs.js";
-import { PACKS, PRINTS, RANKS, type PackId, type PrintId } from "@cg/meta";
+import { PACKS, PRINTS, RANKS, COSMETIC_BY_ID, type PackId, type PrintId } from "@cg/meta";
 import { applyResult, leaderboard, standingOf } from "./ranking.js";
 import { LobbyBook } from "./lobbies.js";
 import {
@@ -111,15 +112,68 @@ app.get("/collection", async (req, reply) =>
       packs: unopenedPacks(user.id),
       decks: decksOf(user.id),
       standing: standingOf(user.id),
+      cosmetics: cosmeticsOwned(user.id),
+      profile: profileOf(user.id),
     };
   }),
 );
 
 // The ladder is public: you can see where everyone stands without an account.
-app.get("/leaderboard", async () => ({
-  standings: leaderboard(50),
-  ranks: RANKS,
-}));
+// Each standing carries what that player is wearing, so the list looks like the
+// people on it rather than a spreadsheet of names.
+app.get("/leaderboard", async () => {
+  const standings = leaderboard(50);
+  return {
+    standings: standings.map(s => ({ ...s, profile: profileOf(s.userId) })),
+    ranks: RANKS,
+  };
+});
+
+/**
+ * What a player is wearing. Only what is actually owned is accepted, so a
+ * client cannot equip a title it never pulled by asking nicely.
+ */
+app.post("/profile", async (req, reply) =>
+  guarded(reply, () => {
+    const user = requireUser(req);
+    const body = (req.body ?? {}) as Partial<Profile>;
+    const owned = new Set(cosmeticsOwned(user.id));
+
+    const wearable = (id: unknown, kind: "title" | "banner" | "border"): string | null => {
+      if (typeof id !== "string" || id === "") return null;
+      const def = COSMETIC_BY_ID[id];
+      if (!def || def.kind !== kind) throw new Error("No such cosmetic");
+      if (!owned.has(id)) throw new Error(`You do not own that ${kind}`);
+      return id;
+    };
+
+    // The icon has to be a print the player actually holds
+    let iconCard: string | null = null;
+    let iconPrint: string | null = null;
+    if (typeof body.iconCard === "string" && typeof body.iconPrint === "string") {
+      if (!(PRINTS as readonly string[]).includes(body.iconPrint)) throw new Error("No such print");
+      if (copiesOf(user.id, body.iconCard, body.iconPrint as PrintId) < 1) {
+        throw new Error("You do not own that card in that print");
+      }
+      iconCard = body.iconCard;
+      iconPrint = body.iconPrint;
+    }
+
+    const showcase = Array.isArray(body.showcase)
+      ? body.showcase.filter(id => typeof id === "string").slice(0, 6)
+      : [];
+
+    saveProfile(user.id, {
+      iconCard,
+      iconPrint,
+      titleId: wearable(body.titleId, "title"),
+      bannerId: wearable(body.bannerId, "banner"),
+      borderId: wearable(body.borderId, "border"),
+      showcase,
+    });
+    return { profile: profileOf(user.id) };
+  }),
+);
 
 app.get("/packs", async (req, reply) =>
   guarded(reply, () => ({ packs: unopenedPacks(requireUser(req).id), catalogue: PACKS })),

@@ -8,6 +8,7 @@ import PrintCard from "../components/PrintCard";
 import Inspect from "../components/Inspect";
 import { Button, Currency, TierPip } from "../components/primitives";
 import { cardFace } from "../data/pool";
+import { CosmeticTile, cosmeticOf } from "../components/cosmetics";
 import "../design/opening.css";
 
 export interface Opened {
@@ -19,15 +20,6 @@ export interface Opened {
 /** Cards are shown at the size the design page uses, so a pull looks like a card. */
 const WIDTH = CARD_SIZE.lg;
 const MAX_PER_ROW = 4;
-
-/** The print whose name reads as a tier, for labelling a cosmetic. */
-function tierPrint(tier: number): PrintId {
-  if (tier >= 7) return "holoOne";
-  if (tier >= 6) return "secret";
-  if (tier >= 5) return "altArt";
-  if (tier >= 4) return "foil";
-  return "base";
-}
 
 /**
  * How the row splits. At most four across, and the rows are balanced with the
@@ -107,16 +99,21 @@ export default function PackOpening({ opened, onDone }: { opened: Opened; onDone
     let fresh = 0;
     let spares = 0;
     let dust = 0;
+    let berries = 0;
     let best: Pull | null = null;
     pulls.forEach((pull, i) => {
-      if (isNew[i]) fresh++;
-      else if (pull.kind === "card") {
+      // Berries are neither new nor a duplicate: they are just paid out.
+      if (pull.kind === "cosmetic" && pull.berries) {
+        berries += pull.berries;
+      } else if (isNew[i]) {
+        fresh++;
+      } else {
         spares++;
-        dust += DUPLICATE_VALUE[pull.print].stardust;
+        if (pull.kind === "card") dust += DUPLICATE_VALUE[pull.print].stardust;
       }
       if (!best || pull.tier > best.tier) best = pull;
     });
-    return { fresh, spares, dust, best: best as Pull | null };
+    return { fresh, spares, dust, berries, best: best as Pull | null };
   }, [pulls, isNew]);
 
   // Cut the flat list into rows without losing each card's original index
@@ -179,6 +176,12 @@ export default function PackOpening({ opened, onDone }: { opened: Opened; onDone
           <div style={{ display: "flex", alignItems: "center", gap: SPACE.xl, flexWrap: "wrap", justifyContent: "center" }}>
             <Tally label="New" value={summary.fresh} color={COLOR.kelp} />
             <Tally label="Duplicates" value={summary.spares} color={COLOR.mist} />
+            {summary.berries > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "center" }}>
+                <span style={{ ...text("label"), color: COLOR.fathom }}>Paid out</span>
+                <Currency kind="berries" amount={summary.berries} />
+              </div>
+            )}
             {summary.dust > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "center" }}>
                 <span style={{ ...text("label"), color: COLOR.fathom }}>Spares worth</span>
@@ -199,7 +202,7 @@ export default function PackOpening({ opened, onDone }: { opened: Opened; onDone
                 >
                   {summary.best.kind === "card"
                     ? PRINT_INFO[summary.best.print].name
-                    : summary.best.category}
+                    : cosmeticOf(summary.best.cosmeticId)?.name ?? "Berries"}
                 </span>
               </div>
             )}
@@ -270,11 +273,7 @@ function Slot({
               interactive={revealed}
             />
           ) : (
-            <div className="po__cosmetic" style={{ height: WIDTH * 1.4 }}>
-              <TierPip tier={pull.tier} />
-              <span style={{ ...text("body"), fontSize: 15 }}>{pull.category}</span>
-              <span style={{ ...text("label"), fontSize: 9, color: COLOR.fathom }}>Cosmetic</span>
-            </div>
+            <CosmeticReveal pull={pull} />
           )}
         </div>
 
@@ -293,9 +292,38 @@ function Slot({
           transition: "opacity 300ms ease 180ms",
         }}
       >
-        {pull.kind === "cosmetic" ? PRINT_INFO[tierPrint(pull.tier)].name : isNew ? "New" : "+1"}
+        {pull.kind === "cosmetic" ? cosmeticLabel(pull) : isNew ? "New" : "+1"}
       </div>
     </>
+  );
+}
+
+/** What a cosmetic pull is, in a word: the slot it fills, or Berries. */
+function cosmeticLabel(pull: Extract<Pull, { kind: "cosmetic" }>): string {
+  return cosmeticOf(pull.cosmeticId)?.kind ?? "Berries";
+}
+
+/** A cosmetic pull, which is either something to wear or a few Berries. */
+function CosmeticReveal({ pull }: { pull: Extract<Pull, { kind: "cosmetic" }> }) {
+  const def = cosmeticOf(pull.cosmeticId);
+  if (!def) {
+    return (
+      <div className="po__cosmetic" style={{ height: WIDTH * 1.4 }}>
+        <TierPip tier={pull.tier} />
+        <span style={{ ...text("title"), fontSize: 26, color: COLOR.doubloon }}>
+          {pull.berries ?? 0}
+        </span>
+        <span style={{ ...text("label"), fontSize: 9, color: COLOR.fathom }}>Berries</span>
+      </div>
+    );
+  }
+  return (
+    <div
+      className="po__cosmetic"
+      style={{ height: WIDTH * 1.4, padding: 0, border: "none", background: "transparent" }}
+    >
+      <CosmeticTile def={def} />
+    </div>
   );
 }
 

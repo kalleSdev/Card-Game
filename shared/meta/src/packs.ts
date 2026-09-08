@@ -1,5 +1,6 @@
 import type { PrintId, PrintTier } from "./prints";
 import { PRINTS, PRINT_INFO } from "./prints";
+import { rollCosmetic, type CosmeticRoll } from "./cosmetics";
 import { assertSumsTo100, makeRng, pickWeighted, type Rng } from "./rng";
 
 // Packs roll in two or three stages. First the tier, then — on 5★ and 6★ — the
@@ -54,7 +55,11 @@ export interface PackDef {
   /** Cards for a card pack, cosmetics for a cosmetic pack. */
   contents: "cards" | "cosmetics";
   pulls: number;
-  rates: RateTable;
+  /**
+   * Card packs only. Cosmetic packs all roll COSMETIC_RATES, because a cosmetic
+   * pack is scarce for how few you get rather than for its rates.
+   */
+  rates: RateTable | null;
   /** Berries. Null only for a pack that cannot be bought at all. */
   price: number | null;
 }
@@ -63,8 +68,8 @@ export const PACKS: Record<PackId, PackDef> = {
   silverCard:      { id: "silverCard",      name: "Silver Card Pack",      contents: "cards",     pulls: 5, rates: STANDARD_RATES, price: 90  },
   goldCard:        { id: "goldCard",        name: "Gold Card Pack",        contents: "cards",     pulls: 8, rates: STANDARD_RATES, price: 170 },
   diamondCard:     { id: "diamondCard",     name: "Diamond Card Pack",     contents: "cards",     pulls: 8, rates: DIAMOND_RATES,  price: 300 },
-  goldCosmetic:    { id: "goldCosmetic",    name: "Gold Cosmetic Pack",    contents: "cosmetics", pulls: 1,  rates: STANDARD_RATES, price: 100 },
-  diamondCosmetic: { id: "diamondCosmetic", name: "Diamond Cosmetic Pack", contents: "cosmetics", pulls: 5,  rates: DIAMOND_RATES,  price: 450 },
+  goldCosmetic:    { id: "goldCosmetic",    name: "Gold Cosmetic Pack",    contents: "cosmetics", pulls: 1, rates: null, price: 100 },
+  diamondCosmetic: { id: "diamondCosmetic", name: "Diamond Cosmetic Pack", contents: "cosmetics", pulls: 5, rates: null, price: 450 },
 };
 
 /** What a match hands out. The winner gets both of theirs. */
@@ -72,32 +77,6 @@ export const MATCH_REWARDS = {
   winner: ["goldCard", "goldCosmetic"] as PackId[],
   loser: ["silverCard"] as PackId[],
 };
-
-// ── Cosmetics ────────────────────────────────────────────────────────────────
-// A cosmetic pull rolls its tier, then what kind of thing it is, so a run of
-// wins is not a run of stickers.
-
-export const COSMETIC_CATEGORIES = [
-  "finisher", "arena", "killEffect", "border", "banner", "sticker", "title", "berries",
-] as const;
-
-export type CosmeticCategory = (typeof COSMETIC_CATEGORIES)[number];
-
-/** Which categories a tier can produce, and how often within that tier. */
-export const CATEGORY_WEIGHTS: Record<PrintTier, Readonly<Partial<Record<CosmeticCategory, number>>>> = {
-  3: { berries: 40, sticker: 30, border: 15, banner: 15 },
-  // Your tier list put mid-tier arenas at 4 stars, but the category list said
-  // arenas are 5 star and up because they are big background visuals. Following
-  // the category list, since that reasoning is the stronger of the two.
-  4: { title: 30, sticker: 25, killEffect: 25, banner: 20 },
-  5: { killEffect: 30, finisher: 25, border: 20, banner: 15, arena: 10 },
-  6: { finisher: 45, arena: 35, border: 20 },
-  7: { finisher: 55, arena: 45 },
-};
-
-for (const [tier, weights] of Object.entries(CATEGORY_WEIGHTS)) {
-  assertSumsTo100(`CATEGORY_WEIGHTS[${tier}]`, Object.values(weights) as number[]);
-}
 
 // ── Rolling ──────────────────────────────────────────────────────────────────
 
@@ -108,10 +87,8 @@ export interface CardPull {
   tier: PrintTier;
 }
 
-export interface CosmeticPull {
+export interface CosmeticPull extends CosmeticRoll {
   kind: "cosmetic";
-  category: CosmeticCategory;
-  tier: PrintTier;
 }
 
 export type Pull = CardPull | CosmeticPull;
@@ -123,27 +100,9 @@ export interface PackResult {
   seed: number;
 }
 
-function rollTier(rng: Rng, rates: RateTable): PrintTier {
-  const totals = tierRates(rates);
-  return pickWeighted(rng, [
-    { value: 3 as PrintTier, weight: totals[3] },
-    { value: 4 as PrintTier, weight: totals[4] },
-    { value: 5 as PrintTier, weight: totals[5] },
-    { value: 6 as PrintTier, weight: totals[6] },
-    { value: 7 as PrintTier, weight: totals[7] },
-  ]);
-}
-
 /** One roll across all six prints. */
 function rollPrint(rng: Rng, rates: RateTable): PrintId {
   return pickWeighted(rng, PRINTS.map(print => ({ value: print, weight: rates[print] })));
-}
-
-function rollCategory(rng: Rng, tier: PrintTier): CosmeticCategory {
-  const weights = CATEGORY_WEIGHTS[tier];
-  const entries = (Object.entries(weights) as [CosmeticCategory, number][])
-    .map(([value, weight]) => ({ value, weight }));
-  return pickWeighted(rng, entries);
 }
 
 /**
@@ -161,10 +120,10 @@ export function openPack(
 
   for (let i = 0; i < pack.pulls; i++) {
     if (pack.contents === "cosmetics") {
-      const tier = rollTier(rng, pack.rates);
-      pulls.push({ kind: "cosmetic", category: rollCategory(rng, tier), tier });
+      pulls.push({ kind: "cosmetic", ...rollCosmetic(rng) });
       continue;
     }
+    if (!pack.rates) throw new Error(`${pack.name} has no card rates`);
     if (cardPool.length === 0) throw new Error("Cannot open a card pack with an empty pool");
     const print = rollPrint(rng, pack.rates);
     const cardId = cardPool[Math.floor(rng.next() * cardPool.length)];
@@ -177,4 +136,10 @@ export function openPack(
 /** The odds of a print, in percent. */
 export function effectiveRate(print: PrintId, rates: RateTable): number {
   return rates[print];
+}
+
+/** "8 cards" or "1 cosmetic": what a pack holds, said properly. */
+export function packContents(def: PackDef): string {
+  const noun = def.contents === "cards" ? "card" : "cosmetic";
+  return `${def.pulls} ${noun}${def.pulls === 1 ? "" : "s"}`;
 }

@@ -18,7 +18,7 @@ export const NAV: NavItem[] = [
   { id: "shop", label: "Shop" },
   { id: "trade", label: "Trade", soon: true },
   { id: "ladder", label: "Ladder" },
-  { id: "profile", label: "Profile", soon: true },
+  { id: "profile", label: "Profile" },
   { id: "design", label: "Design" },
 ];
 

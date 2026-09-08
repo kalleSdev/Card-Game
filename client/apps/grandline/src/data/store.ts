@@ -27,6 +27,8 @@ export interface Store {
   decks: Deck[];
   /** Where you sit on the ladder. Null while signed out. */
   standing: api.Standing | null;
+  cosmetics: string[];
+  profile: api.Profile;
 
   signIn: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string) => Promise<void>;
@@ -36,6 +38,7 @@ export interface Store {
   open: (packRowId: string) => Promise<{ pulls: Pull[]; isNew: boolean[] } | null>;
   scrap: (cardId: string, print: PrintId, amount: number, action: SpareAction) => Promise<void>;
 
+  saveProfile: (profile: api.Profile) => void;
   saveDeck: (deck: Deck) => void;
   deleteDeck: (id: string) => void;
   newDeck: (name: string) => Deck;
@@ -61,6 +64,8 @@ export function useStore(): Store {
   const [packs, setPacks] = useState<api.OwnedPack[]>([]);
   const [decks, setDecks] = useState<Deck[]>([]);
   const [standing, setStanding] = useState<api.Standing | null>(null);
+  const [cosmetics, setCosmetics] = useState<string[]>([]);
+  const [profile, setProfile] = useState<api.Profile>(api.EMPTY_PROFILE);
 
   const load = useCallback(async () => {
     const everything = await api.fetchEverything();
@@ -69,6 +74,8 @@ export function useStore(): Store {
     setPacks(everything.packs);
     setDecks(everything.decks.map(d => ({ ...d })));
     setStanding(everything.standing ?? null);
+    setCosmetics(everything.cosmetics ?? []);
+    setProfile(everything.profile ?? api.EMPTY_PROFILE);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -122,6 +129,8 @@ export function useStore(): Store {
     setPacks([]);
     setDecks([]);
     setStanding(null);
+    setCosmetics([]);
+    setProfile(api.EMPTY_PROFILE);
   }, []);
 
   const buy = useCallback(async (packId: PackId) => {
@@ -159,6 +168,18 @@ export function useStore(): Store {
     [load],
   );
 
+  // Worn straight away, then confirmed. If the server refuses, it says why and
+  // sends back what is actually being worn rather than leaving a lie on screen.
+  const saveProfileNow = useCallback((next: api.Profile) => {
+    setProfile(next);
+    void api.saveProfile(next)
+      .then(res => setProfile(res.profile))
+      .catch(err => {
+        setError(err instanceof Error ? err.message : "That did not save");
+        void load();
+      });
+  }, [load]);
+
   // Decks are written straight through: the screen updates now and the server
   // catches up, because a deck edit is not worth a spinner.
   const saveDeck = useCallback((deck: Deck) => {
@@ -184,7 +205,8 @@ export function useStore(): Store {
 
   return {
     account, signedIn: account !== null, loading, error,
-    collection, wallet, packs, decks, standing,
+    collection, wallet, packs, decks, standing, cosmetics, profile,
+    saveProfile: saveProfileNow,
     signIn, register, signOut,
     buy, open, scrap,
     saveDeck, deleteDeck, newDeck,
