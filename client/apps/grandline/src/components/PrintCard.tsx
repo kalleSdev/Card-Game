@@ -84,8 +84,9 @@ export default function PrintCard({
 
   return (
     <div className={classes} style={style} onClick={onClick}>
+      {/* Star and name only. The tier number is dropped: it reads as a stat next
+          to cost and attack, and the name already says which tier it is. */}
       <div className="pc__ribbon">
-        {info.tier}
         {"★"} {compact ? info.short : info.name}
       </div>
       {count !== undefined && count > 1 && <div className="pc__count">{"×"}{count}</div>}

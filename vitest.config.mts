@@ -15,6 +15,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Server tests hit the real schema, just never the real file
+    env: { DB_PATH: ":memory:" },
     include: ["client/**/*.test.ts", "shared/**/*.test.ts", "server/**/*.test.ts"],
   },
 });

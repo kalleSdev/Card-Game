@@ -25,6 +25,8 @@ export type ServerMessage =
   // Full state, already redacted for the receiving player
   | { type: "state"; state: BattleState; events: BattleEvent[] }
   | { type: "opponentLeft" }
+  // What the finished match paid: packs to open, and Berries
+  | { type: "rewards"; packs: { id: string; packId: string }[]; berries: number }
   // The opponent dropped but has a little while to come back
   | { type: "opponentDisconnected"; seconds: number }
   | { type: "opponentReturned" }

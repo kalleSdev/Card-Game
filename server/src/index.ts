@@ -3,6 +3,12 @@ import { WebSocketServer, type WebSocket } from "ws";
 import type { PlayerId, PlayerDraftResult } from "@cg/contracts";
 import type { ClientMessage, ServerMessage } from "./protocol.js";
 import { cardsFor, botFor, DEFAULT_UNIVERSE, type UniverseId } from "./universes.js";
+import {
+  walletOf, printsOf, unopenedPacks, openOwnedPack, replayPack, buyPack,
+  payOutMatch, scrapSpares, craftPrint,
+  type ScrapAction,
+} from "./packs.js";
+import { PACKS, PRINTS, type PackId, type PrintId } from "@cg/meta";
 import { LobbyBook } from "./lobbies.js";
 import {
   createMatch, validateDraft, runBotIfItsTurn, getMatch, endMatch, broadcast, submitIntent,
@@ -26,6 +32,19 @@ app.addHook("onSend", async (_req, reply) => {
 app.options("/*", async (_req, reply) => reply.code(204).send());
 
 const bearer = (auth?: string) => auth?.startsWith("Bearer ") ? auth.slice(7) : undefined;
+
+// A POST with nothing to say is normal on routes that take no body, and fetch
+// sends a JSON content type regardless. Fastify rejects an empty JSON body out
+// of the box, which turns an ordinary call into a 400, so treat it as {}.
+app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => {
+  const text = typeof body === "string" ? body.trim() : "";
+  if (text === "") return done(null, {});
+  try {
+    done(null, JSON.parse(text));
+  } catch {
+    done(new Error("Body is not valid JSON"), undefined);
+  }
+});
 
 app.get("/health", async () => ({ ok: true, matches: liveMatchIds.size, lobbies: lobbies.size }));
 
@@ -58,6 +77,93 @@ app.get("/me", async (req, reply) => {
   if (!user) return reply.code(401).send({ error: "Not signed in" });
   return { user, collection: getCollection(user.id) };
 });
+
+// ── Collection, packs and money ──────────────────────────────────────────────
+// Everything here is the player's own, so every route reads the user from the
+// token rather than taking an id from the caller.
+
+function requireUser(req: { headers: { authorization?: string } }) {
+  const user = userForToken(bearer(req.headers.authorization));
+  if (!user) throw new AuthError("Not signed in");
+  return user;
+}
+
+/** Turns a thrown error into a status the client can act on. */
+async function guarded<T>(reply: { code: (n: number) => { send: (b: unknown) => unknown } }, run: () => T) {
+  try {
+    return run();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Something went wrong";
+    return reply.code(err instanceof AuthError ? 401 : 400).send({ error: message });
+  }
+}
+
+app.get("/collection", async (req, reply) =>
+  guarded(reply, () => {
+    const user = requireUser(req);
+    return {
+      prints: printsOf(user.id),
+      wallet: walletOf(user.id),
+      packs: unopenedPacks(user.id),
+    };
+  }),
+);
+
+app.get("/packs", async (req, reply) =>
+  guarded(reply, () => ({ packs: unopenedPacks(requireUser(req).id), catalogue: PACKS })),
+);
+
+app.post("/packs/:id/open", async (req, reply) =>
+  guarded(reply, () => {
+    const user = requireUser(req);
+    const { id } = req.params as { id: string };
+    return openOwnedPack(user.id, id);
+  }),
+);
+
+app.get("/packs/:id/replay", async (req, reply) =>
+  guarded(reply, () => {
+    const user = requireUser(req);
+    const { id } = req.params as { id: string };
+    const opened = replayPack(user.id, id);
+    if (!opened) return reply.code(404).send({ error: "No opened pack with that id" });
+    return opened;
+  }),
+);
+
+app.post("/packs/buy", async (req, reply) =>
+  guarded(reply, () => {
+    const user = requireUser(req);
+    const { packId } = (req.body ?? {}) as { packId?: string };
+    if (!packId || !(packId in PACKS)) throw new Error("No such pack");
+    return buyPack(user.id, packId as PackId);
+  }),
+);
+
+app.post("/collection/scrap", async (req, reply) =>
+  guarded(reply, () => {
+    const user = requireUser(req);
+    const { cardId, print, amount, action } = (req.body ?? {}) as {
+      cardId?: string; print?: string; amount?: number; action?: string;
+    };
+    if (!cardId) throw new Error("Which card?");
+    if (!print || !(PRINTS as readonly string[]).includes(print)) throw new Error("No such print");
+    if (action !== "dust" && action !== "sell") throw new Error("Dust it or sell it");
+    const result = scrapSpares(user.id, cardId, print as PrintId, Math.max(1, amount ?? 1), action as ScrapAction);
+    return { ...result, wallet: walletOf(user.id) };
+  }),
+);
+
+app.post("/collection/craft", async (req, reply) =>
+  guarded(reply, () => {
+    const user = requireUser(req);
+    const { cardId, print } = (req.body ?? {}) as { cardId?: string; print?: string };
+    if (!cardId) throw new Error("Which card?");
+    if (!print || !(PRINTS as readonly string[]).includes(print)) throw new Error("No such print");
+    craftPrint(user.id, cardId, print as PrintId);
+    return { wallet: walletOf(user.id) };
+  }),
+);
 
 // ── Sockets ──────────────────────────────────────────────────────────────────
 interface Conn {
@@ -214,7 +320,23 @@ function settle(match: Match) {
   for (const pid of ["P1", "P2"] as PlayerId[]) {
     const conn = [...conns.values()].find(c => c.matchId === match.id && c.playerId === pid);
     const opponent = match.seats[pid === "P1" ? "P2" : "P1"].name;
-    if (conn?.user) recordResult(conn.user.id, opponent, winner === pid, match.state.turn);
+    if (!conn?.user) continue;
+
+    const won = winner === pid;
+    recordResult(conn.user.id, opponent, won, match.state.turn);
+
+    // Packs and Berries. Wrapped because a payout failing should not stop the
+    // result being recorded or the other player being paid.
+    try {
+      const payout = payOutMatch(conn.user.id, won);
+      send(conn.socket, {
+        type: "rewards",
+        packs: payout.packs.map(p => ({ id: p.id, packId: p.packId })),
+        berries: payout.berries,
+      });
+    } catch (err) {
+      console.warn("payout failed", conn.user.username, err);
+    }
   }
   liveMatchIds.delete(match.id);
 }
