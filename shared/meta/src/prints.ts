@@ -1,7 +1,7 @@
 // A card and its print are different things. Every print of a card plays
 // identically; they differ only in how the card looks on the board.
 
-export type PrintTier = 3 | 4 | 5 | 6;
+export type PrintTier = 3 | 4 | 5 | 6 | 7;
 
 export const PRINTS = [
   "base",        // 3★ standard art
@@ -10,6 +10,7 @@ export const PRINTS = [
   "blackLabel",  // 5★ alt art restruck in monochrome on black, borderless
   "secret",      // 6★ alt art in the red manga treatment, plus VFX
   "signed",      // 6★ secret with a signature struck across it
+  "holoOne",     // 7★ the same treatment struck in white, running rainbow
 ] as const;
 
 export type PrintId = (typeof PRINTS)[number];
@@ -32,6 +33,7 @@ export const PRINT_INFO: Record<PrintId, PrintInfo> = {
   blackLabel: { id: "blackLabel", tier: 5, name: "Black Label", short: "B. Label", isVariant: true  },
   secret:     { id: "secret",     tier: 6, name: "Secret",      short: "Secret",   isVariant: false },
   signed:     { id: "signed",     tier: 6, name: "Signed",      short: "Signed",   isVariant: true  },
+  holoOne:    { id: "holoOne",    tier: 7, name: "Holo One",    short: "Holo One", isVariant: false },
 };
 
 /** The standard and variant print for a tier, in that order. */
@@ -40,6 +42,7 @@ export const PRINTS_BY_TIER: Record<PrintTier, readonly PrintId[]> = {
   4: ["foil"],
   5: ["altArt", "blackLabel"],
   6: ["secret", "signed"],
+  7: ["holoOne"],
 };
 
 /** Identifies one card in one treatment. Everything you own is one of these. */

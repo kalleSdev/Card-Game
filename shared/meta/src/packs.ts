@@ -13,22 +13,25 @@ export type RateTable = Readonly<Record<PrintId, number>>;
 
 /** Silver and gold packs, cards and cosmetics alike. */
 export const STANDARD_RATES: RateTable = {
-  base: 90,
+  // Base takes whatever the others leave, so the column always totals 100
+  base: 90.65,
   foil: 7.5,
-  altArt: 2,
-  blackLabel: 0.3,
-  secret: 0.18,
-  signed: 0.02,
+  altArt: 1,
+  blackLabel: 0.5,
+  secret: 0.2,
+  signed: 0.1,
+  holoOne: 0.05,
 };
 
 /** Diamond packs. Better on every line, not just the top. */
 export const DIAMOND_RATES: RateTable = {
-  base: 69.2,
+  base: 71.3,
   foil: 25,
-  altArt: 4,
+  altArt: 2,
   blackLabel: 1,
-  secret: 0.7,
-  signed: 0.1,
+  secret: 0.4,
+  signed: 0.2,
+  holoOne: 0.1,
 };
 
 assertSumsTo100("STANDARD_RATES", Object.values(STANDARD_RATES));
@@ -36,7 +39,7 @@ assertSumsTo100("DIAMOND_RATES", Object.values(DIAMOND_RATES));
 
 /** Rolls the six print rates up into four tier rates, for cosmetic packs. */
 export function tierRates(rates: RateTable): Record<PrintTier, number> {
-  const totals: Record<PrintTier, number> = { 3: 0, 4: 0, 5: 0, 6: 0 };
+  const totals: Record<PrintTier, number> = { 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
   for (const print of PRINTS) totals[PRINT_INFO[print].tier] += rates[print];
   return totals;
 }
@@ -57,9 +60,9 @@ export interface PackDef {
 }
 
 export const PACKS: Record<PackId, PackDef> = {
-  silverCard:      { id: "silverCard",      name: "Silver Card Pack",      contents: "cards",     pulls: 5,  rates: STANDARD_RATES, price: 90  },
-  goldCard:        { id: "goldCard",        name: "Gold Card Pack",        contents: "cards",     pulls: 10, rates: STANDARD_RATES, price: 170 },
-  diamondCard:     { id: "diamondCard",     name: "Diamond Card Pack",     contents: "cards",     pulls: 10, rates: DIAMOND_RATES,  price: 300 },
+  silverCard:      { id: "silverCard",      name: "Silver Card Pack",      contents: "cards",     pulls: 5, rates: STANDARD_RATES, price: 90  },
+  goldCard:        { id: "goldCard",        name: "Gold Card Pack",        contents: "cards",     pulls: 8, rates: STANDARD_RATES, price: 170 },
+  diamondCard:     { id: "diamondCard",     name: "Diamond Card Pack",     contents: "cards",     pulls: 8, rates: DIAMOND_RATES,  price: 300 },
   goldCosmetic:    { id: "goldCosmetic",    name: "Gold Cosmetic Pack",    contents: "cosmetics", pulls: 1,  rates: STANDARD_RATES, price: 100 },
   diamondCosmetic: { id: "diamondCosmetic", name: "Diamond Cosmetic Pack", contents: "cosmetics", pulls: 5,  rates: DIAMOND_RATES,  price: 450 },
 };
@@ -89,6 +92,7 @@ export const CATEGORY_WEIGHTS: Record<PrintTier, Readonly<Partial<Record<Cosmeti
   4: { title: 30, sticker: 25, killEffect: 25, banner: 20 },
   5: { killEffect: 30, finisher: 25, border: 20, banner: 15, arena: 10 },
   6: { finisher: 45, arena: 35, border: 20 },
+  7: { finisher: 55, arena: 45 },
 };
 
 for (const [tier, weights] of Object.entries(CATEGORY_WEIGHTS)) {
@@ -126,6 +130,7 @@ function rollTier(rng: Rng, rates: RateTable): PrintTier {
     { value: 4 as PrintTier, weight: totals[4] },
     { value: 5 as PrintTier, weight: totals[5] },
     { value: 6 as PrintTier, weight: totals[6] },
+    { value: 7 as PrintTier, weight: totals[7] },
   ]);
 }
 

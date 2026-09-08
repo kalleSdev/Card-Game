@@ -30,12 +30,20 @@
   padding: 24px;
 }
 
+/* Rows are split deliberately rather than left to wrap, so five cards read as
+   two then three instead of four and a lonely one. */
+.po__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  perspective: 1800px;
+}
+
 .po__row {
   display: flex;
   flex-wrap: wrap;
-  gap: 18px;
+  gap: 22px;
   justify-content: center;
-  perspective: 1400px;
 }
 
 /* ── One card in the row ─────────────────────────────────────────────────── */
@@ -126,11 +134,32 @@
 .po__slot--tier6 .po__burst {
   background: radial-gradient(circle, rgba(214, 65, 47, 0.62), transparent 64%);
 }
+/* The 7★ burst is white running through colour, and reaches further out */
+.po__slot--tier7 .po__burst {
+  inset: -45%;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, 0.75), transparent 52%),
+    conic-gradient(
+      from 0deg,
+      rgba(255, 214, 224, 0.45),
+      rgba(255, 250, 214, 0.45),
+      rgba(214, 255, 236, 0.45),
+      rgba(214, 236, 255, 0.45),
+      rgba(240, 214, 255, 0.45),
+      rgba(255, 214, 224, 0.45)
+    );
+}
 
 /* A rare card holds the room for a beat longer */
 .po__slot--tier5 .po__face--front,
-.po__slot--tier6 .po__face--front {
+.po__slot--tier6 .po__face--front,
+.po__slot--tier7 .po__face--front {
   animation-duration: 620ms;
+}
+
+/* A card still face down invites a click */
+.po__slot--down:hover {
+  transform: rotateY(180deg) translateY(-6px);
 }
 
 /* ── Labels under each card ──────────────────────────────────────────────── */

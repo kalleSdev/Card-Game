@@ -55,6 +55,7 @@ export const PRINT_COLOR: Record<PrintId, string> = {
   blackLabel: "#E8E2D4",
   secret: "#D6412F",
   signed: "#FF6A4D",
+  holoOne: "#EDF3FF",
 };
 
 export const TIER_COLOR: Record<PrintTier, string> = {
@@ -62,6 +63,7 @@ export const TIER_COLOR: Record<PrintTier, string> = {
   4: "#7B6BD9",
   5: "#E0A93B",
   6: "#D6412F",
+  7: "#EDF3FF",
 };
 
 export const RANK_COLOR: Record<RankId, string> = {

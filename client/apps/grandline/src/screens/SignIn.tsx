@@ -4,7 +4,7 @@ import { Button, Panel, Text } from "../components/primitives";
 import type { Store } from "../data/store";
 
 /** The gate. Nothing a player owns exists on this machine, so there is one. */
-export default function SignIn({ store }: { store: Store }) {
+export default function SignIn({ store, onViewDesign }: { store: Store; onViewDesign: () => void }) {
   const [mode, setMode] = useState<"in" | "new">("in");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -119,10 +119,21 @@ export default function SignIn({ store }: { store: Store }) {
           </form>
         </Panel>
 
-        <p style={{ ...text("small"), color: COLOR.fathom, marginTop: SPACE.lg }}>
-          The server runs separately. If sign in cannot reach it, start it with{" "}
-          <code style={{ ...text("data"), fontSize: 12, color: COLOR.mist }}>npm run dev:server</code>.
-        </p>
+        <div style={{ marginTop: SPACE.lg, display: "flex", flexDirection: "column", gap: SPACE.sm }}>
+          <button
+            onClick={onViewDesign}
+            style={{
+              ...text("small"), background: "none", border: "none",
+              color: COLOR.current, padding: 0, textAlign: "left",
+            }}
+          >
+            Look at the design language without an account
+          </button>
+          <p style={{ ...text("small"), color: COLOR.fathom, margin: 0 }}>
+            The server runs separately. If sign in cannot reach it, start it with{" "}
+            <code style={{ ...text("data"), fontSize: 12, color: COLOR.mist }}>npm run dev:server</code>.
+          </p>
+        </div>
       </div>
     </div>
   );

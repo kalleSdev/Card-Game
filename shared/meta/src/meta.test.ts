@@ -37,7 +37,7 @@ describe("prints", () => {
 
   it("orders prints worst to best", () => {
     const sorted = [...PRINTS].sort((a, b) => printRank(a) - printRank(b));
-    expect(sorted).toEqual(["base", "foil", "altArt", "blackLabel", "secret", "signed"]);
+    expect(sorted).toEqual(["base", "foil", "altArt", "blackLabel", "secret", "signed", "holoOne"]);
   });
 });
 
@@ -61,10 +61,31 @@ describe("rate tables", () => {
   });
 
   it("quotes a rate straight off the table", () => {
-    expect(effectiveRate("base", STANDARD_RATES)).toBe(90);
-    expect(effectiveRate("altArt", STANDARD_RATES)).toBe(2);
-    expect(effectiveRate("signed", STANDARD_RATES)).toBe(0.02);
-    expect(effectiveRate("signed", DIAMOND_RATES)).toBe(0.1);
+    expect(effectiveRate("base", STANDARD_RATES)).toBe(90.65);
+    expect(effectiveRate("altArt", STANDARD_RATES)).toBe(1);
+    expect(effectiveRate("holoOne", STANDARD_RATES)).toBe(0.05);
+    expect(effectiveRate("holoOne", DIAMOND_RATES)).toBe(0.1);
+  });
+
+  it("puts base at whatever the other prints leave", () => {
+    for (const rates of [STANDARD_RATES, DIAMOND_RATES]) {
+      const others = PRINTS.filter(p => p !== "base").reduce((n, p) => n + rates[p], 0);
+      expect(rates.base).toBeCloseTo(100 - others, 6);
+    }
+  });
+
+  it("makes the top print the rarest thing in the set", () => {
+    for (const rates of [STANDARD_RATES, DIAMOND_RATES]) {
+      for (const print of PRINTS) {
+        if (print !== "holoOne") expect(rates.holoOne).toBeLessThan(rates[print]);
+      }
+    }
+  });
+
+  it("sizes a gold and a diamond card pack the same", () => {
+    expect(PACKS.goldCard.pulls).toBe(8);
+    expect(PACKS.diamondCard.pulls).toBe(8);
+    expect(PACKS.silverCard.pulls).toBe(5);
   });
 
   it("gives every print a short label that fits a small card", () => {
@@ -76,15 +97,17 @@ describe("rate tables", () => {
 
   it("rolls the six print rates up into four tier rates", () => {
     const standard = tierRates(STANDARD_RATES);
-    expect(standard[3]).toBeCloseTo(90, 6);
+    expect(standard[3]).toBeCloseTo(90.65, 6);
     expect(standard[4]).toBeCloseTo(7.5, 6);
-    expect(standard[5]).toBeCloseTo(2.3, 6);
-    expect(standard[6]).toBeCloseTo(0.2, 6);
+    expect(standard[5]).toBeCloseTo(1.5, 6);
+    expect(standard[6]).toBeCloseTo(0.3, 6);
+    expect(standard[7]).toBeCloseTo(0.05, 6);
     const diamond = tierRates(DIAMOND_RATES);
-    expect(diamond[3]).toBeCloseTo(69.2, 6);
+    expect(diamond[3]).toBeCloseTo(71.3, 6);
     expect(diamond[4]).toBeCloseTo(25, 6);
-    expect(diamond[5]).toBeCloseTo(5, 6);
-    expect(diamond[6]).toBeCloseTo(0.8, 6);
+    expect(diamond[5]).toBeCloseTo(3, 6);
+    expect(diamond[6]).toBeCloseTo(0.6, 6);
+    expect(diamond[7]).toBeCloseTo(0.1, 6);
     expect(Object.values(standard).reduce((a, b) => a + b, 0)).toBeCloseTo(100, 6);
     expect(Object.values(tierRates(DIAMOND_RATES)).reduce((a, b) => a + b, 0)).toBeCloseTo(100, 6);
   });
@@ -145,7 +168,7 @@ describe("opening packs", () => {
     }
   });
 
-  it("lands within a whisker of the published odds over a hundred thousand pulls", () => {
+  it("lands within a whisker of the published odds over eighty thousand pulls", () => {
     const seen: Record<string, number> = {};
     let pulls = 0;
     for (let seed = 1; seed <= 10_000; seed++) {
@@ -155,17 +178,18 @@ describe("opening packs", () => {
         pulls++;
       }
     }
-    expect(pulls).toBe(100_000);
+    expect(pulls).toBe(80_000);
     // Base and foil are common enough to pin tightly
-    expect(((seen.base ?? 0) / pulls) * 100).toBeCloseTo(90, 0);
+    expect(((seen.base ?? 0) / pulls) * 100).toBeCloseTo(90.65, 0);
     expect(((seen.foil ?? 0) / pulls) * 100).toBeCloseTo(7.5, 0);
-    // The rare prints get a wider window: a hundred thousand pulls only expects
-    // about 20 signed cards, so exact agreement would be a fluke
-    expect(((seen.altArt ?? 0) / pulls) * 100).toBeGreaterThan(1.7);
-    expect(((seen.altArt ?? 0) / pulls) * 100).toBeLessThan(2.3);
-    expect(seen.blackLabel ?? 0).toBeGreaterThan(200);
-    expect(seen.secret ?? 0).toBeGreaterThan(100);
-    expect(seen.signed ?? 0).toBeGreaterThan(5);
+    // The rare prints get a wider window: this many pulls only expects about
+    // 40 holo ones, so exact agreement would be a fluke
+    expect(((seen.altArt ?? 0) / pulls) * 100).toBeGreaterThan(0.75);
+    expect(((seen.altArt ?? 0) / pulls) * 100).toBeLessThan(1.3);
+    expect(seen.blackLabel ?? 0).toBeGreaterThan(300);
+    expect(seen.secret ?? 0).toBeGreaterThan(120);
+    expect(seen.signed ?? 0).toBeGreaterThan(50);
+    expect(seen.holoOne ?? 0).toBeGreaterThan(15);
   });
 
   it("prices every pack, and bundles the diamond cosmetics", () => {
@@ -221,16 +245,16 @@ describe("duplicates and currency", () => {
     expect(EMPTY_WALLET).toEqual({ berries: 0, stardust: 0 });
   });
 
-  it("takes about fifteen gold packs of dusting to craft an alt art", () => {
-    const perPack = 10 * PRINTS.reduce(
+  it("takes a long run of gold packs of dusting to craft an alt art", () => {
+    const perPack = PACKS.goldCard.pulls * PRINTS.reduce(
       (sum, print) => sum + (STANDARD_RATES[print] / 100) * DUPLICATE_VALUE[print].stardust,
       0,
     );
     const cost = craftCost("altArt");
     expect(cost).not.toBeNull();
     const packs = (cost as number) / perPack;
-    expect(packs).toBeGreaterThan(12);
-    expect(packs).toBeLessThan(18);
+    expect(packs).toBeGreaterThan(15);
+    expect(packs).toBeLessThan(30);
   });
 });
 

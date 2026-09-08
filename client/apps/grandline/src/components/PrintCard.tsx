@@ -39,6 +39,7 @@ const FOILED: Record<PrintId, boolean> = {
   blackLabel: true,
   secret: true,
   signed: true,
+  holoOne: true,
 };
 
 export default function PrintCard({
@@ -95,6 +96,7 @@ export default function PrintCard({
         <div className="pc__art-fill" />
         <div className="pc__sun" />
         <div className="pc__horizon" />
+        {print === "holoOne" && <div className="pc__hue" />}
         {print === "signed" && (
           <svg className="pc__signature" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
             <path

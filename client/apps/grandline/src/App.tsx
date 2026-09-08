@@ -11,10 +11,30 @@ import { Panel, Text } from "./components/primitives";
 
 export default function App() {
   const [page, setPage] = useState("collection");
+  // The design page is a showcase as much as a reference, so it does not need
+  // an account to look at.
+  const [designOnly, setDesignOnly] = useState(false);
   const store = useStore();
 
   if (store.loading) return <Loading />;
-  if (!store.account) return <SignIn store={store} />;
+
+  if (!store.account) {
+    if (!designOnly) return <SignIn store={store} onViewDesign={() => setDesignOnly(true)} />;
+    return (
+      <div style={{ position: "relative", zIndex: 1, padding: `${SPACE.xl}px ${SPACE.xl}px ${SPACE.xxxl}px`, maxWidth: 1180, margin: "0 auto" }}>
+        <button
+          onClick={() => setDesignOnly(false)}
+          style={{
+            ...text("small"), background: "none", border: "none",
+            color: COLOR.current, padding: 0, marginBottom: SPACE.xl,
+          }}
+        >
+          Back to sign in
+        </button>
+        <DesignLanguage />
+      </div>
+    );
+  }
 
   return (
     <Shell
