@@ -28,6 +28,9 @@ jobs:
       - name: Type-check server
         run: npx tsc -p server/tsconfig.json --noEmit
 
+      - name: Type-check shared packages
+        run: npx tsc -p shared/meta/tsconfig.json --noEmit
+
       - name: Lint
         run: npm run lint
 

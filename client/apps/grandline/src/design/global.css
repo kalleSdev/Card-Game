@@ -1,0 +1,124 @@
+/* The only global stylesheet. Everything else is component-local. */
+
+:root {
+  --abyss: #070c13;
+  --hull: #0d1520;
+  --deck: #141f2d;
+  --swell: #1b283a;
+  --rope: #22303f;
+  --cable: #33465c;
+
+  --foam: #f2ecdf;
+  --mist: #93a3b4;
+  --fathom: #5d6e7f;
+
+  --signal: #d6412f;
+  --doubloon: #e0a93b;
+  --current: #3e8fa0;
+  --marine: #7b6bd9;
+  --kelp: #3fa46b;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* min-height, not height: with height:100% the root box stays viewport tall and
+   everything past the fold overflows it, which breaks both the sticky rail and
+   anything that paints against the root. */
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--abyss);
+  color: var(--foam);
+  font-family: "Archivo", system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* A chart grid, barely there. It gives the ground a texture without becoming a
+   pattern anyone has to look at. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(51, 70, 92, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(51, 70, 92, 0.14) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, #000 20%, transparent 75%);
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--current);
+}
+
+/* Focus is visible everywhere, and it is the same ring every time. */
+:focus-visible {
+  outline: 2px solid var(--current);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+::selection {
+  background: rgba(62, 143, 160, 0.35);
+}
+
+/* Scrollbars, made to match rather than left as the browser default. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--abyss);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--rope);
+  border-radius: 999px;
+  border: 2px solid var(--abyss);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--cable);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
