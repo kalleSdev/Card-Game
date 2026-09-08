@@ -80,9 +80,48 @@ export default function App() {
   const [account, setAccount] = useState<PublicUser | null>(null);
   // True while the draft is being done to take online rather than to play locally
   const [draftingForOnline, setDraftingForOnline] = useState(false);
+  // Code from an invite link (?join=ABCDE). Held until the deck is drafted.
+  const [inviteCode, setInviteCode] = useState<string | null>(
+    () => new URLSearchParams(window.location.search).get("join"),
+  );
 
   // Pick an existing session back up on load
   useEffect(() => { fetchMe().then(me => { if (me) setAccount(me.user); }); }, []);
+
+  // Online uses the signed in account rather than a local profile, so it skips
+  // profile select and drafts a single deck before reaching the lobby.
+  const startOnlineDraft = () => {
+    if (!account) { setAppScreen("LOGIN"); return; }
+    const me: Profile = {
+      id: `online-${account.id}`,
+      name: account.username,
+      icon: "player-1",
+      createdAt: Date.now(),
+      quickStats:  { wins: 0, losses: 0, matches: 0 },
+      draftStats:  { wins: 0, losses: 0, matches: 0 },
+      normalStats: { wins: 0, losses: 0, matches: 0 },
+      history: [], collection: [], subDecks: [],
+    };
+    setP1Profile(me);
+    setP2Profile(me);
+    setPlayerNames({ P1: me.name, P2: "Opponent" });
+    setPlayerIcons({ P1: me.icon, P2: "player-2" });
+    setBattleMode("quick-draft");
+    setDraftMode(true);
+    setDraftingForOnline(true);
+    setAppScreen("DRAFT_BATTLE");
+  };
+
+  // Someone opening an invite link goes straight to the draft, then the lobby
+  // joins with the code once they have a deck.
+  const [inviteHandled, setInviteHandled] = useState(false);
+  useEffect(() => {
+    if (!inviteCode || inviteHandled || !account) return;
+    setInviteHandled(true);
+    startOnlineDraft();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inviteCode, inviteHandled, account]);
+
 
   // New match means a new engine, so pull its state in during render.
   const [prevEngine, setPrevEngine] = useState(engine);
@@ -161,29 +200,7 @@ export default function App() {
       onGallery={() => setAppScreen("GALLERY")}
       onProfiles={() => setAppScreen("PROFILES_VIEW")}
       onRanking={() => setAppScreen("RANKING")}
-      onPlayOnline={() => {
-        if (!account) { setAppScreen("LOGIN"); return; }
-        // Online uses the signed in account rather than a local profile,
-        // so skip profile select and draft a single deck
-        const me: Profile = {
-          id: `online-${account.id}`,
-          name: account.username,
-          icon: "player-1",
-          createdAt: Date.now(),
-          quickStats:  { wins: 0, losses: 0, matches: 0 },
-          draftStats:  { wins: 0, losses: 0, matches: 0 },
-          normalStats: { wins: 0, losses: 0, matches: 0 },
-          history: [], collection: [], subDecks: [],
-        };
-        setP1Profile(me);
-        setP2Profile(me);
-        setPlayerNames({ P1: me.name, P2: "Opponent" });
-        setPlayerIcons({ P1: me.icon, P2: "player-2" });
-        setBattleMode("quick-draft");
-        setDraftMode(true);
-        setDraftingForOnline(true);
-        setAppScreen("DRAFT_BATTLE");
-      }}
+      onPlayOnline={startOnlineDraft}
       account={account}
       onAccount={() => setAppScreen("LOGIN")}
       onSignOut={() => { apiLogout(); setAccount(null); }}
@@ -198,7 +215,8 @@ export default function App() {
       cardDb={state.cardDb}
       draft={p1DraftResult}
       username={account.username}
-      onLeave={() => { setDraftingForOnline(false); setAppScreen("HOME"); }}
+      joinCode={inviteCode ?? undefined}
+      onLeave={() => { setDraftingForOnline(false); setInviteCode(null); setAppScreen("HOME"); }}
     />
   );
 

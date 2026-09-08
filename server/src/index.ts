@@ -2,7 +2,8 @@ import Fastify from "fastify";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { PlayerId, PlayerDraftResult } from "@cg/contracts";
 import type { ClientMessage, ServerMessage } from "./protocol.js";
-import { cardsFor } from "./universes.js";
+import { cardsFor, botFor, DEFAULT_UNIVERSE, type UniverseId } from "./universes.js";
+import { LobbyBook } from "./lobbies.js";
 import {
   createMatch, validateDraft, runBotIfItsTurn, getMatch, endMatch, broadcast, submitIntent,
   forfeit, rebindSeat, forceEndTurn, type Match,
@@ -13,7 +14,7 @@ import {
 } from "./auth.js";
 
 const PORT = Number(process.env.PORT ?? 8787);
-const cardDb = cardsFor();
+
 
 const app = Fastify({ logger: false });
 
@@ -26,7 +27,7 @@ app.options("/*", async (_req, reply) => reply.code(204).send());
 
 const bearer = (auth?: string) => auth?.startsWith("Bearer ") ? auth.slice(7) : undefined;
 
-app.get("/health", async () => ({ ok: true, matches: liveMatchIds.size }));
+app.get("/health", async () => ({ ok: true, matches: liveMatchIds.size, lobbies: lobbies.size }));
 
 app.post("/auth/register", async (req, reply) => {
   const { username, password } = (req.body ?? {}) as { username?: string; password?: string };
@@ -78,16 +79,20 @@ const seatOfUser = new Map<string, { matchId: string; playerId: PlayerId }>();
 const dropTimers = new Map<string, NodeJS.Timeout>();
 const turnTimers = new Map<string, { timer: NodeJS.Timeout; pid: PlayerId }>();
 const missedTurns = new Map<string, { pid: PlayerId; count: number }>();
-let waiting: { conn: Conn; draft: PlayerDraftResult } | null = null;
+const lobbies = new LobbyBook<Conn>();
 const liveMatchIds = new Set<string>();
 
 const send = (ws: WebSocket, msg: ServerMessage) => {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
 };
 
-function startMatch(a: { conn: Conn; draft: PlayerDraftResult }, b: { conn: Conn; draft: PlayerDraftResult }) {
+function startMatch(
+  a: { conn: Conn; draft: PlayerDraftResult },
+  b: { conn: Conn; draft: PlayerDraftResult },
+  universe: UniverseId,
+) {
   try {
-    pairUp(a, b);
+    pairUp(a, b, universe);
   } catch (err) {
     // Neither player should be left staring at an empty queue if this ever throws
     const reason = err instanceof Error ? err.message : "Could not start the match";
@@ -96,10 +101,14 @@ function startMatch(a: { conn: Conn; draft: PlayerDraftResult }, b: { conn: Conn
   }
 }
 
-function pairUp(a: { conn: Conn; draft: PlayerDraftResult }, b: { conn: Conn; draft: PlayerDraftResult }) {
+function pairUp(
+  a: { conn: Conn; draft: PlayerDraftResult },
+  b: { conn: Conn; draft: PlayerDraftResult },
+  universe: UniverseId,
+) {
   const nameOf = (c: Conn) => c.user?.username ?? "Player";
   const match = createMatch(
-    cardDb,
+    cardsFor(universe),
     { seat: { name: nameOf(a.conn), send: m => send(a.conn.socket, m as ServerMessage) }, draft: a.draft },
     { seat: { name: nameOf(b.conn), send: m => send(b.conn.socket, m as ServerMessage) }, draft: b.draft },
   );
@@ -119,14 +128,15 @@ function pairUp(a: { conn: Conn; draft: PlayerDraftResult }, b: { conn: Conn; dr
 
 // A practice match: the player takes P1, the computer takes P2 with a deck
 // thrown together from whatever is in the card pool.
-function startPractice(conn: Conn, draft: PlayerDraftResult) {
+function startPractice(conn: Conn, draft: PlayerDraftResult, universe: UniverseId) {
   const nothing = () => {};
   const match = createMatch(
-    cardDb,
+    cardsFor(universe),
     { seat: { name: conn.user?.username ?? "Player", send: m => send(conn.socket, m as ServerMessage) }, draft },
-    { seat: { name: "Computer", send: nothing }, draft: randomDraft() },
+    { seat: { name: "Computer", send: nothing }, draft: randomDraft(universe) },
   );
   match.botSeat = "P2";
+  match.botPlay = botFor(universe);
   liveMatchIds.add(match.id);
   conn.matchId = match.id;
   conn.playerId = "P1";
@@ -137,7 +147,8 @@ function startPractice(conn: Conn, draft: PlayerDraftResult) {
   armTurnTimer(match);
 }
 
-function randomDraft(): PlayerDraftResult {
+function randomDraft(universe: UniverseId): PlayerDraftResult {
+  const cardDb = cardsFor(universe);
   const ids = Object.keys(cardDb);
   const pool = [...ids].sort(() => Math.random() - 0.5);
   const of = (affinity: string, n: number) =>
@@ -221,25 +232,44 @@ function handle(conn: Conn, msg: ClientMessage) {
   if (!conn.user) return send(conn.socket, { type: "error", reason: "Sign in first" });
 
   switch (msg.type) {
-    case "queue": {
-      const bad = validateDraft(msg.draft, cardDb);
+    case "createLobby": {
+      const universe = msg.universe ?? DEFAULT_UNIVERSE;
+      const bad = validateDraft(msg.draft, cardsFor(universe));
       if (bad) return send(conn.socket, { type: "error", reason: bad });
-      if (waiting && waiting.conn.socket !== conn.socket) {
-        const opponent = waiting;
-        waiting = null;
-        startMatch(opponent, { conn, draft: msg.draft });
-      } else {
-        waiting = { conn, draft: msg.draft };
-        send(conn.socket, { type: "queued" });
-      }
-      return;
+      const lobby = lobbies.create(conn, conn.user.username, msg.draft, universe);
+      return send(conn.socket, { type: "lobbyOpen", code: lobby.code });
     }
 
-    case "practice": {
-      const bad = validateDraft(msg.draft, cardDb);
+    case "joinLobby": {
+      const lobby = lobbies.find(msg.code);
+      if (!lobby) return send(conn.socket, { type: "error", reason: "No lobby with that code" });
+      if (lobby.host.socket === conn.socket) {
+        return send(conn.socket, { type: "error", reason: "That is your own lobby" });
+      }
+      if (lobby.host.socket.readyState !== lobby.host.socket.OPEN) {
+        lobbies.close(lobby.code);
+        return send(conn.socket, { type: "error", reason: "The host is no longer connected" });
+      }
+      const bad = validateDraft(msg.draft, cardsFor(lobby.universe));
       if (bad) return send(conn.socket, { type: "error", reason: bad });
-      if (waiting && waiting.conn.socket === conn.socket) waiting = null;
-      return startPractice(conn, msg.draft);
+      lobbies.close(lobby.code);
+      return startMatch(
+        { conn: lobby.host, draft: lobby.draft },
+        { conn, draft: msg.draft },
+        lobby.universe,
+      );
+    }
+
+    case "cancelLobby":
+      lobbies.closeFor(conn);
+      return;
+
+    case "practice": {
+      const universe = msg.universe ?? DEFAULT_UNIVERSE;
+      const bad = validateDraft(msg.draft, cardsFor(universe));
+      if (bad) return send(conn.socket, { type: "error", reason: bad });
+      lobbies.closeFor(conn);
+      return startPractice(conn, msg.draft, universe);
     }
 
     case "intent": {
@@ -294,7 +324,7 @@ function resumeMatch(conn: Conn) {
 // A dropped socket does not end the match straight away. The player gets a
 // short window to come back before the win is handed over.
 function handleDisconnect(conn: Conn) {
-  if (waiting && waiting.conn.socket === conn.socket) waiting = null;
+  lobbies.closeFor(conn);
   const match = conn.matchId ? getMatch(conn.matchId) : undefined;
   if (!match || !conn.playerId || match.state.winner) return;
 
@@ -313,7 +343,7 @@ function handleDisconnect(conn: Conn) {
 }
 
 function dropFromMatch(conn: Conn) {
-  if (waiting && waiting.conn.socket === conn.socket) waiting = null;
+  lobbies.closeFor(conn);
   const match: Match | undefined = conn.matchId ? getMatch(conn.matchId) : undefined;
   if (!match || !conn.playerId) return;
   const other: PlayerId = conn.playerId === "P1" ? "P2" : "P1";

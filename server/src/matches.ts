@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { BattleState, BattleIntent } from "@cg/battle";
+import type { BattleState, BattleIntent, BattleEvent } from "@cg/battle";
 import { createBattleState, applyBattleIntent, viewFor, playBotTurn } from "@cg/battle";
 import type { CardDef, PlayerId, PlayerDraftResult } from "@cg/contracts";
 
@@ -18,6 +18,8 @@ export interface Match {
   seats: Record<PlayerId, Seat>;
   /** Set on practice matches: the seat the computer plays. */
   botSeat?: PlayerId;
+  /** How the computer plays, so a different universe can bring its own. */
+  botPlay?: (state: BattleState, pid: PlayerId) => { state: BattleState; events: BattleEvent[] };
 }
 
 const matches = new Map<string, Match>();
@@ -74,7 +76,8 @@ export function createMatch(
 export function runBotIfItsTurn(match: Match): void {
   let guard = 0;
   while (match.botSeat && match.state.activePlayer === match.botSeat && !match.state.winner && guard++ < 4) {
-    const { state, events } = playBotTurn(match.state, match.botSeat);
+    const play = match.botPlay ?? playBotTurn;
+    const { state, events } = play(match.state, match.botSeat);
     match.state = state;
     broadcast(match, events);
   }

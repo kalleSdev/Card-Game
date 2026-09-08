@@ -12,15 +12,17 @@ export interface PublicUser {
 // so these are declared again here rather than imported across that boundary.
 export type ClientMessage =
   | { type: "auth"; token: string }
-  | { type: "queue"; draft: PlayerDraftResult }
-  | { type: "practice"; draft: PlayerDraftResult }
+  | { type: "createLobby"; draft: PlayerDraftResult; universe?: string }
+  | { type: "joinLobby"; code: string; draft: PlayerDraftResult }
+  | { type: "cancelLobby" }
+  | { type: "practice"; draft: PlayerDraftResult; universe?: string }
   | { type: "surrender" }
   | { type: "intent"; intent: BattleIntent }
   | { type: "leave" };
 
 export type ServerMessage =
   | { type: "authed"; username: string }
-  | { type: "queued" }
+  | { type: "lobbyOpen"; code: string }
   | { type: "matched"; matchId: string; you: PlayerId; opponentName: string }
   | { type: "state"; state: BattleState; events: BattleEvent[] }
   | { type: "opponentLeft" }
