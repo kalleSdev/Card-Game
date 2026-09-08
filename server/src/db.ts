@@ -111,6 +111,21 @@ db.exec(`
     updated_at INTEGER NOT NULL
   );
 
+  -- Where a player sits on the ladder. Separate from users so it can be reset
+  -- for a season without touching an account, and so a streak is counted as it
+  -- happens rather than derived from the whole result history on every read.
+  CREATE TABLE IF NOT EXISTS ranking (
+    user_id     TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    mmr         INTEGER NOT NULL DEFAULT 0,
+    peak_mmr    INTEGER NOT NULL DEFAULT 0,
+    wins        INTEGER NOT NULL DEFAULT 0,
+    losses      INTEGER NOT NULL DEFAULT 0,
+    streak      INTEGER NOT NULL DEFAULT 0,
+    best_streak INTEGER NOT NULL DEFAULT 0,
+    updated_at  INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_ranking_mmr   ON ranking(mmr DESC);
   CREATE INDEX IF NOT EXISTS idx_decks_user    ON decks(user_id);
   CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
   CREATE INDEX IF NOT EXISTS idx_results_user  ON results(user_id);
@@ -154,4 +169,15 @@ export interface PackRow {
 export interface WalletRow {
   berries: number;
   stardust: number;
+}
+
+export interface RankingRow {
+  user_id: string;
+  mmr: number;
+  peak_mmr: number;
+  wins: number;
+  losses: number;
+  streak: number;
+  best_streak: number;
+  updated_at: number;
 }

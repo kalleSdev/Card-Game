@@ -9,7 +9,8 @@ import {
   decksOf, saveDeck, deleteDeck, grantStarter,
   type ScrapAction, type StoredDeck,
 } from "./packs.js";
-import { PACKS, PRINTS, type PackId, type PrintId } from "@cg/meta";
+import { PACKS, PRINTS, RANKS, type PackId, type PrintId } from "@cg/meta";
+import { applyResult, leaderboard, standingOf } from "./ranking.js";
 import { LobbyBook } from "./lobbies.js";
 import {
   createMatch, validateDraft, runBotIfItsTurn, getMatch, endMatch, broadcast, submitIntent,
@@ -109,9 +110,16 @@ app.get("/collection", async (req, reply) =>
       wallet: walletOf(user.id),
       packs: unopenedPacks(user.id),
       decks: decksOf(user.id),
+      standing: standingOf(user.id),
     };
   }),
 );
+
+// The ladder is public: you can see where everyone stands without an account.
+app.get("/leaderboard", async () => ({
+  standings: leaderboard(50),
+  ranks: RANKS,
+}));
 
 app.get("/packs", async (req, reply) =>
   guarded(reply, () => ({ packs: unopenedPacks(requireUser(req).id), catalogue: PACKS })),
@@ -354,6 +362,13 @@ function settle(match: Match) {
     const won = winner === pid;
     recordResult(conn.user.id, opponent, won, match.state.turn);
 
+    let rankChange = null;
+    try {
+      rankChange = applyResult(conn.user.id, won);
+    } catch (err) {
+      console.warn("ranking failed", conn.user.username, err);
+    }
+
     // Packs and Berries. Wrapped because a payout failing should not stop the
     // result being recorded or the other player being paid.
     try {
@@ -362,6 +377,7 @@ function settle(match: Match) {
         type: "rewards",
         packs: payout.packs.map(p => ({ id: p.id, packId: p.packId })),
         berries: payout.berries,
+        rank: rankChange,
       });
     } catch (err) {
       console.warn("payout failed", conn.user.username, err);

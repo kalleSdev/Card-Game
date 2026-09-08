@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { RankId } from "@cg/meta";
 import { COLOR, LAYOUT, MOTION, RADIUS, SPACE, text } from "../design/tokens";
 import { Currency, RankBadge } from "./primitives";
 
@@ -16,7 +17,7 @@ export const NAV: NavItem[] = [
   { id: "packs", label: "Packs" },
   { id: "shop", label: "Shop" },
   { id: "trade", label: "Trade", soon: true },
-  { id: "ladder", label: "Ladder", soon: true },
+  { id: "ladder", label: "Ladder" },
   { id: "profile", label: "Profile", soon: true },
   { id: "design", label: "Design" },
 ];
@@ -31,6 +32,7 @@ export default function Shell({
   onNavigate,
   wallet,
   username,
+  standing,
   packsWaiting,
   onSignOut,
   onSignIn,
@@ -41,6 +43,7 @@ export default function Shell({
   wallet: { berries: number; stardust: number };
   /** Null while browsing without an account. */
   username: string | null;
+  standing: { mmr: number; rank: RankId; rankName: string; topRank: RankId | null } | null;
   packsWaiting: number;
   onSignOut: () => void;
   onSignIn: () => void;
@@ -173,7 +176,17 @@ export default function Shell({
             zIndex: 10,
           }}
         >
-          {username && <RankBadge rank="diamond" label="Diamond" mmr={194} />}
+          {standing && (
+            <RankBadge
+              rank={standing.topRank ?? standing.rank}
+              label={
+                standing.topRank === "pirateKing" ? "Pirate King"
+                  : standing.topRank === "emperor" ? "Emperor"
+                  : standing.rankName
+              }
+              mmr={standing.mmr}
+            />
+          )}
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: SPACE.lg }}>
             {username ? (
               <>

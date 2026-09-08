@@ -25,6 +25,8 @@ export interface Store {
   wallet: Wallet;
   packs: api.OwnedPack[];
   decks: Deck[];
+  /** Where you sit on the ladder. Null while signed out. */
+  standing: api.Standing | null;
 
   signIn: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string) => Promise<void>;
@@ -58,6 +60,7 @@ export function useStore(): Store {
   const [wallet, setWallet] = useState<Wallet>(EMPTY_WALLET);
   const [packs, setPacks] = useState<api.OwnedPack[]>([]);
   const [decks, setDecks] = useState<Deck[]>([]);
+  const [standing, setStanding] = useState<api.Standing | null>(null);
 
   const load = useCallback(async () => {
     const everything = await api.fetchEverything();
@@ -65,6 +68,7 @@ export function useStore(): Store {
     setWallet(everything.wallet);
     setPacks(everything.packs);
     setDecks(everything.decks.map(d => ({ ...d })));
+    setStanding(everything.standing ?? null);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -117,6 +121,7 @@ export function useStore(): Store {
     setWallet(EMPTY_WALLET);
     setPacks([]);
     setDecks([]);
+    setStanding(null);
   }, []);
 
   const buy = useCallback(async (packId: PackId) => {
@@ -179,7 +184,7 @@ export function useStore(): Store {
 
   return {
     account, signedIn: account !== null, loading, error,
-    collection, wallet, packs, decks,
+    collection, wallet, packs, decks, standing,
     signIn, register, signOut,
     buy, open, scrap,
     saveDeck, deleteDeck, newDeck,

@@ -26,7 +26,13 @@ export type ServerMessage =
   | { type: "state"; state: BattleState; events: BattleEvent[] }
   | { type: "opponentLeft" }
   // What the finished match paid: packs to open, and Berries
-  | { type: "rewards"; packs: { id: string; packId: string }[]; berries: number }
+  | {
+      type: "rewards";
+      packs: { id: string; packId: string }[];
+      berries: number;
+      /** What the match did to your place on the ladder. */
+      rank: { before: number; after: number; delta: number; rankedUp: boolean; rankName: string; streak: number } | null;
+    }
   // The opponent dropped but has a little while to come back
   | { type: "opponentDisconnected"; seconds: number }
   | { type: "opponentReturned" }

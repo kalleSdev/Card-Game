@@ -1,4 +1,4 @@
-import type { PackId, PrintId, Pull, Wallet } from "@cg/meta";
+import type { PackId, PrintId, Pull, RankId, Wallet } from "@cg/meta";
 
 /**
  * Talking to the server.
@@ -115,11 +115,28 @@ export interface OwnedPack {
   earnedAt: number;
 }
 
+export interface Standing {
+  userId: string;
+  username: string;
+  mmr: number;
+  peakMmr: number;
+  wins: number;
+  losses: number;
+  streak: number;
+  bestStreak: number;
+  rank: RankId;
+  rankName: string;
+  /** Set only for the five seats the leaderboard decides. */
+  topRank: RankId | null;
+  position: number | null;
+}
+
 export interface Everything {
   prints: PrintRow[];
   wallet: Wallet;
   packs: OwnedPack[];
   decks: ServerDeck[];
+  standing: Standing;
 }
 
 export interface ServerDeck {
@@ -132,6 +149,9 @@ export interface ServerDeck {
 }
 
 export const fetchEverything = () => call<Everything>("/collection");
+
+/** The ladder is public, so this works signed out. */
+export const fetchLeaderboard = () => call<{ standings: Standing[] }>("/leaderboard");
 
 export const buyPack = (packId: PackId) =>
   call<OwnedPack>("/packs/buy", { method: "POST", body: { packId } });

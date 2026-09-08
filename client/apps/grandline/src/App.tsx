@@ -4,6 +4,7 @@ import DesignLanguage from "./screens/DesignLanguage";
 import CollectionScreen from "./screens/Collection";
 import DecksScreen from "./screens/Decks";
 import ShopScreen, { PacksScreen } from "./screens/Shop";
+import LadderScreen from "./screens/Ladder";
 import SignIn from "./screens/SignIn";
 import { useStore } from "./data/store";
 import { COLOR, SPACE, text } from "./design/tokens";
@@ -29,6 +30,7 @@ export default function App() {
       onNavigate={setPage}
       wallet={store.wallet}
       username={store.account?.username ?? null}
+      standing={store.standing}
       packsWaiting={store.packs.length}
       onSignOut={() => void store.signOut()}
       onSignIn={goSignIn}
@@ -37,6 +39,7 @@ export default function App() {
         : page === "decks" ? <DecksScreen store={store} onSignIn={goSignIn} />
         : page === "shop" ? <ShopScreen store={store} onSignIn={goSignIn} />
         : page === "packs" ? <PacksScreen store={store} onSignIn={goSignIn} />
+        : page === "ladder" ? <LadderScreen store={store} />
         : page === "design" ? <DesignLanguage />
         : <NotBuiltYet id={page} />}
     </Shell>
