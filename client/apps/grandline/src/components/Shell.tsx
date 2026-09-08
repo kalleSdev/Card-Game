@@ -11,7 +11,8 @@ export interface NavItem {
 
 export const NAV: NavItem[] = [
   { id: "play", label: "Play", soon: true },
-  { id: "collection", label: "Collection", soon: true },
+  { id: "collection", label: "Collection" },
+  { id: "decks", label: "Decks" },
   { id: "packs", label: "Packs", soon: true },
   { id: "shop", label: "Shop", soon: true },
   { id: "trade", label: "Trade", soon: true },
@@ -28,10 +29,12 @@ export const NAV: NavItem[] = [
 export default function Shell({
   active,
   onNavigate,
+  wallet,
   children,
 }: {
   active: string;
   onNavigate: (id: string) => void;
+  wallet: { berries: number; stardust: number };
   children: ReactNode;
 }) {
   return (
@@ -139,8 +142,8 @@ export default function Shell({
         >
           <RankBadge rank="diamond" label="Diamond" mmr={194} />
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: SPACE.lg }}>
-            <Currency kind="berries" amount={1240} />
-            <Currency kind="stardust" amount={860} />
+            <Currency kind="berries" amount={wallet.berries} />
+            <Currency kind="stardust" amount={wallet.stardust} />
             <div
               style={{
                 width: 30,

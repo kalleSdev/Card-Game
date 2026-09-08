@@ -7,4 +7,5 @@ export * from "./prints";
 export * from "./packs";
 export * from "./economy";
 export * from "./ranks";
+export * from "./collection";
 export * from "./rng";

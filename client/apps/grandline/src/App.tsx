@@ -1,15 +1,22 @@
 import { useState } from "react";
 import Shell from "./components/Shell";
 import DesignLanguage from "./screens/DesignLanguage";
+import CollectionScreen from "./screens/Collection";
+import DecksScreen from "./screens/Decks";
+import { useStore } from "./data/store";
 import { COLOR, SPACE, text } from "./design/tokens";
 import { Panel, Text } from "./components/primitives";
 
 export default function App() {
-  const [page, setPage] = useState("design");
+  const [page, setPage] = useState("collection");
+  const store = useStore();
 
   return (
-    <Shell active={page} onNavigate={setPage}>
-      {page === "design" ? <DesignLanguage /> : <NotBuiltYet id={page} />}
+    <Shell active={page} onNavigate={setPage} wallet={store.wallet}>
+      {page === "collection" ? <CollectionScreen store={store} />
+        : page === "decks" ? <DecksScreen store={store} />
+        : page === "design" ? <DesignLanguage />
+        : <NotBuiltYet id={page} />}
     </Shell>
   );
 }

@@ -140,7 +140,7 @@ export default function DesignLanguage() {
             <div key={print} style={{ display: "flex", flexDirection: "column", gap: SPACE.md, width: 168 }}>
               {/* Prints differ in height on purpose, so the slot is fixed and the
                   cards hang from a common baseline. Otherwise the captions stagger. */}
-              <div style={{ height: 232, display: "flex", alignItems: "flex-end" }}>
+              <div style={{ height: 252, display: "flex", alignItems: "flex-end" }}>
                 <PrintCard card={DEMO} print={print} />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

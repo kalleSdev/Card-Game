@@ -74,6 +74,13 @@
   line-height: 1.15;
   letter-spacing: -0.01em;
   color: var(--foam);
+  /* Two lines of room whether the name needs them or not, so a row of cards
+     keeps one baseline instead of stepping up and down with name length. */
+  min-height: 2.3em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .pc__stats {
