@@ -65,7 +65,11 @@ export default function PackOpening({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") { revealAll(); return; }
-      if (e.key === " " || e.key === "Enter") { e.preventDefault(); done ? onDone() : next(); }
+      if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        if (done) onDone();
+        else next();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
