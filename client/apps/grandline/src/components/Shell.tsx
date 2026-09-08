@@ -11,7 +11,7 @@ export interface NavItem {
 }
 
 export const NAV: NavItem[] = [
-  { id: "play", label: "Play", soon: true },
+  { id: "play", label: "Play" },
   { id: "collection", label: "Collection" },
   { id: "decks", label: "Decks" },
   { id: "packs", label: "Packs" },

@@ -1,5 +1,6 @@
 import { createEngine, createInitialState } from "@cg/engine";
 import { deriveStats } from "@cg/battle";
+import { assertGraded, scoreCardsFrom, type ScoreCard } from "@cg/score";
 import type { CardFace } from "../components/PrintCard";
 import { shortNameFor } from "./names";
 
@@ -40,6 +41,20 @@ export function cardName(id: string): string {
 
 export function cardShortName(id: string): string {
   return faces[id]?.shortName ?? id;
+}
+
+/**
+ * The same cards, as Score reads them: a seat and a number of points each.
+ * Checked at load, so a card outside its grade's band is a startup error rather
+ * than something noticed mid-match.
+ */
+export const SCORE_POOL: ScoreCard[] = scoreCardsFrom(cardDb);
+assertGraded(SCORE_POOL);
+
+const scoreById = new Map(SCORE_POOL.map(card => [card.id, card]));
+
+export function scoreCard(id: string): ScoreCard | null {
+  return scoreById.get(id) ?? null;
 }
 
 /** Cards that can lead a deck. Placeholder rule: the strongest rarities. */
