@@ -19,17 +19,19 @@ export interface PrintInfo {
   tier: PrintTier;
   /** Shown to players. */
   name: string;
+  /** For small cards, where the full label would wrap. */
+  short: string;
   /** True for the one-in-ten variant of its tier. */
   isVariant: boolean;
 }
 
 export const PRINT_INFO: Record<PrintId, PrintInfo> = {
-  base:       { id: "base",       tier: 3, name: "Base",        isVariant: false },
-  foil:       { id: "foil",       tier: 4, name: "Foil",        isVariant: false },
-  altArt:     { id: "altArt",     tier: 5, name: "Alt Art",     isVariant: false },
-  blackLabel: { id: "blackLabel", tier: 5, name: "Black Label", isVariant: true  },
-  secret:     { id: "secret",     tier: 6, name: "Secret",      isVariant: false },
-  signed:     { id: "signed",     tier: 6, name: "Signed",      isVariant: true  },
+  base:       { id: "base",       tier: 3, name: "Base",        short: "Base",     isVariant: false },
+  foil:       { id: "foil",       tier: 4, name: "Foil",        short: "Foil",     isVariant: false },
+  altArt:     { id: "altArt",     tier: 5, name: "Alt Art",     short: "Alt Art",  isVariant: false },
+  blackLabel: { id: "blackLabel", tier: 5, name: "Black Label", short: "B. Label", isVariant: true  },
+  secret:     { id: "secret",     tier: 6, name: "Secret",      short: "Secret",   isVariant: false },
+  signed:     { id: "signed",     tier: 6, name: "Signed",      short: "Signed",   isVariant: true  },
 };
 
 /** The standard and variant print for a tier, in that order. */

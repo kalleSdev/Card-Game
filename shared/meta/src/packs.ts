@@ -23,10 +23,10 @@ export const STANDARD_RATES: RateTable = {
 
 /** Diamond packs. Better on every line, not just the top. */
 export const DIAMOND_RATES: RateTable = {
-  base: 64,
+  base: 69.2,
   foil: 25,
-  altArt: 8.5,
-  blackLabel: 1.7,
+  altArt: 4,
+  blackLabel: 1,
   secret: 0.7,
   signed: 0.1,
 };

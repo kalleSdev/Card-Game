@@ -67,12 +67,24 @@ describe("rate tables", () => {
     expect(effectiveRate("signed", DIAMOND_RATES)).toBe(0.1);
   });
 
+  it("gives every print a short label that fits a small card", () => {
+    for (const print of PRINTS) {
+      expect(PRINT_INFO[print].short.length).toBeLessThanOrEqual(8);
+    }
+    expect(PRINT_INFO.blackLabel.short).toBe("B. Label");
+  });
+
   it("rolls the six print rates up into four tier rates", () => {
     const standard = tierRates(STANDARD_RATES);
     expect(standard[3]).toBeCloseTo(90, 6);
     expect(standard[4]).toBeCloseTo(7.5, 6);
     expect(standard[5]).toBeCloseTo(2.3, 6);
     expect(standard[6]).toBeCloseTo(0.2, 6);
+    const diamond = tierRates(DIAMOND_RATES);
+    expect(diamond[3]).toBeCloseTo(69.2, 6);
+    expect(diamond[4]).toBeCloseTo(25, 6);
+    expect(diamond[5]).toBeCloseTo(5, 6);
+    expect(diamond[6]).toBeCloseTo(0.8, 6);
     expect(Object.values(standard).reduce((a, b) => a + b, 0)).toBeCloseTo(100, 6);
     expect(Object.values(tierRates(DIAMOND_RATES)).reduce((a, b) => a + b, 0)).toBeCloseTo(100, 6);
   });

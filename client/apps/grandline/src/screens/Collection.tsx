@@ -4,7 +4,7 @@ import {
   bestPrintOf, binderOrder, countOf, sparesOf, statsFor, valueOfAllSpares,
   type Collection as Held, type PrintId,
 } from "@cg/meta";
-import { COLOR, PRINT_COLOR, RADIUS, SPACE, text } from "../design/tokens";
+import { CARD_SIZE, COLOR, PRINT_COLOR, RADIUS, SPACE, cardSlotHeight, text } from "../design/tokens";
 import PrintCard from "../components/PrintCard";
 import { Button, Chip, Currency, Panel, SectionHead, Stat, Text, TierPip } from "../components/primitives";
 import { POOL, cardFace, cardName } from "../data/pool";
@@ -155,7 +155,7 @@ function BinderSlot({
       <button
         onClick={onOpen}
         style={{
-          width: 150,
+          width: CARD_SIZE.md,
           aspectRatio: "5 / 7.2",
           borderRadius: 10,
           border: `1px dashed ${COLOR.rope}`,
@@ -173,11 +173,11 @@ function BinderSlot({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: SPACE.sm, width: 150 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: SPACE.sm, width: CARD_SIZE.md }}>
       <PrintCard
         card={cardFace(cardId)}
         print={best}
-        width={150}
+        width={CARD_SIZE.md}
         count={countOf(collection, cardId, best)}
         onClick={onOpen}
       />
@@ -236,12 +236,12 @@ function CardSheet({
               const spares = sparesOf(collection, cardId, print);
               const value = DUPLICATE_VALUE[print];
               return (
-                <div key={print} style={{ width: 150, display: "flex", flexDirection: "column", gap: SPACE.sm }}>
-                  <div style={{ height: 228, display: "flex", alignItems: "flex-end", opacity: count ? 1 : 0.28 }}>
+                <div key={print} style={{ width: CARD_SIZE.md, display: "flex", flexDirection: "column", gap: SPACE.sm }}>
+                  <div style={{ height: cardSlotHeight(CARD_SIZE.md), display: "flex", alignItems: "flex-end", opacity: count ? 1 : 0.28 }}>
                     <PrintCard
                       card={cardFace(cardId)}
                       print={print}
-                      width={150}
+                      width={CARD_SIZE.md}
                       count={count}
                       interactive={count > 0}
                     />

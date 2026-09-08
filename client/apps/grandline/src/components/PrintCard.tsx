@@ -1,11 +1,14 @@
 import type { CSSProperties } from "react";
 import type { PrintId } from "@cg/meta";
 import { PRINT_INFO } from "@cg/meta";
+import { CARD_COMPACT_MAX, CARD_SIZE } from "../design/tokens";
 import "../design/card.css";
 
 export interface CardFace {
   id: string;
   name: string;
+  /** Used on small cards, where the full name would wrap. */
+  shortName?: string;
   atk: number;
   hp: number;
   cost: number;
@@ -41,7 +44,7 @@ const FOILED: Record<PrintId, boolean> = {
 export default function PrintCard({
   card,
   print,
-  width = 168,
+  width = CARD_SIZE.lg,
   count,
   duplicate = false,
   interactive = true,
@@ -59,6 +62,9 @@ export default function PrintCard({
 }) {
   const info = PRINT_INFO[print];
   const art = artColors(card.id);
+  // Small cards drop to short names and short print labels, so a row keeps one
+  // baseline instead of stepping wherever a name happens to be long
+  const compact = width <= CARD_COMPACT_MAX;
 
   const style = {
     "--pc-w": `${width}px`,
@@ -70,6 +76,7 @@ export default function PrintCard({
     "pc",
     `pc--${print}`,
     interactive ? "pc--interactive" : "",
+    compact ? "pc--compact" : "",
     duplicate ? "pc--duplicate" : "",
   ]
     .filter(Boolean)
@@ -79,7 +86,7 @@ export default function PrintCard({
     <div className={classes} style={style} onClick={onClick}>
       <div className="pc__ribbon">
         {info.tier}
-        {"★"} {info.name}
+        {"★"} {compact ? info.short : info.name}
       </div>
       {count !== undefined && count > 1 && <div className="pc__count">{"×"}{count}</div>}
 
@@ -105,7 +112,7 @@ export default function PrintCard({
       {FOILED[print] && <div className="pc__leaf" />}
 
       <div className="pc__body">
-        <div className="pc__name">{card.name}</div>
+        <div className="pc__name">{compact ? card.shortName ?? card.name : card.name}</div>
         <div className="pc__stats">
           <span>
             ATK <b>{card.atk}</b>

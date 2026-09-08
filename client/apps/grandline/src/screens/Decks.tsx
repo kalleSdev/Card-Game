@@ -4,7 +4,7 @@ import {
   printForDeck, printsOwnedOf,
   type Deck, type PrintId,
 } from "@cg/meta";
-import { COLOR, PRINT_COLOR, RADIUS, SPACE, text } from "../design/tokens";
+import { CARD_SIZE, COLOR, PRINT_COLOR, RADIUS, SPACE, text } from "../design/tokens";
 import PrintCard from "../components/PrintCard";
 import { Button, Panel, SectionHead, Text, TierPip } from "../components/primitives";
 import { LEADER_POOL, POOL, cardFace, cardName } from "../data/pool";
@@ -64,12 +64,12 @@ function DeckTile({ deck, store, onEdit }: { deck: Deck; store: Store; onEdit: (
   return (
     <Panel padding={SPACE.lg}>
       <div style={{ display: "flex", gap: SPACE.lg }}>
-        <div style={{ width: 92, flex: "none" }}>
+        <div style={{ width: CARD_SIZE.xs, flex: "none" }}>
           {deck.leaderId && leaderPrint ? (
-            <PrintCard card={cardFace(deck.leaderId)} print={leaderPrint} width={92} interactive={false} />
+            <PrintCard card={cardFace(deck.leaderId)} print={leaderPrint} width={CARD_SIZE.xs} interactive={false} />
           ) : (
             <div style={{
-              width: 92, aspectRatio: "5 / 7", borderRadius: 8,
+              width: CARD_SIZE.xs, aspectRatio: "5 / 7", borderRadius: 8,
               border: `1px dashed ${COLOR.rope}`,
               display: "flex", alignItems: "center", justifyContent: "center",
               ...text("label"), fontSize: 9, color: COLOR.fathom, textAlign: "center",
@@ -177,7 +177,7 @@ function DeckBuilder({ deck, store, onBack }: { deck: Deck; store: Store; onBack
                     <PrintCard
                       card={cardFace(id)}
                       print={print}
-                      width={112}
+                      width={CARD_SIZE.sm}
                       onClick={() => update({ leaderId: on ? null : id })}
                     />
                   </div>
@@ -202,8 +202,8 @@ function DeckBuilder({ deck, store, onBack }: { deck: Deck; store: Store; onBack
               if (!print) return null;
               const others = printsOwnedOf(collection, id);
               return (
-                <div key={id} style={{ display: "flex", flexDirection: "column", gap: 6, width: 112 }}>
-                  <PrintCard card={cardFace(id)} print={print} width={112} onClick={() => removeCard(id)} />
+                <div key={id} style={{ display: "flex", flexDirection: "column", gap: 6, width: CARD_SIZE.sm }}>
+                  <PrintCard card={cardFace(id)} print={print} width={CARD_SIZE.sm} onClick={() => removeCard(id)} />
                   {others.length > 1 && (
                     <button
                       onClick={() => setPickingPrintFor(pickingPrintFor === id ? null : id)}
@@ -262,7 +262,7 @@ function DeckBuilder({ deck, store, onBack }: { deck: Deck; store: Store; onBack
                 <PrintCard
                   card={cardFace(id)}
                   print={print}
-                  width={104}
+                  width={CARD_SIZE.sm}
                   interactive={!inDeck && !full}
                   onClick={() => addCard(id)}
                 />

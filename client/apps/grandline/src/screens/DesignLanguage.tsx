@@ -4,7 +4,7 @@ import {
   effectiveRate, DUPLICATE_VALUE, RANKS, craftCost,
   type PackId, type PrintId,
 } from "@cg/meta";
-import { COLOR, PRINT_COLOR, RADIUS, SPACE, TEXT, text } from "../design/tokens";
+import { CARD_SIZE, COLOR, PRINT_COLOR, RADIUS, SPACE, TEXT, cardSlotHeight, text } from "../design/tokens";
 import PrintCard, { type CardFace } from "../components/PrintCard";
 import {
   Button, Chip, Currency, Divider, Panel, RankBadge, SectionHead, Stat, Text, TierPip,
@@ -137,10 +137,10 @@ export default function DesignLanguage() {
 
         <div style={{ display: "flex", gap: SPACE.xl, flexWrap: "wrap" }}>
           {PRINTS.map(print => (
-            <div key={print} style={{ display: "flex", flexDirection: "column", gap: SPACE.md, width: 168 }}>
+            <div key={print} style={{ display: "flex", flexDirection: "column", gap: SPACE.md, width: CARD_SIZE.lg }}>
               {/* Prints differ in height on purpose, so the slot is fixed and the
                   cards hang from a common baseline. Otherwise the captions stagger. */}
-              <div style={{ height: 252, display: "flex", alignItems: "flex-end" }}>
+              <div style={{ height: cardSlotHeight(CARD_SIZE.lg), display: "flex", alignItems: "flex-end" }}>
                 <PrintCard card={DEMO} print={print} />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -197,8 +197,8 @@ export default function DesignLanguage() {
         <Panel padding={SPACE.xl}>
           <div style={{ display: "flex", gap: SPACE.xl, flexWrap: "wrap" }}>
             {BINDER.map(entry => (
-              <div key={entry.print} style={{ display: "flex", flexDirection: "column", gap: SPACE.md, width: 150 }}>
-                <PrintCard card={entry.card} print={entry.print} width={150} count={entry.count} />
+              <div key={entry.print} style={{ display: "flex", flexDirection: "column", gap: SPACE.md, width: CARD_SIZE.md }}>
+                <PrintCard card={entry.card} print={entry.print} width={CARD_SIZE.md} count={entry.count} />
                 <div style={{ display: "flex", gap: 6 }}>
                   <Button size="sm" tone="ghost">Dust</Button>
                   <Button size="sm" tone="ghost">Sell</Button>
@@ -289,7 +289,7 @@ export default function DesignLanguage() {
                 <PrintCard
                   card={i % 2 === 0 ? DEMO : BINDER[1].card}
                   print={pull.print}
-                  width={140}
+                  width={CARD_SIZE.md}
                   duplicate={pull.dupe}
                 />
                 <span

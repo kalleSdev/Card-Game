@@ -156,6 +156,56 @@ export const MOTION = {
   reveal: "600ms cubic-bezier(0.16, 1, 0.3, 1)",
 } as const;
 
+// ── Cards ────────────────────────────────────────────────────────────────────
+
+/**
+ * Every card on screen is one of these five widths. Nothing picks its own
+ * number, so a card in the binder and a card in a deck are recognisably the
+ * same object at two sizes rather than two slightly different drawings.
+ */
+export const CARD_SIZE = {
+  /** Thumbnails: a deck's leader on its tile, dense rows. */
+  xs: 92,
+  /** Deck building, and anywhere many cards are shown at once. */
+  sm: 112,
+  /** The binder grid, and the card sheet. */
+  md: 150,
+  /** Showcase rows and the design page. */
+  lg: 168,
+  /** One card carrying a moment on its own: a pack reveal. */
+  xl: 220,
+} as const;
+
+export type CardSize = keyof typeof CARD_SIZE;
+
+/**
+ * At or below this width a card goes compact: short character names, short
+ * print labels, one line rather than two. Deck building is the threshold, since
+ * that is the first place cards are packed tightly enough for a full name to
+ * wrap and take the row's baseline with it.
+ */
+export const CARD_COMPACT_MAX = CARD_SIZE.sm;
+
+/**
+ * How tall to reserve for a card of a given width.
+ *
+ * Prints differ in height on purpose — the 5★ and 6★ art breaks its frame — so
+ * a row hangs them from a common baseline inside a slot this tall, sized for
+ * the tallest of them.
+ *
+ * Not a flat ratio: the art scales with the width but the name plate does not,
+ * since its padding and type are fixed. So it is the art, whose tallest aspect
+ * is 5:5.4, plus a constant for the plate below it.
+ */
+const ART_RATIO = 5.4 / 5;
+const PLATE_HEIGHT = 67;
+const PLATE_HEIGHT_COMPACT = 35;
+
+export function cardSlotHeight(width: number): number {
+  const plate = width <= CARD_COMPACT_MAX ? PLATE_HEIGHT_COMPACT : PLATE_HEIGHT;
+  return Math.ceil(width * ART_RATIO + plate);
+}
+
 // ── Layout ───────────────────────────────────────────────────────────────────
 
 export const LAYOUT = {

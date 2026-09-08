@@ -1,6 +1,7 @@
 import { createEngine, createInitialState } from "@cg/engine";
 import { deriveStats } from "@cg/battle";
 import type { CardFace } from "../components/PrintCard";
+import { shortNameFor } from "./names";
 
 /**
  * The card pool.
@@ -18,7 +19,14 @@ const faces: Record<string, CardFace> = Object.fromEntries(
   POOL.map(id => {
     const def = cardDb[id];
     const stats = deriveStats(def);
-    return [id, { id, name: def.name, atk: stats.atk, hp: stats.hp, cost: stats.cost }];
+    return [id, {
+      id,
+      name: def.name,
+      shortName: shortNameFor(id, def.name),
+      atk: stats.atk,
+      hp: stats.hp,
+      cost: stats.cost,
+    }];
   }),
 );
 
@@ -28,6 +36,10 @@ export function cardFace(id: string): CardFace {
 
 export function cardName(id: string): string {
   return faces[id]?.name ?? id;
+}
+
+export function cardShortName(id: string): string {
+  return faces[id]?.shortName ?? id;
 }
 
 /** Cards that can lead a deck. Placeholder rule: the strongest rarities. */

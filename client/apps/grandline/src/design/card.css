@@ -128,6 +128,33 @@
   backdrop-filter: blur(4px);
 }
 
+/* Compact: one line of name at a smaller size, and tighter chrome. Used below
+   the width where a full name starts wrapping. */
+.pc--compact .pc__name {
+  font-size: 12.5px;
+  min-height: 0;
+  -webkit-line-clamp: 1;
+}
+.pc--compact .pc__body {
+  padding: 8px 9px 9px;
+  gap: 6px;
+}
+.pc--compact .pc__stats {
+  font-size: 10.5px;
+  gap: 7px;
+}
+.pc--compact .pc__ribbon,
+.pc--compact .pc__count {
+  font-size: 8px;
+  padding: 2px 5px;
+  top: 6px;
+}
+.pc--compact .pc__ribbon { left: 6px; }
+.pc--compact .pc__count { right: 6px; }
+.pc--compact.pc--blackLabel .pc__name {
+  font-size: 13.5px;
+}
+
 /* ── The foiling ───────────────────────────────────────────────────────────
    Two layers over the whole card, the way real foiling covers a card rather
    than sitting inside the frame.
