@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { PlayerDraftResult, PlayerId } from "@cg/contracts";
 import {
   applyBattleIntent, playBotTurn,
@@ -59,7 +59,6 @@ export default function BattleBoard({ initial, seed, drafts, opponent, title, st
   const [state, setState] = useState<BattleState>(initial);
   const [note, setNote] = useState<string | null>(null);
   const [payout, setPayout] = useState<Reward>(null);
-  const sizes = useBattleSizes();
 
   /**
    * Every intent played, in order. The server replays the match from the seed
@@ -84,7 +83,6 @@ export default function BattleBoard({ initial, seed, drafts, opponent, title, st
   const local = opponent === "local";
   /** The seat the board is drawn from. Fixed, even locally. */
   const you: PlayerId = "P1";
-  const them: PlayerId = "P2";
   const yourTurn = !state.winner && (local || state.activePlayer === you);
 
   const play = useCallback((intent: BattleIntent) => {
@@ -133,49 +131,109 @@ export default function BattleBoard({ initial, seed, drafts, opponent, title, st
       .then(result => setPayout(result ?? "refused"));
   }, [state.winner, opponent, store, seed, drafts]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (state.pendingAttackerId) play({ type: "CANCEL_ATTACK", pid: state.activePlayer });
-      else onLeave();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onLeave, play, state.pendingAttackerId, state.activePlayer]);
+  return (
+    <Board
+      state={state}
+      you={you}
+      local={local}
+      yourTurn={yourTurn}
+      note={note}
+      title={title}
+      badge={local ? `Local · ${state.activePlayer}` : "vs Computer"}
+      onIntent={play}
+      onLeave={onLeave}
+    >
+      {passing && !state.winner && (
+        <HandOver
+          seat={seatName(state.activePlayer)}
+          note="Your turn. The last player's hand is put away."
+          onReady={() => setPassing(false)}
+          onLeave={onLeave}
+        />
+      )}
 
+      {state.winner && (
+        <Result
+          winner={state.winner}
+          you={you}
+          local={local}
+          payout={payout}
+          onLeave={onLeave}
+        />
+      )}
+    </Board>
+  );
+}
+
+/**
+ * The board itself: three bands, a hand, and nothing else.
+ *
+ * It holds no rules and no connection. Whatever is driving the match — the
+ * engine in this file, or a server on the other end of a socket — hands it a
+ * state and takes back intents, which is the whole of what it knows how to do.
+ * Overlays are passed as children, so a driver can put its own screens over it.
+ */
+export function Board({
+  state, you, local, yourTurn, note, title, badge, opponentName, onIntent, onLeave, children,
+}: {
+  state: BattleState;
+  /** The seat drawn along the bottom. */
+  you: PlayerId;
+  /** Both seats played on one screen, so the board turns around each turn. */
+  local: boolean;
+  yourTurn: boolean;
+  note: string | null;
+  title: string;
+  /** The line under the title in the rail: who you are playing. */
+  badge: string;
+  opponentName?: string;
+  onIntent: (intent: BattleIntent) => void;
+  onLeave: () => void;
+  children?: ReactNode;
+}) {
+  const sizes = useBattleSizes();
+  const [held, setHeld] = useState<string | null>(null);
+  useEffect(() => { setHeld(null); }, [state.activePlayer]);
+
+  const them: PlayerId = you === "P1" ? "P2" : "P1";
   const actor = state.activePlayer;
   const attacking = state.pendingAttackerId;
 
+  // Locally the seat to move comes to the bottom, because the person to move is
+  // the one sitting in front of the screen. Online your own seat never moves.
+  const acting = local ? actor : you;
+  const top = local && actor === "P2" ? you : them;
+  const bottom = local && actor === "P2" ? them : you;
+  const hand = state.players[acting].hand;
+
+  const play = (intent: BattleIntent) => { if (yourTurn) onIntent(intent); };
+
   /** A click on one of your own cards: pick it up to attack with. */
   const onMine = (card: BattleCard) => {
-    if (!yourTurn) return;
-    setNote(null);
-    if (attacking === card.instanceId) return play({ type: "CANCEL_ATTACK", pid: actor });
-    play({ type: "SELECT_ATTACKER", pid: actor, instanceId: card.instanceId });
+    if (attacking === card.instanceId) return play({ type: "CANCEL_ATTACK", pid: acting });
+    play({ type: "SELECT_ATTACKER", pid: acting, instanceId: card.instanceId });
   };
 
   /** A click on one of theirs: swing at it, if something is picked up. */
   const onTheirs = (card: BattleCard) => {
-    if (!yourTurn || !attacking) return;
-    play({ type: "ATTACK_CARD", pid: actor, targetInstanceId: card.instanceId });
+    if (!attacking) return;
+    play({ type: "ATTACK_CARD", pid: acting, targetInstanceId: card.instanceId });
   };
 
   const onTheirLeader = () => {
-    if (!yourTurn || !attacking) return;
-    play({ type: "ATTACK_LEADER", pid: actor });
+    if (!attacking) return;
+    play({ type: "ATTACK_LEADER", pid: acting });
   };
 
-  /** A card from your hand into an empty slot. */
-  const onPlay = (card: BattleCard, slot: number) => {
-    if (!yourTurn) return;
-    play({ type: "PLAY_CARD", pid: actor, instanceId: card.instanceId, slot });
-  };
-
-  const [held, setHeld] = useState<string | null>(null);
-  useEffect(() => { setHeld(null); }, [state.activePlayer]);
-
-  const top = local && actor === "P2" ? you : them;
-  const bottom = local && actor === "P2" ? them : you;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (state.pendingAttackerId) onIntent({ type: "CANCEL_ATTACK", pid: state.activePlayer });
+      else onLeave();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onLeave, onIntent, state.pendingAttackerId, state.activePlayer]);
 
   return (
     <div
@@ -195,24 +253,18 @@ export default function BattleBoard({ initial, seed, drafts, opponent, title, st
         padding: SPACE.md,
       }}
     >
-      <Rail
-        title={title}
-        local={local}
-        turn={state.turn}
-        actor={actor}
-        onLeave={onLeave}
-      />
+      <Rail title={title} badge={badge} turn={state.turn} onLeave={onLeave} />
 
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: ARENA_GAP.band }}>
         <Side
           player={state.players[top]}
           sizes={sizes}
-          heading={local ? seatName(top) : "Opponent"}
+          heading={local ? seatName(top) : opponentName ?? "Opponent"}
           active={!state.winner && actor === top}
           facing="down"
-          attackable={Boolean(attacking) && top !== actor}
-          onCard={top === actor ? onMine : onTheirs}
-          onLeader={top === actor ? undefined : onTheirLeader}
+          attackable={Boolean(attacking) && top !== acting}
+          onCard={top === acting ? onMine : onTheirs}
+          onLeader={top === acting ? undefined : onTheirLeader}
         />
 
         <TurnBar
@@ -221,8 +273,8 @@ export default function BattleBoard({ initial, seed, drafts, opponent, title, st
           yourTurn={yourTurn}
           local={local}
           note={note}
-          onEndTurn={() => play({ type: "END_TURN", pid: actor })}
-          onCancel={() => play({ type: "CANCEL_ATTACK", pid: actor })}
+          onEndTurn={() => play({ type: "END_TURN", pid: acting })}
+          onCancel={() => play({ type: "CANCEL_ATTACK", pid: acting })}
         />
 
         <Side
@@ -231,22 +283,22 @@ export default function BattleBoard({ initial, seed, drafts, opponent, title, st
           heading={local ? seatName(bottom) : "You"}
           active={!state.winner && actor === bottom}
           facing="up"
-          attackable={Boolean(attacking) && bottom !== actor}
+          attackable={Boolean(attacking) && bottom !== acting}
           selected={attacking}
-          onCard={bottom === actor ? onMine : onTheirs}
-          onLeader={bottom === actor ? undefined : onTheirLeader}
-          onEmptySlot={held && bottom === actor
+          onCard={bottom === acting ? onMine : onTheirs}
+          onLeader={bottom === acting ? undefined : onTheirLeader}
+          onEmptySlot={held && bottom === acting && yourTurn
             ? slot => {
-                const card = state.players[actor].hand.find(c => c.instanceId === held);
-                if (card) onPlay(card, slot);
+                const card = hand.find(c => c.instanceId === held);
+                if (card) play({ type: "PLAY_CARD", pid: acting, instanceId: card.instanceId, slot });
                 setHeld(null);
               }
             : undefined}
         />
 
         <Hand
-          cards={state.players[actor].hand}
-          energy={state.players[actor].energy}
+          cards={hand}
+          energy={state.players[acting].energy}
           sizes={sizes}
           held={held}
           live={yourTurn}
@@ -254,29 +306,12 @@ export default function BattleBoard({ initial, seed, drafts, opponent, title, st
         />
       </div>
 
-      {passing && !state.winner && (
-        <HandOver
-          seat={seatName(actor)}
-          note="Your turn. The last player's hand is put away."
-          onReady={() => setPassing(false)}
-          onLeave={onLeave}
-        />
-      )}
-
-      {state.winner && (
-        <Result
-          winner={state.winner}
-          you={you}
-          local={local}
-          payout={payout}
-          onLeave={onLeave}
-        />
-      )}
+      {children}
     </div>
   );
 }
 
-function seatName(pid: PlayerId): string {
+export function seatName(pid: PlayerId): string {
   return pid === "P1" ? "Player one" : "Player two";
 }
 
@@ -293,11 +328,10 @@ function useBattleSizes(): BattleSizes {
 
 // ── Frame ────────────────────────────────────────────────────────────────────
 
-function Rail({ title, local, turn, actor, onLeave }: {
+function Rail({ title, badge, turn, onLeave }: {
   title: string;
-  local: boolean;
+  badge: string;
   turn: number;
-  actor: PlayerId;
   onLeave: () => void;
 }) {
   return (
@@ -324,7 +358,7 @@ function Rail({ title, local, turn, actor, onLeave }: {
           textAlign: "center",
         }}
       >
-        {local ? `Local · ${actor}` : "vs Computer"}
+        {badge}
       </span>
       <span style={{ ...text("data"), fontSize: 12, color: COLOR.fathom }}>Turn {turn}</span>
 

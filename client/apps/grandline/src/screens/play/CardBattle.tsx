@@ -9,7 +9,8 @@ import { cardDb, cardFace, cardName } from "../../data/pool";
 import { draftFromDeck, randomDraft } from "../../data/draft";
 import DraftPicks from "./DraftPicks";
 import HandOver from "./HandOver";
-import BattleBoard, { type BattleOpponent } from "./BattleBoard";
+import BattleBoard from "./BattleBoard";
+import OnlineBattle from "./OnlineBattle";
 import type { Store } from "../../data/store";
 
 /**
@@ -27,16 +28,20 @@ import type { Store } from "../../data/store";
 
 export type CardMode = "draft" | "deck";
 
+/** Who is on the other side: the computer, the next chair, or the server. */
+export type CardOpponent = "ai" | "local" | "online";
+
 /** How the two seats are named to two people sharing a screen. */
 const SEAT_NAME = { P1: "Player one", P2: "Player two" } as const;
 
 export default function CardBattle({ mode, opponent, store, onLeave }: {
   mode: CardMode;
-  opponent: BattleOpponent;
+  opponent: CardOpponent;
   store: Store;
   onLeave: () => void;
 }) {
   const local = opponent === "local";
+  const online = opponent === "online";
   const title = mode === "draft" ? "Draft" : "Deck";
 
   const [p1, setP1] = useState<PlayerDraftResult | null>(null);
@@ -54,9 +59,15 @@ export default function CardBattle({ mode, opponent, store, onLeave }: {
   const [seed] = useState(() => Math.floor(Math.random() * 2 ** 31));
 
   const battle: BattleState | null = useMemo(() => {
-    if (!p1 || !theirs) return null;
+    if (online || !p1 || !theirs) return null;
     return createBattleState(p1, theirs, cardDb, undefined, seed);
-  }, [p1, theirs, seed]);
+  }, [online, p1, theirs, seed]);
+
+  // Online, the deck is all this screen is for: the match itself belongs to the
+  // server, and the board there is drawn from what it sends back.
+  if (online && p1) {
+    return <OnlineBattle draft={p1} title={title} store={store} onLeave={onLeave} />;
+  }
 
   // Both decks are in. One last hand-over, so the board opens in front of the
   // person whose turn it actually is.
@@ -76,7 +87,7 @@ export default function CardBattle({ mode, opponent, store, onLeave }: {
         initial={battle}
         seed={seed}
         drafts={{ p1, p2: theirs }}
-        opponent={opponent}
+        opponent={local ? "local" : "ai"}
         title={title}
         store={store}
         onLeave={onLeave}

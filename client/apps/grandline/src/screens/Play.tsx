@@ -2,17 +2,20 @@ import { useState } from "react";
 import { ENERGY_PER_TURN, TABLE_SIZE, TEAM, TEAM_SIZE } from "@cg/score";
 import { COLOR, RADIUS, SPACE, text } from "../design/tokens";
 import { Button, Panel, SectionHead, Text } from "../components/primitives";
-import ScoreBattle, { type ScoreOpponent } from "./play/ScoreBattle";
-import CardBattle from "./play/CardBattle";
+import ScoreBattle from "./play/ScoreBattle";
+import CardBattle, { type CardOpponent } from "./play/CardBattle";
 import type { Store } from "../data/store";
 
 /**
  * Where a game starts.
  *
- * Three modes, and three ways into each: online, which is not built yet, the
- * computer, and a local game where one person drives both seats. Local exists
- * because two people at one screen is the easiest way to play a new mode with
+ * Three modes, and three ways into each: online against another person, the
+ * computer, and a local game where one screen holds both seats. Local exists
+ * because two people at one keyboard is the easiest way to play a new mode with
  * somebody, and it needs no server at all.
+ *
+ * Online is a room and a code rather than a queue. Score has no online yet: the
+ * server only knows how to run a card battle between two people.
  */
 
 type Mode = "score" | "draft" | "deck";
@@ -23,6 +26,8 @@ interface ModeDef {
   blurb: string;
   detail: string[];
   ready: boolean;
+  /** Whether the server can run this mode between two people. */
+  online: boolean;
 }
 
 const MODES: ModeDef[] = [
@@ -36,6 +41,7 @@ const MODES: ModeDef[] = [
       `${ENERGY_PER_TURN} energy a turn: look, or lock one away`,
     ],
     ready: true,
+    online: false,
   },
   {
     id: "draft",
@@ -47,6 +53,7 @@ const MODES: ModeDef[] = [
       "Same battle as Deck",
     ],
     ready: true,
+    online: true,
   },
   {
     id: "deck",
@@ -58,14 +65,21 @@ const MODES: ModeDef[] = [
       "Same battle as Draft",
     ],
     ready: true,
+    online: true,
   },
 ];
 
 export default function PlayScreen({ store }: { store: Store }) {
-  const [playing, setPlaying] = useState<{ mode: Mode; opponent: ScoreOpponent } | null>(null);
+  const [playing, setPlaying] = useState<{ mode: Mode; opponent: CardOpponent } | null>(null);
 
   if (playing?.mode === "score") {
-    return <ScoreBattle opponent={playing.opponent} store={store} onLeave={() => setPlaying(null)} />;
+    return (
+      <ScoreBattle
+        opponent={playing.opponent === "local" ? "local" : "ai"}
+        store={store}
+        onLeave={() => setPlaying(null)}
+      />
+    );
   }
 
   if (playing) {
@@ -86,7 +100,7 @@ export default function PlayScreen({ store }: { store: Store }) {
         title="Pick a game"
         right={
           <span style={{ ...text("small"), color: COLOR.fathom }}>
-            Online is not open yet
+            {store.signedIn ? "Online plays out of a room code" : "Sign in to play online"}
           </span>
         }
       />
@@ -130,7 +144,14 @@ export default function PlayScreen({ store }: { store: Store }) {
                 flexWrap: "wrap",
               }}
             >
-              <Button tone="ghost" size="sm" disabled>Online play</Button>
+              <Button
+                tone="ghost"
+                size="sm"
+                disabled={!mode.online || !store.signedIn}
+                onClick={() => setPlaying({ mode: mode.id, opponent: "online" })}
+              >
+                Online play
+              </Button>
               <Button
                 tone={mode.ready ? "primary" : "ghost"}
                 size="sm"
@@ -154,7 +175,8 @@ export default function PlayScreen({ store }: { store: Store }) {
 
       <p style={{ ...text("small"), color: COLOR.fathom, maxWidth: 620 }}>
         A local game runs both seats on this screen, so two people can play across one keyboard, or
-        over a share. Online opens once matchmaking is built.
+        over a share. Online puts you in a room with a code to pass on: no queue, and nothing to
+        keep running between matches. Score is local and against the computer for now.
       </p>
     </div>
   );

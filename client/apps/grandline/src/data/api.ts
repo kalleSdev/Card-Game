@@ -29,6 +29,11 @@ function setToken(token: string | null): void {
   }
 }
 
+/** The same server, spoken to over a socket rather than in requests. */
+export function socketUrl(): string {
+  return BASE.replace(/^http/, "ws");
+}
+
 export class ApiError extends Error {}
 
 async function call<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
