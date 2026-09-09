@@ -46,11 +46,26 @@ function bestTrade(attacker: BattleCard, enemyBoard: BattleCard[]): BattleCard |
   return [...pool].sort((a, b) => b.atk - a.atk || b.currentHp - a.currentHp)[0];
 }
 
+export interface BotOptions {
+  /**
+   * Leaves domains, spells and perks alone.
+   *
+   * Grand Line plays the plain game: no domain, no spells, no perks on the
+   * board. The bot has to play the same game the person across from it can see,
+   * so it is told which one that is rather than assuming the full ruleset.
+   */
+  plain?: boolean;
+}
+
 /**
  * Plays one full turn for `pid` and returns the state once the turn is over,
  * along with every event produced so the client can animate it.
  */
-export function playBotTurn(state: BattleState, pid: PlayerId): { state: BattleState; events: BattleEvent[] } {
+export function playBotTurn(
+  state: BattleState,
+  pid: PlayerId,
+  options: BotOptions = {},
+): { state: BattleState; events: BattleEvent[] } {
   let s = state;
   const events: BattleEvent[] = [];
   const run = (intent: BattleIntent): boolean => {
@@ -62,7 +77,7 @@ export function playBotTurn(state: BattleState, pid: PlayerId): { state: BattleS
   if (s.activePlayer !== pid || s.winner) return { state: s, events };
 
   // A domain may be waiting on a target before anything else can happen
-  if (s.pendingDomainAction) {
+  if (!options.plain && s.pendingDomainAction) {
     const target = bestTrade(
       { atk: 99, currentHp: 99 } as BattleCard,
       s.players[pid === "P1" ? "P2" : "P1"].board.filter(alive),
@@ -72,7 +87,7 @@ export function playBotTurn(state: BattleState, pid: PlayerId): { state: BattleS
 
   // Domain is a big swing, so take it as soon as it is available
   const me = () => s.players[pid];
-  if (me().domainMeter >= 100 && me().domainCooldown <= 0 && !me().domainActive) {
+  if (!options.plain && me().domainMeter >= 100 && me().domainCooldown <= 0 && !me().domainActive) {
     run({ type: "ACTIVATE_DOMAIN", pid });
     if (s.pendingDomainAction) {
       const target = s.players[pid === "P1" ? "P2" : "P1"].board.filter(alive)[0];

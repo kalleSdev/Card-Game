@@ -3,6 +3,8 @@ import { ENERGY_PER_TURN, TABLE_SIZE, TEAM, TEAM_SIZE } from "@cg/score";
 import { COLOR, RADIUS, SPACE, text } from "../design/tokens";
 import { Button, Panel, SectionHead, Text } from "../components/primitives";
 import ScoreBattle, { type ScoreOpponent } from "./play/ScoreBattle";
+import CardBattle from "./play/CardBattle";
+import type { Store } from "../data/store";
 
 /**
  * Where a game starts.
@@ -39,23 +41,42 @@ const MODES: ModeDef[] = [
     id: "draft",
     name: "Draft",
     blurb: "Build a deck out of what you are dealt, then fight with it.",
-    detail: ["Cards come from the draft, not your binder", "Same battle as Deck"],
-    ready: false,
+    detail: [
+      "A leader, then 12 picks, three on offer each time",
+      "Cards come from the draft, not your binder",
+      "Same battle as Deck",
+    ],
+    ready: true,
   },
   {
     id: "deck",
     name: "Deck",
     blurb: "Bring a deck you built, and fight with it.",
-    detail: ["Cards come from your collection", "Same battle as Draft"],
-    ready: false,
+    detail: [
+      "A leader and 12 cards, built on the Decks page",
+      "Cards come from your collection",
+      "Same battle as Draft",
+    ],
+    ready: true,
   },
 ];
 
-export default function PlayScreen() {
+export default function PlayScreen({ store }: { store: Store }) {
   const [playing, setPlaying] = useState<{ mode: Mode; opponent: ScoreOpponent } | null>(null);
 
   if (playing?.mode === "score") {
     return <ScoreBattle opponent={playing.opponent} onLeave={() => setPlaying(null)} />;
+  }
+
+  if (playing) {
+    return (
+      <CardBattle
+        mode={playing.mode}
+        opponent={playing.opponent}
+        store={store}
+        onLeave={() => setPlaying(null)}
+      />
+    );
   }
 
   return (

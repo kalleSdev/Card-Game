@@ -12,7 +12,8 @@ import { displayNameFor, shortNameFor } from "./names";
  * naming a universe, so swapping the source later is a change to this file and
  * nothing else.
  */
-const cardDb = createEngine(createInitialState()).getState().cardDb;
+/** Every card definition, which the battle engine needs whole. */
+export const cardDb = createEngine(createInitialState()).getState().cardDb;
 
 export const POOL: string[] = Object.keys(cardDb).sort();
 
@@ -102,4 +103,14 @@ export function preloadCardArt(): void {
     image.decoding = "async";
     image.src = artUrl(id);
   }
+}
+
+/** What a card is for: LEADER, COMBAT or SUPPORT, as the pool records it. */
+export function cardAffinity(id: string): string {
+  return String(cardDb[id]?.affinity ?? "");
+}
+
+/** The rarity letter, which is what decides who can lead a deck. */
+export function cardRarity(id: string): string {
+  return String(cardDb[id]?.rarity ?? "");
 }

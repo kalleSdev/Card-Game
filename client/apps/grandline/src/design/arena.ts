@@ -138,3 +138,40 @@ export const ARENA_MOTION = {
   settle: 260,
   handover: 520,
 } as const;
+
+/**
+ * The card battle, measured.
+ *
+ * Same three bands as Score, and the same rule about symmetry: both players get
+ * the same slot size, because a board where your side is bigger than theirs
+ * reads as a board that is lying to you.
+ *
+ * The row that gives up size here is your hand, not the board. The board is
+ * where the game is decided and both players have to read it at a glance; the
+ * hand is yours alone and you can pick a card up to look at it.
+ */
+export const BATTLE_COLUMNS = 5;
+
+export interface BattleSizes {
+  /** A card in play, on either side. */
+  slot: number;
+  /** A card in your hand. */
+  hand: number;
+  /** The leader, which sits beside its row rather than in it. */
+  leader: number;
+}
+
+const BATTLE_STEPS: { minHeight: number; sizes: BattleSizes }[] = [
+  { minHeight: 1060, sizes: { slot: CARD_SIZE.md, hand: CARD_SIZE.md, leader: CARD_SIZE.md } },
+  { minHeight: 940, sizes: { slot: CARD_SIZE.sm, hand: CARD_SIZE.md, leader: CARD_SIZE.sm } },
+  { minHeight: 0, sizes: { slot: CARD_SIZE.sm, hand: CARD_SIZE.sm, leader: CARD_SIZE.sm } },
+];
+
+export function battleSizesFor(windowHeight: number): BattleSizes {
+  return (BATTLE_STEPS.find(step => windowHeight >= step.minHeight) ?? BATTLE_STEPS[2]).sizes;
+}
+
+/** How wide a side of the board is: a leader, then five slots beside it. */
+export function battleRowWidth(sizes: BattleSizes): number {
+  return sizes.leader + SEAT_GROUP_GAP + gridWidth(BATTLE_COLUMNS, sizes.slot, ARENA_GAP.card);
+}

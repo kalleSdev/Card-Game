@@ -63,6 +63,7 @@ export default function PrintCard({
   count,
   duplicate = false,
   interactive = true,
+  stats = true,
   onClick,
 }: {
   card: CardFace;
@@ -73,6 +74,12 @@ export default function PrintCard({
   /** Dims the card, for a duplicate in a pack opening. */
   duplicate?: boolean;
   interactive?: boolean;
+  /**
+   * Whether the printed stats are drawn. A card in play carries what it is
+   * worth right now instead, and two sets of numbers on one card is one set
+   * too many.
+   */
+  stats?: boolean;
   onClick?: () => void;
 }) {
   const info = PRINT_INFO[print];
@@ -124,17 +131,19 @@ export default function PrintCard({
 
       <div className="pc__body">
         <div className="pc__name">{compact ? card.shortName ?? card.name : card.name}</div>
-        <div className="pc__stats">
-          <span>
-            ATK <b>{card.atk}</b>
-          </span>
-          <span>
-            HP <b>{card.hp}</b>
-          </span>
-          <span style={{ marginLeft: "auto" }}>
-            <b>{card.cost}</b>
-          </span>
-        </div>
+        {stats && (
+          <div className="pc__stats">
+            <span>
+              ATK <b>{card.atk}</b>
+            </span>
+            <span>
+              HP <b>{card.hp}</b>
+            </span>
+            <span style={{ marginLeft: "auto" }}>
+              <b>{card.cost}</b>
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

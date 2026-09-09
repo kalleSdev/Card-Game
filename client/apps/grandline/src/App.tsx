@@ -48,7 +48,7 @@ export default function App() {
         : page === "decks" ? <DecksScreen store={store} onSignIn={goSignIn} />
         : page === "shop" ? <ShopScreen store={store} onSignIn={goSignIn} />
         : page === "packs" ? <PacksScreen store={store} onSignIn={goSignIn} />
-        : page === "play" ? <PlayScreen />
+        : page === "play" ? <PlayScreen store={store} />
         : page === "feed" ? <FeedScreen />
         : page === "ladder" ? <LadderScreen store={store} />
         : page === "profile" ? <ProfileScreen store={store} onSignIn={goSignIn} />
