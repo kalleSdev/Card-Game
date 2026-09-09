@@ -65,7 +65,7 @@ export default function PlayScreen({ store }: { store: Store }) {
   const [playing, setPlaying] = useState<{ mode: Mode; opponent: ScoreOpponent } | null>(null);
 
   if (playing?.mode === "score") {
-    return <ScoreBattle opponent={playing.opponent} onLeave={() => setPlaying(null)} />;
+    return <ScoreBattle opponent={playing.opponent} store={store} onLeave={() => setPlaying(null)} />;
   }
 
   if (playing) {

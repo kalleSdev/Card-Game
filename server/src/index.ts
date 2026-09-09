@@ -13,6 +13,7 @@ import {
 import { PACKS, PRINTS, RANKS, COSMETIC_BY_ID, isProfileIcon, type PackId, type PrintId } from "@cg/meta";
 import { applyResult, leaderboard, standingOf } from "./ranking.js";
 import { recent, postMatch, postStreak, postRank } from "./feed.js";
+import { settleScoreMatch, settleBattleMatch, ReplayError } from "./practice.js";
 import { LobbyBook } from "./lobbies.js";
 import {
   openTrade, joinTrade, cancelTrade, setOffer, confirmTrade, openTradeFor, historyFor,
@@ -104,6 +105,7 @@ async function guarded<T>(reply: { code: (n: number) => { send: (b: unknown) => 
     return run();
   } catch (err) {
     const message = err instanceof Error ? err.message : "Something went wrong";
+    if (err instanceof ReplayError) return reply.code(422).send({ error: message });
     return reply.code(err instanceof AuthError ? 401 : 400).send({ error: message });
   }
 }
@@ -140,6 +142,28 @@ app.get("/feed", async (req) => {
   const { limit } = (req.query ?? {}) as { limit?: string };
   return { entries: recent(Number(limit) || 50) };
 });
+
+// ── Practice matches ────────────────────────────────────────────────────────
+// A game against the computer is played in the browser and submitted when it
+// ends. Nothing about the result is taken on trust: the seed and every intent
+// come with it, and the server replays the match through the same engine to
+// find out who actually won before it pays anybody.
+
+app.post("/practice/score", async (req, reply) =>
+  guarded(reply, () => {
+    const user = requireUser(req);
+    const body = (req.body ?? {}) as Parameters<typeof settleScoreMatch>[1];
+    return settleScoreMatch(user, body, DEFAULT_UNIVERSE);
+  }),
+);
+
+app.post("/practice/battle", async (req, reply) =>
+  guarded(reply, () => {
+    const user = requireUser(req);
+    const body = (req.body ?? {}) as Parameters<typeof settleBattleMatch>[1];
+    return settleBattleMatch(user, body, DEFAULT_UNIVERSE);
+  }),
+);
 
 // ── Trading ─────────────────────────────────────────────────────────────────
 // One table at a time per player, opened with a code the way a lobby is. Every

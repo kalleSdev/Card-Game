@@ -59,22 +59,24 @@ export interface BotOptions {
 
 /**
  * Plays one full turn for `pid` and returns the state once the turn is over,
- * along with every event produced so the client can animate it.
+ * along with every event produced so the client can animate it and every intent
+ * accepted so the match can be replayed move for move.
  */
 export function playBotTurn(
   state: BattleState,
   pid: PlayerId,
   options: BotOptions = {},
-): { state: BattleState; events: BattleEvent[] } {
+): { state: BattleState; events: BattleEvent[]; intents: BattleIntent[] } {
   let s = state;
   const events: BattleEvent[] = [];
+  const intents: BattleIntent[] = [];
   const run = (intent: BattleIntent): boolean => {
     const t = attempt(s, intent);
-    if (t.ok) { s = t.state; events.push(...t.events); }
+    if (t.ok) { s = t.state; events.push(...t.events); intents.push(intent); }
     return t.ok;
   };
 
-  if (s.activePlayer !== pid || s.winner) return { state: s, events };
+  if (s.activePlayer !== pid || s.winner) return { state: s, events, intents };
 
   // A domain may be waiting on a target before anything else can happen
   if (!options.plain && s.pendingDomainAction) {
@@ -137,5 +139,5 @@ export function playBotTurn(
   }
 
   if (!s.winner) run({ type: "END_TURN", pid });
-  return { state: s, events };
+  return { state: s, events, intents };
 }

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import type { PlayerId } from "@cg/contracts";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { PlayerDraftResult, PlayerId } from "@cg/contracts";
 import {
   applyBattleIntent, playBotTurn,
   type BattleCard, type BattleIntent, type BattleState,
@@ -11,8 +11,10 @@ import {
 } from "../../design/arena";
 import { COLOR, RADIUS, SPACE, text } from "../../design/tokens";
 import PrintCard from "../../components/PrintCard";
-import { Button, Panel, Text } from "../../components/primitives";
+import { Button, Currency, Panel, Text } from "../../components/primitives";
 import { cardFace } from "../../data/pool";
+import * as api from "../../data/api";
+import type { Store } from "../../data/store";
 
 /**
  * The card battle, Grand Line.
@@ -35,16 +37,41 @@ const BOT_THINKING_MS = 800;
 
 export type BattleOpponent = "ai" | "local";
 
-export default function BattleBoard({ initial, opponent, title, onLeave }: {
+/** What came back from handing the match in: nothing yet, a payout, or a no. */
+type Reward = api.Payout | "refused" | null;
+
+export default function BattleBoard({ initial, seed, drafts, opponent, title, store, onLeave }: {
   initial: BattleState;
+  /** What the match was dealt from, so the server can replay it. */
+  seed: number;
+  drafts: { p1: PlayerDraftResult; p2: PlayerDraftResult };
   opponent: BattleOpponent;
   /** Which mode brought us here, for the rail. */
   title: string;
+  store: Store;
   onLeave: () => void;
 }) {
   const [state, setState] = useState<BattleState>(initial);
   const [note, setNote] = useState<string | null>(null);
+  const [payout, setPayout] = useState<Reward>(null);
   const sizes = useBattleSizes();
+
+  /**
+   * Every intent played, in order. The server replays the match from the seed
+   * and these rather than being told who won.
+   */
+  const log = useRef<BattleIntent[]>([]);
+
+  /**
+   * The state the log is written against. A state updater can be called more
+   * than once for the same update, so the log is kept out of one: an intent
+   * written down twice is a match that no longer replays.
+   */
+  const latest = useRef(state);
+  latest.current = state;
+
+  /** Whether this game has already been handed in. */
+  const sent = useRef(false);
 
   const local = opponent === "local";
   /** The seat the board is drawn from. Fixed, even locally. */
@@ -53,26 +80,48 @@ export default function BattleBoard({ initial, opponent, title, onLeave }: {
   const yourTurn = !state.winner && (local || state.activePlayer === you);
 
   const play = useCallback((intent: BattleIntent) => {
-    setState(current => {
-      const { state: next, events } = applyBattleIntent(current, intent);
-      const illegal = events.find(e => e.type === "ILLEGAL");
-      setNote(illegal && "reason" in illegal ? String(illegal.reason) : null);
-      return next;
-    });
+    const current = latest.current;
+    const { state: next, events } = applyBattleIntent(current, intent);
+    const illegal = events.find(e => e.type === "ILLEGAL");
+    setNote(illegal && "reason" in illegal ? String(illegal.reason) : null);
+    if (!illegal) {
+      log.current.push(intent);
+      latest.current = next;
+      setState(next);
+    }
   }, []);
 
   // Against the computer, P2 plays itself, on the plain ruleset this board shows
   useEffect(() => {
     if (opponent !== "ai" || state.winner || state.activePlayer !== "P2") return;
     const timer = setTimeout(() => {
-      setState(current =>
-        current.activePlayer === "P2" && !current.winner
-          ? playBotTurn(current, "P2", { plain: true }).state
-          : current,
-      );
+      const current = latest.current;
+      if (current.activePlayer !== "P2" || current.winner) return;
+      const { state: next, intents } = playBotTurn(current, "P2", { plain: true });
+      log.current.push(...intents);
+      latest.current = next;
+      setState(next);
     }, BOT_THINKING_MS);
     return () => clearTimeout(timer);
   }, [state, opponent]);
+
+  /**
+   * A finished game against the computer is handed in and paid for. A local
+   * game is not: two people at one keyboard decide the winner between them.
+   */
+  useEffect(() => {
+    if (!state.winner || opponent !== "ai" || !store.signedIn || sent.current) return;
+    sent.current = true;
+    void store
+      .settle(() => api.settleBattle({
+        seed,
+        p1: drafts.p1,
+        p2: drafts.p2,
+        intents: log.current,
+        you: "P1",
+      }))
+      .then(result => setPayout(result ?? "refused"));
+  }, [state.winner, opponent, store, seed, drafts]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -200,6 +249,7 @@ export default function BattleBoard({ initial, opponent, title, onLeave }: {
           winner={state.winner}
           you={you}
           local={local}
+          payout={payout}
           onLeave={onLeave}
         />
       )}
@@ -691,10 +741,11 @@ function Cost({ value, affordable }: { value: number; affordable: boolean }) {
 
 // ── The end ──────────────────────────────────────────────────────────────────
 
-function Result({ winner, you, local, onLeave }: {
+function Result({ winner, you, local, payout, onLeave }: {
   winner: PlayerId | "DRAW";
   you: PlayerId;
   local: boolean;
+  payout: Reward;
   onLeave: () => void;
 }) {
   const line = winner === "DRAW"
@@ -717,6 +768,31 @@ function Result({ winner, you, local, onLeave }: {
     >
       <Panel padding={SPACE.xxl} style={{ textAlign: "center", minWidth: 340 }} lifted>
         <Text as="h3" role="display">{line}</Text>
+
+        <div style={{ marginTop: SPACE.lg }}>
+          {local ? (
+            <span style={{ ...text("small"), fontSize: 12, color: COLOR.fathom }}>
+              A local game pays nothing.
+            </span>
+          ) : payout === "refused" ? (
+            <span style={{ ...text("small"), fontSize: 12, color: COLOR.signal }}>
+              That match could not be settled, so nothing was paid for it.
+            </span>
+          ) : payout ? (
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: SPACE.lg }}>
+              <Currency kind="berries" amount={payout.berries} />
+              <span style={{ ...text("small"), fontSize: 12, color: COLOR.mist }}>
+                {payout.packs.length === 1 ? "1 pack" : `${payout.packs.length} packs`} to open
+              </span>
+              <span style={{ ...text("label"), fontSize: 8, color: COLOR.fathom }}>
+                no MMR from practice
+              </span>
+            </span>
+          ) : (
+            <span style={{ ...text("small"), fontSize: 12, color: COLOR.fathom }}>Counting it up…</span>
+          )}
+        </div>
+
         <div style={{ marginTop: SPACE.xl }}>
           <Button tone="primary" onClick={onLeave}>Back to Play</Button>
         </div>

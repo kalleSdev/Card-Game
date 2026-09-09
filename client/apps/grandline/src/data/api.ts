@@ -274,3 +274,26 @@ export interface FeedEntry {
 /** Public, so this works signed out. */
 export const fetchFeed = (limit = 50) =>
   call<{ entries: FeedEntry[] }>(`/feed?limit=${limit}`);
+
+// ── Practice matches ────────────────────────────────────────────────────────
+
+export interface Payout {
+  won: boolean;
+  packs: OwnedPack[];
+  berries: number;
+}
+
+/**
+ * A finished game against the computer, sent with everything needed to replay
+ * it. The server works out who won rather than being told.
+ */
+export const settleScore = (body: { seed: number; intents: unknown[]; you: "P1" | "P2" }) =>
+  call<Payout>("/practice/score", { method: "POST", body });
+
+export const settleBattle = (body: {
+  seed: number;
+  p1: unknown;
+  p2: unknown;
+  intents: unknown[];
+  you: "P1" | "P2";
+}) => call<Payout>("/practice/battle", { method: "POST", body });

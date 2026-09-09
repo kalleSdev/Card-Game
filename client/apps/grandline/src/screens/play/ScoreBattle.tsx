@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   COST, ENERGY_PER_TURN, MISPLACED_PENALTY, SKIPS_PER_GAME, TEAM, TEAM_SIZE,
   applyScoreIntent, createScoreMatch, playScoreTurn, scores, seatOf, seatsFilled, valueOf,
@@ -12,8 +12,10 @@ import {
 import { COLOR, RADIUS, SPACE, text } from "../../design/tokens";
 import ScoreCard from "../../components/ScoreCard";
 import CardBack from "../../components/CardBack";
-import { Button, Panel, Text } from "../../components/primitives";
+import { Button, Currency, Panel, Text } from "../../components/primitives";
 import { SCORE_POOL, artUrl, cardShortName, scoreCard } from "../../data/pool";
+import * as api from "../../data/api";
+import type { Store } from "../../data/store";
 
 /**
  * Score Battle.
@@ -37,11 +39,15 @@ const BOT_THINKING_MS = 750;
 
 export type ScoreOpponent = "ai" | "local";
 
+/** What came back from handing the match in: nothing yet, a payout, or a no. */
+type Reward = api.Payout | "refused" | null;
+
 /** What the bar has armed, waiting for a card. */
 type Armed = "reveal" | "deny" | null;
 
-export default function ScoreBattle({ opponent, onLeave }: {
+export default function ScoreBattle({ opponent, store, onLeave }: {
   opponent: ScoreOpponent;
+  store: Store;
   onLeave: () => void;
 }) {
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 2 ** 31));
@@ -50,7 +56,27 @@ export default function ScoreBattle({ opponent, onLeave }: {
   const [armed, setArmed] = useState<Armed>(null);
   const [placing, setPlacing] = useState<number | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [payout, setPayout] = useState<Reward>(null);
   const { seat: seatCard, table: tableCard } = useBoardSizes();
+
+  /**
+   * Every intent played, in order, so the server can replay the match instead
+   * of taking the client's word for who won it. Kept in a ref because it is a
+   * log rather than state: nothing on screen is drawn from it.
+   */
+  const log = useRef<{ intent: ScoreIntent; by: ScorePlayer }[]>([]);
+
+  /**
+   * The state the log is written against. React is free to call a state updater
+   * more than once for the same update, so anything that has to happen exactly
+   * once for each intent cannot live inside one. Writing it down twice would
+   * hand the server a match that cannot replay.
+   */
+  const latest = useRef(state);
+  latest.current = state;
+
+  /** Whether this game has already been handed in. */
+  const sent = useRef(false);
 
   const total = useMemo(() => scores(state, SCORE_POOL), [state]);
 
@@ -65,12 +91,15 @@ export default function ScoreBattle({ opponent, onLeave }: {
   const yourTurn = !state.over && (local || state.turn === you);
 
   const play = useCallback((intent: ScoreIntent) => {
-    setState(current => {
-      const { state: next, events } = applyScoreIntent(current, intent, current.turn, SCORE_POOL);
-      const refused = events.find(e => e.type === "REJECTED");
-      setNote(refused && "reason" in refused ? refused.reason : null);
-      return next;
-    });
+    const current = latest.current;
+    const { state: next, events } = applyScoreIntent(current, intent, current.turn, SCORE_POOL);
+    const refused = events.find(e => e.type === "REJECTED");
+    setNote(refused && "reason" in refused ? refused.reason : null);
+    if (!refused) {
+      log.current.push({ intent, by: current.turn });
+      latest.current = next;
+      setState(next);
+    }
     setArmed(null);
     setPlacing(null);
   }, []);
@@ -79,14 +108,28 @@ export default function ScoreBattle({ opponent, onLeave }: {
   useEffect(() => {
     if (opponent !== "ai" || state.over || state.turn !== "P2") return;
     const timer = setTimeout(() => {
-      setState(current =>
-        current.turn === "P2" && !current.over
-          ? playScoreTurn(current, "P2", SCORE_POOL).state
-          : current,
-      );
+      const current = latest.current;
+      if (current.turn !== "P2" || current.over) return;
+      const { state: next, intents } = playScoreTurn(current, "P2", SCORE_POOL);
+      for (const intent of intents) log.current.push({ intent, by: "P2" });
+      latest.current = next;
+      setState(next);
     }, BOT_THINKING_MS);
     return () => clearTimeout(timer);
   }, [state, opponent]);
+
+  /**
+   * A finished game against the computer is worth something, so it is handed
+   * in. A local game is not: two people at one keyboard can decide the winner
+   * between them, which is fine for a game and useless as a source of packs.
+   */
+  useEffect(() => {
+    if (!state.over || opponent !== "ai" || !store.signedIn || sent.current) return;
+    sent.current = true;
+    void store
+      .settle(() => api.settleScore({ seed, intents: log.current, you }))
+      .then(result => setPayout(result ?? "refused"));
+  }, [state.over, opponent, store, seed, you]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -131,6 +174,9 @@ export default function ScoreBattle({ opponent, onLeave }: {
     const next = Math.floor(Math.random() * 2 ** 31);
     setSeed(next);
     setState(createScoreMatch(SCORE_POOL, next));
+    log.current = [];
+    sent.current = false;
+    setPayout(null);
     clearAll();
     setNote(null);
   };
@@ -239,6 +285,7 @@ export default function ScoreBattle({ opponent, onLeave }: {
           state={state}
           total={total}
           local={local}
+          payout={payout}
           onRestart={restart}
           onLeave={onLeave}
         />
@@ -752,10 +799,11 @@ function EmptySeat({ width }: { width: number }) {
 
 // ── The end ──────────────────────────────────────────────────────────────────
 
-function Result({ state, total, local, onRestart, onLeave }: {
+function Result({ state, total, local, payout, onRestart, onLeave }: {
   state: ScoreState;
   total: Record<ScorePlayer, number>;
   local: boolean;
+  payout: Reward;
   onRestart: () => void;
   onLeave: () => void;
 }) {
@@ -779,9 +827,11 @@ function Result({ state, total, local, onRestart, onLeave }: {
               ? `${state.winner} wins`
               : state.winner === "P1" ? "You win" : "You lose"}
         </Text>
-        <p style={{ ...text("data"), fontSize: 30, color: COLOR.mist, margin: `${SPACE.lg}px 0 ${SPACE.xl}px` }}>
+        <p style={{ ...text("data"), fontSize: 30, color: COLOR.mist, margin: `${SPACE.lg}px 0 ${SPACE.lg}px` }}>
           {total.P1} — {total.P2}
         </p>
+
+        <Reward payout={payout} local={local} />
         <div style={{ display: "flex", gap: SPACE.md, justifyContent: "center" }}>
           <Button tone="primary" onClick={onRestart}>Play again</Button>
           <Button tone="ghost" onClick={onLeave}>Leave</Button>
@@ -799,4 +849,56 @@ function knownCard(state: ScoreState, index: number): ScoreCardDef | null {
   if (!slot?.revealed && !slot?.takenBy) return null;
   const id = state.cards[index];
   return id ? scoreCard(id) : null;
+}
+
+/**
+ * What the match paid.
+ *
+ * A practice game pays packs and Berries but no MMR, so the panel says what
+ * turned up rather than implying a ladder movement that did not happen.
+ */
+function Reward({ payout, local }: { payout: Reward; local: boolean }) {
+  if (local) {
+    return (
+      <p style={{ ...text("small"), fontSize: 12, color: COLOR.fathom, marginBottom: SPACE.xl }}>
+        A local game pays nothing. Two people at one keyboard can decide the winner between them.
+      </p>
+    );
+  }
+
+  if (payout === "refused") {
+    return (
+      <p style={{ ...text("small"), fontSize: 12, color: COLOR.signal, marginBottom: SPACE.xl }}>
+        That match could not be settled, so nothing was paid for it.
+      </p>
+    );
+  }
+
+  if (!payout) {
+    return (
+      <p style={{ ...text("small"), fontSize: 12, color: COLOR.fathom, marginBottom: SPACE.xl }}>
+        Counting it up…
+      </p>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: SPACE.lg,
+        marginBottom: SPACE.xl,
+        paddingTop: SPACE.md,
+        borderTop: `1px solid ${COLOR.rope}`,
+      }}
+    >
+      <Currency kind="berries" amount={payout.berries} />
+      <span style={{ ...text("small"), fontSize: 12, color: COLOR.mist }}>
+        {payout.packs.length === 1 ? "1 pack" : `${payout.packs.length} packs`} to open
+      </span>
+      <span style={{ ...text("label"), fontSize: 8, color: COLOR.fathom }}>no MMR from practice</span>
+    </div>
+  );
 }

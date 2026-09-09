@@ -50,6 +50,11 @@ export interface Store {
   deleteDeck: (id: string) => void;
   newDeck: (name: string) => Deck;
 
+  /** Hand a finished practice match in, and take back what it paid. */
+  settle: (
+    submit: () => Promise<api.Payout>,
+  ) => Promise<api.Payout | null>;
+
   /** Pull everything down again. */
   refresh: () => Promise<void>;
 }
@@ -181,6 +186,21 @@ export function useStore(): Store {
     [load],
   );
 
+  /**
+   * A finished match. The payout is the server's word, not ours, so the wallet
+   * and the pack shelf are pulled down again rather than guessed at.
+   */
+  const settle = useCallback(async (submit: () => Promise<api.Payout>) => {
+    try {
+      const payout = await submit();
+      await load();
+      return payout;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "That match could not be settled");
+      return null;
+    }
+  }, [load]);
+
   // Worn straight away, then confirmed. If the server refuses, it says why and
   // sends back what is actually being worn rather than leaving a lie on screen.
   const saveProfileNow = useCallback((next: api.Profile) => {
@@ -220,6 +240,7 @@ export function useStore(): Store {
     account, signedIn: account !== null, loading, error,
     collection, wallet, packs, decks, standing, cosmetics, profile,
     saveProfile: saveProfileNow,
+    settle,
     signIn, register, signOut,
     buy, open, scrap,
     saveDeck, deleteDeck, newDeck,

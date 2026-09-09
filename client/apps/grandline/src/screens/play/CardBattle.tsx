@@ -39,17 +39,24 @@ export default function CardBattle({ mode, opponent, store, onLeave }: {
   // draft from the other yet.
   const theirDraft = useMemo(() => randomDraft(), []);
 
+  // The seed is drawn once and kept, because the server replays the match from
+  // it and a match that cannot be replayed cannot be paid for.
+  const [seed] = useState(() => Math.floor(Math.random() * 2 ** 31));
+
   const battle: BattleState | null = useMemo(() => {
     if (!yourDraft) return null;
-    return createBattleState(yourDraft, theirDraft, cardDb);
-  }, [yourDraft, theirDraft]);
+    return createBattleState(yourDraft, theirDraft, cardDb, undefined, seed);
+  }, [yourDraft, theirDraft, seed]);
 
   if (battle && yourDraft) {
     return (
       <BattleBoard
         initial={battle}
+        seed={seed}
+        drafts={{ p1: yourDraft, p2: theirDraft }}
         opponent={opponent}
         title={title}
+        store={store}
         onLeave={onLeave}
       />
     );
