@@ -19,8 +19,9 @@ import "../design/scorecard.css";
 export const GRADE_TONE: Record<Grade, { tone: string; edge: string; inner: string }> = {
   common: { tone: "#8595A5", edge: "#2B3947", inner: "rgba(133,149,165,0.22)" },
   rare: { tone: "#3E8FA0", edge: "#2A4E58", inner: "rgba(62,143,160,0.28)" },
-  epic: { tone: "#7B6BD9", edge: "#3D3670", inner: "rgba(123,107,217,0.3)" },
-  legendary: { tone: "#E0A93B", edge: "#6B5220", inner: "rgba(224,169,59,0.32)" },
+  epic: { tone: "#9A8BEF", edge: "#3D3670", inner: "rgba(154,139,239,0.32)" },
+  legendary: { tone: "#E0A93B", edge: "#6B5220", inner: "rgba(224,169,59,0.34)" },
+  mythic: { tone: "#FF8AD6", edge: "#7A2C63", inner: "rgba(255,138,214,0.34)" },
 };
 
 export const GRADE_LABEL: Record<Grade, string> = {
@@ -28,6 +29,16 @@ export const GRADE_LABEL: Record<Grade, string> = {
   rare: "Rare",
   epic: "Epic",
   legendary: "Legendary",
+  mythic: "Mythic",
+};
+
+/** Which grades catch light. The plain two are plain on purpose. */
+const TREATED: Record<Grade, boolean> = {
+  common: false,
+  rare: false,
+  epic: true,
+  legendary: true,
+  mythic: true,
 };
 
 /** The art, keyed off the id, so a character looks like itself in both modes. */
@@ -75,6 +86,7 @@ export default function ScoreCard({
 
   const classes = [
     "sc",
+    `sc--${card.grade}`,
     compact ? "sc--compact" : "",
     interactive ? "sc--interactive" : "",
     selected ? "sc--selected" : "",
@@ -94,6 +106,8 @@ export default function ScoreCard({
         <div className="sc__horizon" />
         <div className="sc__band" />
       </div>
+
+      {TREATED[card.grade] && <div className="sc__leaf" />}
 
       <div className="sc__body">
         <div className="sc__name">{name}</div>

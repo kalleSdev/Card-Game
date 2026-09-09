@@ -15,7 +15,7 @@ export type Seat = "captain" | "combat" | "support";
 /** Where a card belongs. The same three words as the seats, on purpose. */
 export type ScoreRole = Seat;
 
-export type Grade = "common" | "rare" | "epic" | "legendary";
+export type Grade = "common" | "rare" | "epic" | "legendary" | "mythic";
 
 /** What each grade is worth. A card's own points sit inside its band. */
 export const GRADE_POINTS: Record<Grade, { min: number; max: number }> = {
@@ -23,9 +23,10 @@ export const GRADE_POINTS: Record<Grade, { min: number; max: number }> = {
   rare: { min: 4, max: 6 },
   epic: { min: 7, max: 10 },
   legendary: { min: 12, max: 15 },
+  mythic: { min: 16, max: 20 },
 };
 
-export const GRADES = ["common", "rare", "epic", "legendary"] as const;
+export const GRADES = ["common", "rare", "epic", "legendary", "mythic"] as const;
 
 /** One player's team: one captain, three combat, three support. */
 export const TEAM = { captain: 1, combat: 3, support: 3 } as const;

@@ -20,15 +20,19 @@ const ROLE_OF: Record<string, ScoreRole> = {
   SUPPORT: "support",
 };
 
-/** Rarity letters to grades. The two ends are narrow on purpose. */
+/**
+ * Rarity letters to grades. The top end is narrow on purpose: mythic is the
+ * only grade a card cannot be common at, and it should stay something you are
+ * pleased to turn over rather than something you expect.
+ */
 const GRADE_OF: Record<string, Grade> = {
   C: "common",
   B: "common",
-  A: "common",
+  A: "rare",
   S: "rare",
   SS: "epic",
-  SSS: "epic",
-  X: "legendary",
+  SSS: "legendary",
+  X: "mythic",
 };
 
 export function roleOf(def: CardDef): ScoreRole {

@@ -2,14 +2,15 @@ import { useState } from "react";
 import { ENERGY_PER_TURN, TABLE_SIZE, TEAM, TEAM_SIZE } from "@cg/score";
 import { COLOR, RADIUS, SPACE, text } from "../design/tokens";
 import { Button, Panel, SectionHead, Text } from "../components/primitives";
-import ScoreBattle from "./play/ScoreBattle";
+import ScoreBattle, { type ScoreOpponent } from "./play/ScoreBattle";
 
 /**
  * Where a game starts.
  *
- * Three modes, one card each, and nothing else on the page. Two of them are the
- * same battle with a different source of cards, which the copy says out loud
- * rather than leaving somebody to work out from playing both.
+ * Three modes, and three ways into each: online, which is not built yet, the
+ * computer, and a local game where one person drives both seats. Local exists
+ * because two people at one screen is the easiest way to play a new mode with
+ * somebody, and it needs no server at all.
  */
 
 type Mode = "score" | "draft" | "deck";
@@ -51,9 +52,11 @@ const MODES: ModeDef[] = [
 ];
 
 export default function PlayScreen() {
-  const [playing, setPlaying] = useState<Mode | null>(null);
+  const [playing, setPlaying] = useState<{ mode: Mode; opponent: ScoreOpponent } | null>(null);
 
-  if (playing === "score") return <ScoreBattle onLeave={() => setPlaying(null)} />;
+  if (playing?.mode === "score") {
+    return <ScoreBattle opponent={playing.opponent} onLeave={() => setPlaying(null)} />;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: SPACE.xl }}>
@@ -62,12 +65,12 @@ export default function PlayScreen() {
         title="Pick a game"
         right={
           <span style={{ ...text("small"), color: COLOR.fathom }}>
-            Against the computer for now
+            Online is not open yet
           </span>
         }
       />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: SPACE.lg }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: SPACE.lg }}>
         {MODES.map(mode => (
           <Panel key={mode.id} padding={SPACE.xl} style={{ display: "flex", flexDirection: "column", gap: SPACE.md }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: SPACE.md }}>
@@ -97,18 +100,41 @@ export default function PlayScreen() {
               ))}
             </ul>
 
-            <div style={{ marginTop: "auto", paddingTop: SPACE.lg }}>
+            <div
+              style={{
+                marginTop: "auto",
+                paddingTop: SPACE.lg,
+                display: "flex",
+                gap: SPACE.sm,
+                flexWrap: "wrap",
+              }}
+            >
+              <Button tone="ghost" size="sm" disabled>Online play</Button>
               <Button
                 tone={mode.ready ? "primary" : "ghost"}
+                size="sm"
                 disabled={!mode.ready}
-                onClick={() => setPlaying(mode.id)}
+                onClick={() => setPlaying({ mode: mode.id, opponent: "ai" })}
               >
-                {mode.ready ? "Play" : "Not yet"}
+                Play vs AI
+              </Button>
+              <Button
+                tone="secondary"
+                size="sm"
+                disabled={!mode.ready}
+                onClick={() => setPlaying({ mode: mode.id, opponent: "local" })}
+              >
+                Play local
               </Button>
             </div>
           </Panel>
         ))}
       </div>
+
+      <p style={{ ...text("small"), color: COLOR.fathom, maxWidth: 620 }}>
+        A local game runs both seats on this screen, so two people can play across one keyboard, or
+        over a share. Online opens once matchmaking is built.
+      </p>
     </div>
   );
 }

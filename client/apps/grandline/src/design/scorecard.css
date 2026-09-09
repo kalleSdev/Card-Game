@@ -1,14 +1,14 @@
 /* The Score Battle card.
 
-   A second face for the same characters, used nowhere but this mode. It is
-   built from the same geometry as a collection card so the two read as the same
-   family, and then stripped: no print name, no attack, no health, no cost. A
-   star with nothing written next to it, the character, and the one number that
-   decides the game.
+   A second face for the same characters, used nowhere but this mode. Same
+   geometry as a collection card so the two read as one family, then stripped:
+   no print name, no attack, no health, no cost. A star with nothing written
+   beside it, the character, and the one number that decides the game.
 
-   Colour is the whole grading system here. A collection card is told apart by
-   its treatment; a Score card is told apart by its band, because in this mode
-   the only question anybody is asking is what a card is worth. */
+   Colour and treatment carry the grade. Common and rare are plain, because most
+   of the table is plain and a card you are pleased to turn over has to look
+   different from across the room. Epic gets the foil sweep, legendary a gold
+   that stays quiet, and mythic the only glow in the mode. */
 
 .sc {
   position: relative;
@@ -46,13 +46,13 @@
 
 .sc__star {
   position: absolute;
-  top: 7px;
-  left: 8px;
-  z-index: 3;
-  font-size: 12px;
+  top: 8px;
+  left: 9px;
+  z-index: 4;
+  font-size: 13px;
   line-height: 1;
   color: var(--sc-tone);
-  text-shadow: 0 1px 4px rgba(4, 7, 12, 0.9);
+  text-shadow: 0 1px 5px rgba(4, 7, 12, 0.95);
 }
 
 /* ── Art ─────────────────────────────────────────────────────────────────── */
@@ -94,8 +94,8 @@
   border: 1px solid rgba(242, 236, 223, 0.26);
 }
 
-/* A band of the card's own colour across the bottom of the art, so the grade is
-   readable at table size from the colour alone. */
+/* A rule of the card's own colour under the art, so the grade is readable at
+   table size from the colour alone. */
 .sc__band {
   position: absolute;
   left: 0;
@@ -104,16 +104,19 @@
   height: 3px;
   background: var(--sc-tone);
   opacity: 0.9;
+  z-index: 3;
 }
 
 /* ── The plate ───────────────────────────────────────────────────────────── */
 
 .sc__body {
+  position: relative;
+  z-index: 3;
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 9px 10px 10px;
-  background: linear-gradient(180deg, rgba(7, 12, 19, 0.4), transparent);
+  padding: 10px 11px 11px;
+  background: linear-gradient(180deg, rgba(7, 12, 19, 0.45), transparent);
 }
 
 .sc__name {
@@ -121,13 +124,12 @@
   min-width: 0;
   font-family: "Fraunces", Georgia, serif;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.15;
   letter-spacing: -0.01em;
   color: var(--foam);
-  /* Two lines of room whether the name needs them or not, so a row of cards
-     keeps one baseline rather than stepping with name length. The same rule the
-     collection card follows, since they sit next to each other in the design. */
+  /* Two lines of room whether the name needs them or not, so a row keeps one
+     baseline rather than stepping with name length. */
   min-height: 2.3em;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -138,24 +140,156 @@
 /* The only number on the card. */
 .sc__value {
   flex: none;
-  min-width: 26px;
-  padding: 2px 6px;
+  min-width: 28px;
+  padding: 3px 7px;
   border-radius: 4px;
   text-align: center;
   font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--sc-tone);
-  background: rgba(7, 12, 19, 0.55);
+  background: rgba(7, 12, 19, 0.6);
   border: 1px solid var(--sc-inner);
+}
+
+/* ── The leaf: everything that catches light lives here ──────────────────── */
+
+/* One shared layer over the whole card, the way the collection prints do it.
+   Grades that carry no treatment simply never render it. */
+.sc__leaf {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 0.85;
+}
+
+/* The sweep. Parked off the right edge, and pulled across on hover. */
+.sc__leaf::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-size: 260% 100%;
+  background-position: 100% 0;
+  background-repeat: no-repeat;
+  transition: background-position 900ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  mix-blend-mode: screen;
+}
+.sc--interactive:hover .sc__leaf::after {
+  background-position: 0 0;
+}
+
+/* ── Common and rare: no treatment at all ────────────────────────────────── */
+/* Deliberately nothing. Most of the table is these two, and the mode only
+   works if the good ones look good by comparison. */
+
+/* ── Epic: the foil ──────────────────────────────────────────────────────── */
+
+.sc--epic .sc__leaf {
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 26%),
+    linear-gradient(
+      104deg,
+      rgba(150, 132, 255, 0.14) 0%,
+      rgba(206, 196, 255, 0.1) 34%,
+      rgba(123, 107, 217, 0.14) 68%,
+      rgba(180, 168, 255, 0.1) 100%
+    ),
+    repeating-linear-gradient(104deg, transparent 0 3px, rgba(198, 190, 255, 0.05) 3px 4px);
+}
+.sc--epic .sc__leaf::after {
+  background-image: linear-gradient(
+    104deg,
+    transparent 38%,
+    rgba(214, 206, 255, 0.3) 48%,
+    rgba(255, 255, 255, 0.16) 52%,
+    transparent 62%
+  );
+}
+
+/* ── Legendary: gold, and quiet about it ─────────────────────────────────── */
+
+.sc--legendary .sc__leaf {
+  background-image:
+    linear-gradient(180deg, rgba(255, 236, 190, 0.06), transparent 24%),
+    linear-gradient(
+      100deg,
+      rgba(224, 169, 59, 0.1) 0%,
+      rgba(255, 226, 168, 0.08) 40%,
+      rgba(190, 138, 44, 0.11) 100%
+    ),
+    repeating-linear-gradient(100deg, transparent 0 4px, rgba(255, 226, 168, 0.045) 4px 5px);
+}
+.sc--legendary .sc__leaf::after {
+  background-image: linear-gradient(
+    100deg,
+    transparent 40%,
+    rgba(255, 228, 170, 0.26) 49%,
+    rgba(255, 246, 220, 0.14) 53%,
+    transparent 63%
+  );
+}
+
+/* ── Mythic: the only glow in the mode ───────────────────────────────────── */
+
+.sc--mythic {
+  border-color: rgba(255, 138, 214, 0.75);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 138, 214, 0.3),
+    0 0 24px rgba(255, 110, 200, 0.22);
+}
+.sc--mythic:hover {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 138, 214, 0.4),
+    0 0 34px rgba(255, 110, 200, 0.34),
+    0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+.sc--mythic .sc__leaf {
+  opacity: 1;
+  background-image:
+    radial-gradient(ellipse 90% 60% at 50% 0%, rgba(255, 150, 220, 0.16), transparent 70%),
+    linear-gradient(
+      106deg,
+      rgba(255, 130, 210, 0.16) 0%,
+      rgba(200, 150, 255, 0.12) 30%,
+      rgba(255, 170, 225, 0.14) 60%,
+      rgba(230, 140, 255, 0.12) 100%
+    ),
+    repeating-linear-gradient(106deg, transparent 0 3px, rgba(255, 190, 235, 0.06) 3px 4px);
+}
+/* Dots, the way the 6★ prints carry them, in light rather than ink */
+.sc--mythic .sc__art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background-image: radial-gradient(rgba(255, 200, 240, 0.5) 1px, transparent 1.6px);
+  background-size: 6px 6px;
+  mix-blend-mode: overlay;
+  opacity: 0.7;
+}
+.sc--mythic .sc__leaf::after {
+  background-image: linear-gradient(
+    106deg,
+    transparent 36%,
+    rgba(255, 190, 235, 0.34) 47%,
+    rgba(255, 255, 255, 0.2) 51%,
+    rgba(210, 160, 255, 0.3) 56%,
+    transparent 66%
+  );
+}
+.sc--mythic .sc__name {
+  color: #ffeaf7;
 }
 
 /* ── Compact ─────────────────────────────────────────────────────────────── */
 
 .sc--compact .sc__name {
-  font-size: 11.5px;
-  /* One line at table size: at 92px there is no room for two, and the short
-     name is what is drawn there anyway. */
+  font-size: 12px;
+  /* One line at table size: at this width there is no room for two, and the
+     short name is what is drawn there anyway. */
   min-height: 0;
   -webkit-line-clamp: 1;
 }
@@ -169,14 +303,18 @@
   padding: 1px 5px;
 }
 .sc--compact .sc__star {
-  font-size: 10px;
-  top: 5px;
-  left: 6px;
+  font-size: 11px;
+  top: 6px;
+  left: 7px;
 }
 
 /* ── Out of play ─────────────────────────────────────────────────────────── */
 
 .sc--spent {
-  opacity: 0.36;
-  filter: saturate(0.5);
+  opacity: 0.34;
+  filter: saturate(0.45);
+}
+.sc--spent .sc__leaf,
+.sc--mythic.sc--spent {
+  box-shadow: none;
 }

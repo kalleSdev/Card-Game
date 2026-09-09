@@ -19,40 +19,23 @@ function pool(size = 40): ScoreCard[] {
 
 const CARDS = pool();
 
-/**
- * Both sides played by the bot, which is the cheapest way to see a whole game.
- * The draft is taken in turns; placement is not, so both sides are asked in
- * that phase rather than whoever the turn happens to point at.
- */
+/** Both sides played by the bot, which is the cheapest way to see a whole game. */
 function playOut(seed: number) {
   let state = createScoreMatch(CARDS, seed);
   let turns = 0;
   while (!state.over && turns < 200) {
-    if (state.phase === "draft") {
-      state = playScoreTurn(state, state.turn, CARDS).state;
-    } else {
-      for (const player of ["P1", "P2"] as const) state = playScoreTurn(state, player, CARDS).state;
-    }
+    state = playScoreTurn(state, state.turn, CARDS).state;
     turns++;
   }
   return { state, turns };
 }
 
 describe("the bot", () => {
-  it("drafts a card every turn it can", () => {
+  it("takes a card every turn it can", () => {
     const state = createScoreMatch(CARDS, 4);
     const me = state.turn;
     const after = playScoreTurn(state, me, CARDS).state;
-    expect(after.hands[me]).toHaveLength(1);
-  });
-
-  it("sits a whole hand once the draft is over", () => {
-    let state = createScoreMatch(CARDS, 4);
-    while (state.phase === "draft") state = playScoreTurn(state, state.turn, CARDS).state;
-
-    const after = playScoreTurn(state, "P1", CARDS).state;
-    expect(after.hands.P1).toHaveLength(0);
-    expect(seatsFilled(after.teams.P1)).toBe(TEAM_SIZE);
+    expect(seatsFilled(after.teams[me])).toBe(1);
   });
 
   it("never leaves a turn half played, and never gets stuck", () => {
@@ -79,7 +62,7 @@ describe("the bot", () => {
   it("only ever plays legal moves", () => {
     let state = createScoreMatch(CARDS, 5);
     while (!state.over) {
-      const me = state.phase === "draft" ? state.turn : state.hands.P1.length > 0 ? "P1" : "P2";
+      const me = state.turn;
       const { intents } = playScoreTurn(state, me, CARDS);
       // Replay them against the state the bot started from
       for (const intent of intents) {
@@ -100,13 +83,7 @@ describe("the bot", () => {
     let state = createScoreMatch(supportOnly, 3);
     let turns = 0;
     while (!state.over && turns < 100) {
-      if (state.phase === "draft") {
-        state = playScoreTurn(state, state.turn, supportOnly).state;
-      } else {
-        for (const player of ["P1", "P2"] as const) {
-          state = playScoreTurn(state, player, supportOnly).state;
-        }
-      }
+      state = playScoreTurn(state, state.turn, supportOnly).state;
       turns++;
     }
     expect(state.over).toBe(true);

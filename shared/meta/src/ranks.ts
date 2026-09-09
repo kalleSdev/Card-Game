@@ -1,8 +1,11 @@
-// The ladder. Eight ranks on fixed thresholds, then two decided by where you
+// The ladder. Seven ranks on fixed thresholds, then two decided by where you
 // sit on the leaderboard rather than by a number.
+//
+// It starts at Bronze. A rank below the one everybody starts at is a rank
+// nobody is ever pleased to be in, so there is no Iron.
 
 export type RankId =
-  | "iron" | "bronze" | "silver" | "gold" | "platinum"
+  | "bronze" | "silver" | "gold" | "platinum"
   | "emerald" | "diamond" | "master" | "emperor" | "pirateKing";
 
 export interface RankDef {
@@ -23,8 +26,7 @@ export const STARTING_MMR = 0;
 
 /** Ordered low to high. Emperor and Pirate King are not in here: they are earned on the leaderboard. */
 export const RANKS: readonly RankDef[] = [
-  { id: "iron",     name: "Iron",     floor: 0,   ceiling: 29,   lossValue: 5 },
-  { id: "bronze",   name: "Bronze",   floor: 30,  ceiling: 59,   lossValue: 5 },
+  { id: "bronze",   name: "Bronze",   floor: 0,   ceiling: 59,   lossValue: 5 },
   { id: "silver",   name: "Silver",   floor: 60,  ceiling: 89,   lossValue: 5 },
   { id: "gold",     name: "Gold",     floor: 90,  ceiling: 119,  lossValue: 5 },
   { id: "platinum", name: "Platinum", floor: 120, ceiling: 149,  lossValue: 7 },

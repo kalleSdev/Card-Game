@@ -299,8 +299,8 @@ describe("the ladder", () => {
   });
 
   it("puts every MMR in exactly one rank", () => {
-    expect(rankForMmr(0).id).toBe("iron");
-    expect(rankForMmr(29).id).toBe("iron");
+    expect(rankForMmr(0).id).toBe("bronze");
+    expect(rankForMmr(29).id).toBe("bronze");
     expect(rankForMmr(30).id).toBe("bronze");
     expect(rankForMmr(119).id).toBe("gold");
     expect(rankForMmr(120).id).toBe("platinum");

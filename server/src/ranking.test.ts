@@ -28,7 +28,7 @@ describe("a place on the ladder", () => {
     const start = rankingOf(freshUser());
     expect(start.mmr).toBe(0);
     expect(start.wins).toBe(0);
-    expect(rankForMmr(start.mmr).id).toBe("iron");
+    expect(rankForMmr(start.mmr).id).toBe("bronze");
   });
 
   it("pays a win and charges a loss", () => {
@@ -54,10 +54,11 @@ describe("a place on the ladder", () => {
   });
 
   it("says when a rank was crossed, and stays quiet otherwise", () => {
-    climbTo(user, 25);
+    // Bronze runs to 59, so the win that lands on 60 is the one that promotes
+    climbTo(user, 55);
     const up = applyResult(user, true);
     expect(up.rankedUp).toBe(true);
-    expect(up.rankName).toBe("Bronze");
+    expect(up.rankName).toBe("Silver");
 
     const flat = applyResult(user, true);
     expect(flat.rankedUp).toBe(false);
@@ -142,7 +143,7 @@ describe("one player's standing", () => {
   it("works for someone who has never played", () => {
     const standing = standingOf(freshUser());
     expect(standing.mmr).toBe(0);
-    expect(standing.rank).toBe("iron");
+    expect(standing.rank).toBe("bronze");
     expect(standing.position).toBeNull();
   });
 

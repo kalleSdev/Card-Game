@@ -67,7 +67,6 @@ export const TIER_COLOR: Record<PrintTier, string> = {
 };
 
 export const RANK_COLOR: Record<RankId, string> = {
-  iron: "#6E6A65",
   bronze: "#A9713F",
   silver: "#A8B4BC",
   gold: "#D9A441",

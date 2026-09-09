@@ -10,18 +10,37 @@ export interface NavItem {
   soon?: boolean;
 }
 
-export const NAV: NavItem[] = [
-  { id: "play", label: "Play" },
-  { id: "collection", label: "Collection" },
-  { id: "decks", label: "Decks" },
-  { id: "packs", label: "Packs" },
-  { id: "shop", label: "Shop" },
-  { id: "trade", label: "Trade" },
-  { id: "feed", label: "Feed" },
-  { id: "ladder", label: "Ladder" },
-  { id: "profile", label: "Profile" },
-  { id: "design", label: "Design" },
+/**
+ * The rail, in groups.
+ *
+ * The groups have no headings on purpose: a rule between them is enough to say
+ * these belong together, and naming five sections would be five more words to
+ * read every time. Playing is first, what you own is next, then the two places
+ * that are about other people, and the two you visit rarely at the end.
+ */
+export const NAV: NavItem[][] = [
+  [{ id: "play", label: "Play" }],
+  [
+    { id: "collection", label: "Collection" },
+    { id: "decks", label: "Decks" },
+  ],
+  [
+    { id: "packs", label: "Packs" },
+    { id: "shop", label: "Shop" },
+    { id: "trade", label: "Trade" },
+  ],
+  [
+    { id: "ladder", label: "Leaderboard" },
+    { id: "feed", label: "Feed" },
+  ],
+  [
+    { id: "profile", label: "Profile" },
+    { id: "design", label: "Design" },
+  ],
 ];
+
+/** Flat, for anything that needs to look a page up by id. */
+export const NAV_ITEMS: NavItem[] = NAV.flat();
 
 /**
  * The frame every page sits in. A permanent left rail rather than tabs, because
@@ -84,8 +103,19 @@ export default function Shell({
           <div style={{ ...text("label"), color: COLOR.fathom, marginTop: 6 }}>Card Game</div>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {NAV.map(item => {
+        <div style={{ display: "flex", flexDirection: "column", gap: SPACE.md }}>
+          {NAV.map((group, groupIndex) => (
+            <div
+              key={groupIndex}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 2,
+                paddingTop: groupIndex === 0 ? 0 : SPACE.md,
+                borderTop: groupIndex === 0 ? "none" : `1px solid ${COLOR.rope}`,
+              }}
+            >
+          {group.map(item => {
             const on = item.id === active;
             return (
               <button
@@ -135,6 +165,8 @@ export default function Shell({
               </button>
             );
           })}
+            </div>
+          ))}
         </div>
 
         <div style={{ marginTop: "auto", padding: `0 ${SPACE.sm}px`, display: "flex", flexDirection: "column", gap: SPACE.sm }}>

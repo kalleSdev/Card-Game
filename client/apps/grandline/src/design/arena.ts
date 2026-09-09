@@ -14,29 +14,31 @@ import { CARD_SIZE, SPACE, cardSlotHeight } from "./tokens";
  *   TABLE      the contested middle, where every click happens
  *   YOU        what you are building, and the thing you read most
  *
- * Sizes come off the CARD_SIZE scale, and the rule is fit rather than
- * importance: the table has to hold twenty cards on one screen without
- * scrolling, so it draws compact, and most of it is face down anyway. Your own
- * team is the largest thing on the board because it is the only part you read
- * closely; theirs matches the table, since it is a glance and nothing more.
+ * A match takes the whole window, so these are sized against a screen rather
+ * than against a page with a sidebar in it. The rule is still fit: twenty cards
+ * have to sit on the table at once. Your own team is the largest thing on the
+ * board because it is the part you read closely; theirs matches the table,
+ * since it is a glance and nothing more.
  */
 
 export const ARENA_CARD = {
-  /** Twenty of these have to fit at once, so this is the compact size. */
-  table: CARD_SIZE.xs,
+  /** Twenty of these at once, across the full width of the window. */
+  table: CARD_SIZE.sm,
   /** Your own team, read closely and often. The biggest thing on the board. */
-  yours: CARD_SIZE.sm,
-  /** Theirs. Table sized, and never clickable. */
+  yours: CARD_SIZE.md,
+  /** Theirs. A glance and nothing more, and the row the board can afford to
+      give up height on when a window is short. */
   theirs: CARD_SIZE.xs,
 } as const;
 
 export const ARENA_GAP = {
   /** Between cards in the same row. */
-  card: SPACE.md,
+  card: SPACE.sm,
   /** Between a row and the next one. */
   row: SPACE.lg,
-  /** Between the three bands. */
-  band: SPACE.xl,
+  /** Between the three bands. Tight on purpose: the whole board has to fit a
+      laptop screen, and the bands are already separated by their own edges. */
+  band: SPACE.md,
 } as const;
 
 /**
@@ -64,7 +66,7 @@ export const ARENA_SLOT = {
 } as const;
 
 /** The bar that says whose turn it is and what they have left to spend. */
-export const TURN_BAR_HEIGHT = 56;
+export const TURN_BAR_HEIGHT = 48;
 
 /** How long the board takes to acknowledge a click, in milliseconds. */
 export const ARENA_MOTION = {

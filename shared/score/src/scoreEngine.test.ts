@@ -5,8 +5,8 @@ import {
   type ScoreCard,
 } from "./rules";
 import {
-  applyScoreIntent, available, createScoreMatch, draftIsDone, placementIsDone,
-  scoreOf, scores, seatOf, seatsFilled, viewFor,
+  applyScoreIntent, available, createScoreMatch, isFinished, scoreOf, scores, seatOf, seatsFilled,
+  viewFor,
   type ScoreIntent, type ScorePlayer, type ScoreState,
 } from "./scoreEngine";
 import { scoreCardsFrom } from "./fromCards";
@@ -33,43 +33,16 @@ function run(state: ScoreState, intent: ScoreIntent, actor = state.turn) {
   return applyScoreIntent(state, intent, actor, CARDS);
 }
 
-/** Drafts any card still on the table, into the hand. */
+/** Takes any card that is still on the table, into the first free seat. */
 function takeAnything(state: ScoreState): ScoreState {
-  return run(state, { type: "TAKE", index: available(state)[0] }).state;
-}
-
-/** The first free seat on a team, in reading order. */
-function freeSeat(team: ScoreState["teams"][ScorePlayer]) {
-  if (!team.captain) return { row: "captain" as const, index: 0 };
-  const combat = team.combat.findIndex(x => x === null);
-  if (combat >= 0) return { row: "combat" as const, index: combat };
-  return { row: "support" as const, index: team.support.findIndex(x => x === null) };
-}
-
-/** Plays a whole draft out, one take a turn, until the placement phase opens. */
-function draftOut(state: ScoreState): ScoreState {
-  let guard = 0;
-  while (state.phase === "draft" && guard++ < 60) {
-    if (state.takesLeft > 0 && available(state).length > 0) state = takeAnything(state);
-    if (state.phase === "draft") state = run(state, { type: "END_TURN" }).state;
-  }
-  return state;
-}
-
-/** Sits everything both players drafted, in hand order. */
-function placeOut(state: ScoreState): ScoreState {
-  for (const player of ["P1", "P2"] as ScorePlayer[]) {
-    let guard = 0;
-    while (state.hands[player].length > 0 && guard++ < 20) {
-      state = applyScoreIntent(
-        state,
-        { type: "PLACE", cardId: state.hands[player][0], seat: freeSeat(state.teams[player]) },
-        player,
-        CARDS,
-      ).state;
-    }
-  }
-  return state;
+  const index = available(state)[0];
+  const team = state.teams[state.turn];
+  const seat = team.captain === null
+    ? { row: "captain" as const, index: 0 }
+    : team.combat.findIndex(x => x === null) >= 0
+      ? { row: "combat" as const, index: team.combat.findIndex(x => x === null) }
+      : { row: "support" as const, index: team.support.findIndex(x => x === null) };
+  return run(state, { type: "TAKE", index, seat }).state;
 }
 
 describe("the table", () => {
@@ -137,41 +110,27 @@ describe("what a turn costs", () => {
     expect(state.energy).toBe(ENERGY_PER_TURN);
   });
 
-  it("takes for free, into the hand, but only once a turn", () => {
+  it("takes for free, but only once a turn", () => {
     let state = createScoreMatch(CARDS, 2);
-    const me = state.turn;
     const before = state.energy;
-    state = run(state, { type: "TAKE", index: 0 }).state;
+    state = run(state, { type: "TAKE", index: 0, seat: { row: "captain", index: 0 } }).state;
 
     expect(state.energy).toBe(before);
     expect(state.takesLeft).toBe(0);
-    expect(state.hands[me]).toEqual([state.cards[0]]);
-    expect(seatsFilled(state.teams[me])).toBe(0);
+    expect(state.teams[state.turn].captain).toBe(state.cards[0]);
 
-    const again = run(state, { type: "TAKE", index: 1 });
+    const again = run(state, { type: "TAKE", index: 1, seat: { row: "combat", index: 0 } });
     expect(again.events[0]).toMatchObject({ reason: /already taken/i });
-  });
-
-  it("keeps a drafted card face down until the draft is over", () => {
-    let state = createScoreMatch(CARDS, 2);
-    const me = state.turn;
-    state = run(state, { type: "TAKE", index: 0 }).state;
-
-    expect(state.table[0].revealed).toBe(false);
-    // The other player can count the hand but cannot read it
-    const theirView = viewFor(state, me === "P1" ? "P2" : "P1");
-    expect(theirView.hands[me]).toEqual([""]);
-    expect(theirView.cards[0]).toBeNull();
   });
 
   it("takes blind or face up, and says which it was", () => {
     let state = createScoreMatch(CARDS, 2);
-    const blind = run(state, { type: "TAKE", index: 0 });
+    const blind = run(state, { type: "TAKE", index: 0, seat: { row: "captain", index: 0 } });
     expect(blind.events[0]).toMatchObject({ type: "TAKEN", blind: true });
 
     state = run(blind.state, { type: "END_TURN" }).state;
     state = run(state, { type: "REVEAL", index: 5 }).state;
-    const seen = run(state, { type: "TAKE", index: 5 });
+    const seen = run(state, { type: "TAKE", index: 5, seat: { row: "captain", index: 0 } });
     expect(seen.events[0]).toMatchObject({ type: "TAKEN", blind: false });
   });
 
@@ -181,17 +140,23 @@ describe("what a turn costs", () => {
     state = run(state, { type: "REVEAL", index: 6 }).state;
     state = run(state, { type: "END_TURN" }).state;
 
-    const { state: after, events } = run(state, { type: "TAKE", index: 6 });
+    const { state: after, events } = run(state, {
+      type: "TAKE", index: 6, seat: { row: "captain", index: 0 },
+    });
     expect(events[0]).toMatchObject({ type: "TAKEN", blind: false });
-    expect(after.hands[first === "P1" ? "P2" : "P1"]).toContain(state.cards[6]);
+    expect(after.teams[first === "P1" ? "P2" : "P1"].captain).toBe(state.cards[6]);
   });
 
-  it("will not place anything while the draft is still running", () => {
+  it("refuses a seat that is already sat in, and one that does not exist", () => {
     let state = createScoreMatch(CARDS, 2);
-    state = run(state, { type: "TAKE", index: 0 }).state;
-    const held = state.hands[state.turn][0];
-    expect(run(state, { type: "PLACE", cardId: held, seat: { row: "captain", index: 0 } }).events[0])
-      .toMatchObject({ reason: /nothing to place/i });
+    state = run(state, { type: "TAKE", index: 0, seat: { row: "captain", index: 0 } }).state;
+    state = run(state, { type: "END_TURN" }).state;
+    state = run(state, { type: "END_TURN" }).state;
+
+    expect(run(state, { type: "TAKE", index: 1, seat: { row: "captain", index: 0 } }).events[0])
+      .toMatchObject({ reason: /seat is taken/i });
+    expect(run(state, { type: "TAKE", index: 1, seat: { row: "combat", index: 9 } }).events[0])
+      .toMatchObject({ reason: /no such seat/i });
   });
 
   it("gives each player their own energy and take back at the start of a turn", () => {
@@ -232,20 +197,22 @@ describe("what a team is worth", () => {
   });
 
   it("adds a whole team up", () => {
-    let state = draftOut(createScoreMatch(CARDS, 2));
-    const me: ScorePlayer = "P1";
-    const held = state.hands[me][0];
-    state = applyScoreIntent(
-      state, { type: "PLACE", cardId: held, seat: { row: "captain", index: 0 } }, me, CARDS,
-    ).state;
+    let state = createScoreMatch(CARDS, 2);
+    const first = state.turn;
+    state = run(state, { type: "TAKE", index: 0, seat: { row: "captain", index: 0 } }).state;
 
-    expect(scoreOf(state, me, CARDS)).toBe(valueOf(cardOf(held), "captain"));
+    const taken = cardOf(state.cards[0] as string);
+    expect(scoreOf(state, first, CARDS)).toBe(valueOf(taken, "captain"));
   });
 });
 
 describe("the end", () => {
   it("finishes when both teams are full, and calls it", () => {
-    const state = placeOut(draftOut(createScoreMatch(CARDS, 2)));
+    let state = createScoreMatch(CARDS, 2);
+    for (let i = 0; i < TEAM_SIZE * 2; i++) {
+      state = takeAnything(state);
+      if (!state.over) state = run(state, { type: "END_TURN" }).state;
+    }
 
     expect(state.over).toBe(true);
     expect(seatsFilled(state.teams.P1)).toBe(TEAM_SIZE);
@@ -256,29 +223,32 @@ describe("the end", () => {
     expect(state.winner).toBe(expected);
   });
 
-  it("ends the draft when the table runs out, however empty the hands are", () => {
+  it("finishes when the table runs out, however full the teams are", () => {
     let state = createScoreMatch(CARDS, 2);
     // Deny everything, two a turn, taking nothing
-    while (available(state).length > 0 && state.phase === "draft") {
+    while (available(state).length > 0 && !state.over) {
       const index = available(state)[0];
       state = run(state, { type: "REVEAL", index }).state;
       state = run(state, { type: "DENY", index }).state;
-      if (state.phase === "draft") state = run(state, { type: "END_TURN" }).state;
+      if (!state.over) state = run(state, { type: "END_TURN" }).state;
     }
 
-    expect(draftIsDone(state)).toBe(true);
-    // Nobody drafted anything, so there is nothing to place and it is a draw
-    expect(placementIsDone(state)).toBe(true);
-    expect(state.hands.P1).toHaveLength(0);
+    expect(isFinished(state)).toBe(true);
+    expect(state.over).toBe(true);
+    expect(state.winner).toBe("draw");
   });
 
   it("refuses anything at all once it is over", () => {
-    const state = placeOut(draftOut(createScoreMatch(CARDS, 2)));
+    let state = createScoreMatch(CARDS, 2);
+    for (let i = 0; i < TEAM_SIZE * 2; i++) {
+      state = takeAnything(state);
+      if (!state.over) state = run(state, { type: "END_TURN" }).state;
+    }
     expect(run(state, { type: "REVEAL", index: 19 }, state.turn).events[0])
       .toMatchObject({ reason: /over/i });
   });
 
-  it("skips a player whose hand is already full", () => {
+  it("skips a player whose team is already full", () => {
     let state = createScoreMatch(CARDS, 2);
     const first: ScorePlayer = state.turn;
 
@@ -289,8 +259,8 @@ describe("the end", () => {
       if (state.turn !== first) state = run(state, { type: "END_TURN" }).state;
     }
 
-    expect(state.hands[first]).toHaveLength(TEAM_SIZE);
-    expect(state.phase).toBe("draft");
+    expect(seatsFilled(state.teams[first])).toBe(TEAM_SIZE);
+    expect(state.over).toBe(false);
     expect(state.turn).not.toBe(first);
   });
 });
@@ -306,13 +276,10 @@ describe("the pool itself", () => {
   });
 
   it("puts every seat reference where it belongs", () => {
-    const drafted = draftOut(createScoreMatch(CARDS, 2));
-    const held = drafted.hands.P1[0];
-    const after = applyScoreIntent(
-      drafted, { type: "PLACE", cardId: held, seat: { row: "support", index: 2 } }, "P1", CARDS,
-    ).state;
-    expect(seatOf(after.teams.P1, { row: "support", index: 2 })).toBe(held);
-    expect(seatOf(after.teams.P1, { row: "support", index: 0 })).toBeNull();
+    const state = createScoreMatch(CARDS, 2);
+    const after = run(state, { type: "TAKE", index: 0, seat: { row: "support", index: 2 } }).state;
+    expect(seatOf(after.teams[state.turn], { row: "support", index: 2 })).toBe(state.cards[0]);
+    expect(seatOf(after.teams[state.turn], { row: "support", index: 0 })).toBeNull();
   });
 });
 
@@ -327,7 +294,7 @@ describe("cards from a card database", () => {
   it("reads the seat and the grade off the definition", () => {
     const cards = scoreCardsFrom(db);
     const by = Object.fromEntries(cards.map(c => [c.id, c]));
-    expect(by.leader).toMatchObject({ role: "captain", grade: "legendary" });
+    expect(by.leader).toMatchObject({ role: "captain", grade: "mythic" });
     expect(by.fighter).toMatchObject({ role: "combat", grade: "rare" });
     expect(by.helper).toMatchObject({ role: "support", grade: "common" });
   });
