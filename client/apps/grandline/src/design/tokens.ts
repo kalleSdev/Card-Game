@@ -53,7 +53,7 @@ export const PRINT_COLOR: Record<PrintId, string> = {
   foil: "#7B6BD9",
   altArt: "#E0A93B",
   blackLabel: "#E8E2D4",
-  secret: "#D6412F",
+  secret: "#C0203A",
   holoOne: "#EDF3FF",
 };
 

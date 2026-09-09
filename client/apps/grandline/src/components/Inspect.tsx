@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useState } from "react";
 import { PRINT_INFO, type PrintId } from "@cg/meta";
 import { CARD_SIZE, COLOR, PRINT_COLOR, RADIUS, SPACE, text } from "../design/tokens";
 import PrintCard, { type CardFace } from "./PrintCard";
@@ -7,21 +6,21 @@ import ScoreCard, { GRADE_LABEL, GRADE_TONE } from "./ScoreCard";
 import { TierPip } from "./primitives";
 import { scoreCard } from "../data/pool";
 
-/** How far the card leans toward the pointer, in degrees. */
-const MAX_TILT = 9;
-
 /**
  * One card, held up to the light.
  *
- * This is the only place in the app where a card tilts. Everywhere else a
- * pointer moving over a card would be noise, because there are twenty of them
- * and you are trying to read the grid. Here there is exactly one card and
- * turning it is the entire point.
+ * Two sizes: the card as you would hold it, and a step closer for reading the
+ * artwork. Clicking the card moves between them, so a second look costs one
+ * click rather than a menu.
  *
  * It is also the one place both faces of a character are on offer. A card has a
  * collection face and a Score Battle face, and this flips between them without
  * either one borrowing anything from the other.
  */
+
+/** Held, and held closer. */
+const HELD = CARD_SIZE.xl;
+const CLOSER = 320;
 export default function Inspect({
   card,
   print,
@@ -34,26 +33,8 @@ export default function Inspect({
   count?: number;
   onClose: () => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
   const [face, setFace] = useState<"collection" | "score">("collection");
-
-  // Written straight onto the node: this fires every pointer move, and a
-  // re-render per frame would be waste.
-  const onMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
-    const el = ref.current;
-    if (!el) return;
-    const box = el.getBoundingClientRect();
-    const x = (e.clientX - box.left) / box.width;
-    const y = (e.clientY - box.top) / box.height;
-    el.style.transform =
-      `rotateY(${((x - 0.5) * MAX_TILT * 2).toFixed(2)}deg) ` +
-      `rotateX(${((0.5 - y) * MAX_TILT * 2).toFixed(2)}deg)`;
-  }, []);
-
-  const rest = useCallback(() => {
-    const el = ref.current;
-    if (el) el.style.transform = "";
-  }, []);
+  const [closer, setCloser] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -81,27 +62,20 @@ export default function Inspect({
         justifyContent: "center",
         gap: SPACE.xl,
         cursor: "zoom-out",
-        // Only the pointer that moves over the card should turn it, so the
-        // whole overlay tracks nothing
-        perspective: 1600,
       }}
     >
       <div
-        ref={ref}
-        onPointerMove={onMove}
-        onPointerLeave={rest}
-        onClick={e => e.stopPropagation()}
+        onClick={e => { e.stopPropagation(); setCloser(!closer); }}
         style={{
-          transformStyle: "preserve-3d",
-          transition: "transform 380ms cubic-bezier(0.16, 1, 0.3, 1)",
-          cursor: "default",
+          cursor: closer ? "zoom-out" : "zoom-in",
+          transition: "width 260ms cubic-bezier(0.16, 1, 0.3, 1)",
           filter: "drop-shadow(0 26px 60px rgba(0,0,0,0.6))",
         }}
       >
         {showingScore && score ? (
-          <ScoreCard card={score} name={card.name} width={CARD_SIZE.xl} />
+          <ScoreCard card={score} name={card.name} width={closer ? CLOSER : HELD} />
         ) : (
-          <PrintCard card={card} print={print} width={CARD_SIZE.xl} count={count} />
+          <PrintCard card={card} print={print} width={closer ? CLOSER : HELD} count={count} />
         )}
       </div>
 
@@ -169,7 +143,8 @@ export default function Inspect({
             marginTop: SPACE.sm, pointerEvents: "none",
           }}
         >
-          Click anywhere to close
+          {closer ? "Click the card to step back" : "Click the card for a closer look"} · click
+          anywhere else to close
         </span>
       </div>
     </div>

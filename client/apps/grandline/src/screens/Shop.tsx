@@ -44,8 +44,13 @@ export default function ShopScreen({ store, onSignIn }: { store: Store; onSignIn
 
       {!store.signedIn && <GuestNotice what="buy packs" onSignIn={onSignIn} />}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: SPACE.lg }}>
-        {(Object.keys(PACKS) as PackId[]).map(id => {
+      {SHELVES.map(shelf => (
+        <section key={shelf.contents}>
+          <h3 style={{ ...text("label"), color: COLOR.fathom, marginBottom: SPACE.md }}>
+            {shelf.heading}
+          </h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: SPACE.lg }}>
+        {packIdsFor(shelf.contents).map(id => {
           const pack = PACKS[id];
           const diamond = id.startsWith("diamond");
           const accent = diamond ? COLOR.current : id.startsWith("gold") ? COLOR.doubloon : COLOR.mist;
@@ -89,7 +94,9 @@ export default function ShopScreen({ store, onSignIn }: { store: Store; onSignIn
             </Panel>
           );
         })}
-      </div>
+          </div>
+        </section>
+      ))}
 
       {showOdds && (
         <Panel padding={SPACE.xl}>
@@ -184,8 +191,17 @@ export function PacksScreen({ store, onSignIn }: { store: Store; onSignIn: () =>
           </p>
         </Panel>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: SPACE.lg }}>
-          {store.packs.map(pack => {
+        <div style={{ display: "flex", flexDirection: "column", gap: SPACE.xl }}>
+          {SHELVES.map(shelf => {
+            const mine = store.packs.filter(p => PACKS[p.packId].contents === shelf.contents);
+            if (mine.length === 0) return null;
+            return (
+              <section key={shelf.contents}>
+                <h3 style={{ ...text("label"), color: COLOR.fathom, marginBottom: SPACE.md }}>
+                  {shelf.heading} · {mine.length}
+                </h3>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: SPACE.lg }}>
+          {mine.map(pack => {
             const def = PACKS[pack.packId];
             const accent = pack.packId.startsWith("diamond")
               ? COLOR.current
@@ -209,10 +225,30 @@ export function PacksScreen({ store, onSignIn }: { store: Store; onSignIn: () =>
               </Panel>
             );
           })}
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
     </div>
   );
+}
+
+/**
+ * The two shelves, everywhere packs are listed.
+ *
+ * Cards and cosmetics come out of different packs, cost different money and are
+ * opened for different reasons, so a single list of five was five things to
+ * read rather than two choices to make.
+ */
+const SHELVES = [
+  { contents: "cards" as const, heading: "Card packs" },
+  { contents: "cosmetics" as const, heading: "Cosmetic packs" },
+];
+
+function packIdsFor(contents: "cards" | "cosmetics"): PackId[] {
+  return (Object.keys(PACKS) as PackId[]).filter(id => PACKS[id].contents === contents);
 }
 
 function sourceLabel(source: string): string {

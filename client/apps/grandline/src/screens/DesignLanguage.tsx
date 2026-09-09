@@ -7,11 +7,18 @@ import {
 } from "@cg/meta";
 import { CARD_SIZE, COLOR, PRINT_COLOR, RADIUS, SPACE, TEXT, cardSlotHeight, text } from "../design/tokens";
 import PrintCard, { type CardFace } from "../components/PrintCard";
+import Inspect from "../components/Inspect";
 import ScoreCard, { GRADE_LABEL, GRADE_TONE } from "../components/ScoreCard";
 import {
   Button, Chip, Currency, Divider, Panel, RankBadge, SectionHead, Stat, Text, TierPip,
 } from "../components/primitives";
 import { artUrl, cardFace, cardName } from "../data/pool";
+
+/** The two shelves, the same split the shop and your packs use. */
+const SHELVES = [
+  { contents: "cards" as const, heading: "Card packs" },
+  { contents: "cosmetics" as const, heading: "Cosmetic packs" },
+];
 
 /** Packs a match hands out for free, on top of being buyable. */
 const EARNED = new Set<PackId>(["goldCard", "goldCosmetic", "silverCard"]);
@@ -41,6 +48,9 @@ const SCORE_DEMO: Record<Grade, string> = {
 
 export default function DesignLanguage() {
   const [tone, setTone] = useState<"standard" | "diamond">("standard");
+  // Every card on this page opens the same way it does in the binder, because
+  // a showcase where the cards are not the real thing is not a showcase.
+  const [inspecting, setInspecting] = useState<{ card: CardFace; print: PrintId } | null>(null);
   const rates = tone === "standard" ? STANDARD_RATES : DIAMOND_RATES;
 
   return (
@@ -159,7 +169,7 @@ export default function DesignLanguage() {
               {/* Prints differ in height on purpose, so the slot is fixed and the
                   cards hang from a common baseline. Otherwise the captions stagger. */}
               <div style={{ height: cardSlotHeight(CARD_SIZE.lg), display: "flex", alignItems: "flex-end" }}>
-                <PrintCard card={DEMO} print={print} />
+                <PrintCard card={DEMO} print={print} onClick={() => setInspecting({ card: DEMO, print })} />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
@@ -228,8 +238,13 @@ export default function DesignLanguage() {
       {/* ── Packs ── */}
       <section>
         <SectionHead eyebrow="05" title="Packs" />
+        {SHELVES.map(shelf => (
+        <div key={shelf.contents} style={{ marginBottom: SPACE.xl }}>
+        <h3 style={{ ...text("label"), color: COLOR.fathom, marginBottom: SPACE.md }}>
+          {shelf.heading}
+        </h3>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: SPACE.lg }}>
-          {(Object.keys(PACKS) as PackId[]).map(id => {
+          {(Object.keys(PACKS) as PackId[]).filter(id => PACKS[id].contents === shelf.contents).map(id => {
             const pack = PACKS[id];
             const isDiamond = id.startsWith("diamond");
             const accent = isDiamond ? COLOR.current : id.startsWith("gold") ? COLOR.doubloon : COLOR.mist;
@@ -255,6 +270,8 @@ export default function DesignLanguage() {
             );
           })}
         </div>
+        </div>
+        ))}
       </section>
 
       {/* ── Collection row ── */}
@@ -264,7 +281,13 @@ export default function DesignLanguage() {
           <div style={{ display: "flex", gap: SPACE.xl, flexWrap: "wrap" }}>
             {BINDER.map(entry => (
               <div key={entry.print} style={{ display: "flex", flexDirection: "column", gap: SPACE.md, width: CARD_SIZE.md }}>
-                <PrintCard card={entry.card} print={entry.print} width={CARD_SIZE.md} count={entry.count} />
+                <PrintCard
+                  card={entry.card}
+                  print={entry.print}
+                  width={CARD_SIZE.md}
+                  count={entry.count}
+                  onClick={() => setInspecting({ card: entry.card, print: entry.print })}
+                />
                 <div style={{ display: "flex", gap: 6 }}>
                   <Button size="sm" tone="ghost">Dust</Button>
                   <Button size="sm" tone="ghost">Sell</Button>
@@ -376,6 +399,14 @@ export default function DesignLanguage() {
           in the app allowed to take its time.
         </p>
       </section>
+
+      {inspecting && (
+        <Inspect
+          card={inspecting.card}
+          print={inspecting.print}
+          onClose={() => setInspecting(null)}
+        />
+      )}
     </div>
   );
 }

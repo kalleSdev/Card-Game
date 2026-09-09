@@ -377,6 +377,10 @@ function CardSheet({
         </Panel>
       </div>
 
+      {/* Both of these sit inside the sheet, and the sheet closes on any click
+          that reaches it. Stopping the click here is what makes dismissing an
+          overlay put you back on the sheet rather than out of it entirely. */}
+      <div onClick={e => e.stopPropagation()}>
       {confirming && (
         <LastCopy
           cardId={cardId}
@@ -398,6 +402,7 @@ function CardSheet({
           onClose={() => setInspecting(null)}
         />
       )}
+      </div>
     </div>
   );
 }

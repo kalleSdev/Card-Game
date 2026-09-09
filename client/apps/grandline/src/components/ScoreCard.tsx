@@ -21,7 +21,7 @@ export const GRADE_TONE: Record<Grade, { tone: string; edge: string; inner: stri
   rare: { tone: "#3E8FA0", edge: "#2A4E58", inner: "rgba(62,143,160,0.28)" },
   epic: { tone: "#9A8BEF", edge: "#3D3670", inner: "rgba(154,139,239,0.32)" },
   legendary: { tone: "#E0A93B", edge: "#6B5220", inner: "rgba(224,169,59,0.34)" },
-  mythic: { tone: "#FF8AD6", edge: "#7A2C63", inner: "rgba(255,138,214,0.34)" },
+  mythic: { tone: "#E0447A", edge: "#6E1430", inner: "rgba(224,68,122,0.34)" },
 };
 
 export const GRADE_LABEL: Record<Grade, string> = {

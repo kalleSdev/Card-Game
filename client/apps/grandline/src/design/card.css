@@ -268,10 +268,12 @@
    Red manga treatment: the art duotoned to ink and red, halftone over the top,
    and the whole card carrying a red cast. */
 .pc--secret {
-  --pc-accent: #d6412f;
-  border-color: rgba(214, 65, 47, 0.75);
-  background: #12080a;
-  box-shadow: inset 0 0 0 1px rgba(214, 65, 47, 0.2);
+  /* A deeper crimson than the signal red, which belongs to the interface. This
+     one is closer to dried ink, and the bottom rule takes the same colour. */
+  --pc-accent: #a01228;
+  border-color: rgba(160, 18, 40, 0.85);
+  background: #0e0508;
+  box-shadow: inset 0 0 0 1px rgba(160, 18, 40, 0.24);
 }
 .pc--secret .pc__art-fill {
   filter: grayscale(1) contrast(1.5);
@@ -285,9 +287,9 @@
      ink on a dark plate rather than as a red wash. */
   background: linear-gradient(
     160deg,
-    rgba(214, 65, 47, 0.9) 0%,
-    rgba(120, 20, 18, 0.85) 52%,
-    rgba(10, 6, 8, 0.9) 100%
+    rgba(178, 26, 46, 0.92) 0%,
+    rgba(96, 12, 26, 0.88) 52%,
+    rgba(9, 5, 8, 0.92) 100%
   );
   mix-blend-mode: color;
 }
@@ -651,17 +653,18 @@
   letter-spacing: -0.015em;
 }
 
-/* Secret: outlined, geometric, drawn rather than printed. The fill is kept
-   faint so the letters read as struck through the card. */
+/* Secret: a carved, decorative face. Not a label on the card so much as
+   something cut into it. */
 .pc--secret .pc__name {
-  font-family: "Archivo", system-ui, sans-serif;
-  font-size: 15px;
-  font-weight: 700;
+  font-family: "Metamorphous", "Fraunces", Georgia, serif;
+  font-size: 15.5px;
+  font-weight: 400;
   font-style: normal;
   letter-spacing: 0.02em;
-  color: rgba(242, 236, 223, 0.18);
-  -webkit-text-stroke: 0.7px rgba(255, 236, 228, 0.95);
-  paint-order: stroke fill;
+  color: #f6e3de;
+  text-shadow:
+    0 1px 5px rgba(4, 7, 12, 0.95),
+    0 0 12px rgba(150, 18, 30, 0.5);
 }
 
 /* Black label: cryptic and italic, the one print whose name looks older than
@@ -679,20 +682,26 @@
 .pc--holoOne .pc__name {
   font-family: "Great Vibes", "Fraunces", Georgia, cursive;
   font-weight: 400;
-  font-size: 22px;
-  line-height: 1.05;
+  font-size: 21px;
+  /* A script runs above and below its line in a way the display face does not,
+     so it gets the room to do it. Clamped at one line rather than two, because
+     a second line of script would take a third of the card. */
+  line-height: 1.5;
+  padding-bottom: 2px;
   letter-spacing: 0.01em;
   color: #f8fbff;
+  -webkit-line-clamp: 1;
+  overflow: visible;
 }
 
 .pc--compact.pc--secret .pc__name {
-  font-size: 12px;
-  -webkit-text-stroke-width: 0.55px;
+  font-size: 12.5px;
 }
 .pc--compact.pc--blackLabel .pc__name {
   font-size: 14.5px;
 }
 .pc--compact.pc--holoOne .pc__name {
-  font-size: 17px;
+  font-size: 16px;
+  line-height: 1.45;
   letter-spacing: 0;
 }
