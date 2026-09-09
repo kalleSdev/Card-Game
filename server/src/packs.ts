@@ -189,13 +189,20 @@ export function scrapSpares(
   print: PrintId,
   amount: number,
   action: ScrapAction,
+  /**
+   * Whether the last copy may go too. Off by default, so nothing scraps a
+   * player's only copy of a print unless the client asked for exactly that
+   * after warning them.
+   */
+  includeLast = false,
 ): { removed: number; gained: number; currency: Currency } {
   const currency: Currency = action === "dust" ? "stardust" : "berries";
   const rate = action === "dust" ? DUPLICATE_VALUE[print].stardust : DUPLICATE_VALUE[print].berries;
 
   const run = db.transaction(() => {
     const held = copiesOf(userId, cardId, print);
-    const removed = Math.max(0, Math.min(amount, held - 1));
+    const ceiling = includeLast ? held : held - 1;
+    const removed = Math.max(0, Math.min(amount, ceiling));
     if (removed === 0) return { removed: 0, gained: 0, currency };
 
     db.prepare("UPDATE prints SET copies = copies - ? WHERE user_id = ? AND card_id = ? AND print_id = ?")

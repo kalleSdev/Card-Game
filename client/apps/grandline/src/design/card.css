@@ -35,9 +35,16 @@
 .pc__art-fill {
   position: absolute;
   inset: 0;
-  background:
+  /* The picture when there is one, and the drawn gradient underneath it either
+     way, so a card with no art yet still looks like a card rather than a hole.
+     Every print treatment sits over this layer, which is what makes a foil or a
+     black label read as the same picture struck a different way. */
+  background-image: var(--pc-art-image, none),
     radial-gradient(ellipse 120% 80% at 50% 118%, var(--pc-art-b), transparent 70%),
     linear-gradient(165deg, var(--pc-art-a), var(--pc-art-b));
+  background-size: cover, auto, auto;
+  background-position: center top, center, center;
+  background-repeat: no-repeat;
 }
 .pc__horizon {
   position: absolute;

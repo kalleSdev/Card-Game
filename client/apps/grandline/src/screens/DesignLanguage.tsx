@@ -11,18 +11,33 @@ import ScoreCard, { GRADE_LABEL, GRADE_TONE } from "../components/ScoreCard";
 import {
   Button, Chip, Currency, Divider, Panel, RankBadge, SectionHead, Stat, Text, TierPip,
 } from "../components/primitives";
+import { artUrl, cardFace, cardName } from "../data/pool";
 
 /** Packs a match hands out for free, on top of being buyable. */
 const EARNED = new Set<PackId>(["goldCard", "goldCosmetic", "silverCard"]);
 
-const DEMO: CardFace = { id: "monkey-d-luffy", name: "Monkey D. Luffy", atk: 6, hp: 7, cost: 5 };
+/**
+ * Real cards, because the page is meant to show what the game looks like. One
+ * Piece has no art yet, so this page is drawn with the set that does, the same
+ * way everything else in the app is.
+ */
+const DEMO: CardFace = cardFace("gojo-base");
 
 const BINDER: { card: CardFace; print: PrintId; count: number }[] = [
   { card: DEMO, print: "altArt", count: 3 },
-  { card: { id: "roronoa-zoro", name: "Roronoa Zoro", atk: 7, hp: 5, cost: 5 }, print: "foil", count: 8 },
-  { card: { id: "nami", name: "Nami", atk: 2, hp: 4, cost: 2 }, print: "base", count: 12 },
-  { card: { id: "nico-robin", name: "Nico Robin", atk: 4, hp: 4, cost: 3 }, print: "blackLabel", count: 1 },
+  { card: cardFace("toji"), print: "foil", count: 8 },
+  { card: cardFace("nobara"), print: "base", count: 12 },
+  { card: cardFace("sukuna"), print: "blackLabel", count: 1 },
 ];
+
+/** One card per grade, so the Score faces are somebody rather than a swatch. */
+const SCORE_DEMO: Record<Grade, string> = {
+  common: "nobara",
+  rare: "yuji",
+  epic: "toji",
+  legendary: "mahoraga",
+  mythic: "gojo-base",
+};
 
 export default function DesignLanguage() {
   const [tone, setTone] = useState<"standard" | "diamond">("standard");
@@ -133,9 +148,9 @@ export default function DesignLanguage() {
         />
         <p style={{ ...text("body"), color: COLOR.mist, maxWidth: 620, marginBottom: SPACE.xl }}>
           Identical stats, seven treatments. Each one changes the card's shape or colour rather than
-          just its trim, so it reads from across the table. Art is placeholder — the treatments are
-          real. Alt art and everything above it is hand picked per character rather than drawn for
-          the whole pool, so not every card will exist in every print.
+          just its trim, so it reads from across the table. The art is the real thing, and every
+          treatment is struck over it. Alt art and everything above it is hand picked per character
+          rather than drawn for the whole pool, so not every card will exist in every print.
         </p>
 
         <div style={{ display: "flex", gap: SPACE.xl, flexWrap: "wrap" }}>
@@ -177,11 +192,12 @@ export default function DesignLanguage() {
         <div style={{ display: "flex", gap: SPACE.xl, flexWrap: "wrap" }}>
           {GRADES.map((grade: Grade) => {
             const band = GRADE_POINTS[grade];
-            const demo = { id: `demo-${grade}`, role: "combat" as const, grade, points: band.max };
+            const id = SCORE_DEMO[grade];
+            const demo = { id, role: "combat" as const, grade, points: band.max };
             return (
               <div key={grade} style={{ display: "flex", flexDirection: "column", gap: SPACE.md, width: CARD_SIZE.lg }}>
                 <div style={{ height: cardSlotHeight(CARD_SIZE.lg), display: "flex", alignItems: "flex-end" }}>
-                  <ScoreCard card={demo} name={DEMO.name} width={CARD_SIZE.lg} />
+                  <ScoreCard card={demo} name={cardName(id)} art={artUrl(id)} width={CARD_SIZE.lg} />
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 7 }}>

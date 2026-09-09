@@ -12,6 +12,8 @@ export interface CardFace {
   atk: number;
   hp: number;
   cost: number;
+  /** The character's picture. Cards without one fall back to the drawn placeholder. */
+  art?: string;
 }
 
 /**
@@ -63,6 +65,7 @@ export default function PrintCard({
 }) {
   const info = PRINT_INFO[print];
   const art = artColors(card.id);
+  const drawn = Boolean(card.art);
   // Small cards drop to short names and short print labels, so a row keeps one
   // baseline instead of stepping wherever a name happens to be long
   const compact = width <= CARD_COMPACT_MAX;
@@ -71,6 +74,7 @@ export default function PrintCard({
     "--pc-w": `${width}px`,
     "--pc-art-a": art.a,
     "--pc-art-b": art.b,
+    "--pc-art-image": drawn ? `url("${card.art}")` : "none",
   } as CSSProperties;
 
   const classes = [
@@ -94,8 +98,10 @@ export default function PrintCard({
 
       <div className="pc__art">
         <div className="pc__art-fill" />
-        <div className="pc__sun" />
-        <div className="pc__horizon" />
+        {/* The drawn sun and horizon are the stand-in for a card with no
+            picture yet. A card that has one gets the picture instead. */}
+        {!drawn && <div className="pc__sun" />}
+        {!drawn && <div className="pc__horizon" />}
         {print === "holoOne" && <div className="pc__hue" />}
         {print === "signed" && (
           <svg className="pc__signature" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">

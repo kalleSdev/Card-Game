@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  CAPTAIN_MULTIPLIER, ENERGY_PER_TURN, GRADE_POINTS, MISPLACED_PENALTY,
+  ENERGY_PER_TURN, GRADE_POINTS, MISPLACED_PENALTY, SKIPS_PER_GAME,
   TABLE_SIZE, TEAM_SIZE, assertGraded, valueOf,
   type ScoreCard,
 } from "./rules";
@@ -33,7 +33,7 @@ function run(state: ScoreState, intent: ScoreIntent, actor = state.turn) {
   return applyScoreIntent(state, intent, actor, CARDS);
 }
 
-/** Takes any card that is still on the table, into the first free seat. */
+/** Takes any card still on the table into the first free seat, ending the turn. */
 function takeAnything(state: ScoreState): ScoreState {
   const index = available(state)[0];
   const team = state.teams[state.turn];
@@ -43,6 +43,13 @@ function takeAnything(state: ScoreState): ScoreState {
       ? { row: "combat" as const, index: team.combat.findIndex(x => x === null) }
       : { row: "support" as const, index: team.support.findIndex(x => x === null) };
   return run(state, { type: "TAKE", index, seat }).state;
+}
+
+/** Plays a whole game out by taking, which is the only way a turn ends for free. */
+function playOut(state: ScoreState): ScoreState {
+  let guard = 0;
+  while (!state.over && guard++ < 40) state = takeAnything(state);
+  return state;
 }
 
 describe("the table", () => {
@@ -91,9 +98,8 @@ describe("what a turn costs", () => {
     expect(events[0]).toMatchObject({ type: "REJECTED", reason: /energy/i });
   });
 
-  it("denies a revealed card, and locks it for good", () => {
+  it("denies a card, and locks it for good", () => {
     let state = createScoreMatch(CARDS, 2);
-    state = run(state, { type: "REVEAL", index: 4 }).state;
     state = run(state, { type: "DENY", index: 4 }).state;
 
     expect(state.table[4]).toMatchObject({ denied: true, revealed: false });
@@ -104,23 +110,26 @@ describe("what a turn costs", () => {
     expect(run(state, { type: "TAKE", index: 4, seat }).events[0]).toMatchObject({ reason: /locked/i });
   });
 
-  it("will not deny something nobody has looked at", () => {
-    const state = createScoreMatch(CARDS, 2);
-    expect(run(state, { type: "DENY", index: 0 }).events[0]).toMatchObject({ reason: /face up/i });
-    expect(state.energy).toBe(ENERGY_PER_TURN);
+  it("denies a card nobody has looked at, which is the point of doing it early", () => {
+    let state = createScoreMatch(CARDS, 2);
+    state = run(state, { type: "DENY", index: 0 }).state;
+    expect(state.table[0].denied).toBe(true);
+    expect(state.energy).toBe(ENERGY_PER_TURN - 1);
   });
 
-  it("takes for free, but only once a turn", () => {
-    let state = createScoreMatch(CARDS, 2);
-    const before = state.energy;
-    state = run(state, { type: "TAKE", index: 0, seat: { row: "captain", index: 0 } }).state;
+  it("takes for free, and taking is what ends the turn", () => {
+    const state = createScoreMatch(CARDS, 2);
+    const me = state.turn;
+    const { state: after, events } = run(state, {
+      type: "TAKE", index: 0, seat: { row: "captain", index: 0 },
+    });
 
-    expect(state.energy).toBe(before);
-    expect(state.takesLeft).toBe(0);
-    expect(state.teams[state.turn].captain).toBe(state.cards[0]);
-
-    const again = run(state, { type: "TAKE", index: 1, seat: { row: "combat", index: 0 } });
-    expect(again.events[0]).toMatchObject({ reason: /already taken/i });
+    expect(after.teams[me].captain).toBe(state.cards[0]);
+    expect(after.turn).not.toBe(me);
+    // The next player starts fresh rather than inheriting what was left
+    expect(after.energy).toBe(ENERGY_PER_TURN);
+    expect(after.takesLeft).toBe(1);
+    expect(events.map(e => e.type)).toEqual(["TAKEN", "TURN_ENDED"]);
   });
 
   it("takes blind or face up, and says which it was", () => {
@@ -128,8 +137,7 @@ describe("what a turn costs", () => {
     const blind = run(state, { type: "TAKE", index: 0, seat: { row: "captain", index: 0 } });
     expect(blind.events[0]).toMatchObject({ type: "TAKEN", blind: true });
 
-    state = run(blind.state, { type: "END_TURN" }).state;
-    state = run(state, { type: "REVEAL", index: 5 }).state;
+    state = run(blind.state, { type: "REVEAL", index: 5 }).state;
     const seen = run(state, { type: "TAKE", index: 5, seat: { row: "captain", index: 0 } });
     expect(seen.events[0]).toMatchObject({ type: "TAKEN", blind: false });
   });
@@ -138,7 +146,7 @@ describe("what a turn costs", () => {
     let state = createScoreMatch(CARDS, 2);
     const first = state.turn;
     state = run(state, { type: "REVEAL", index: 6 }).state;
-    state = run(state, { type: "END_TURN" }).state;
+    state = run(state, { type: "SKIP" }).state;
 
     const { state: after, events } = run(state, {
       type: "TAKE", index: 6, seat: { row: "captain", index: 0 },
@@ -150,8 +158,7 @@ describe("what a turn costs", () => {
   it("refuses a seat that is already sat in, and one that does not exist", () => {
     let state = createScoreMatch(CARDS, 2);
     state = run(state, { type: "TAKE", index: 0, seat: { row: "captain", index: 0 } }).state;
-    state = run(state, { type: "END_TURN" }).state;
-    state = run(state, { type: "END_TURN" }).state;
+    state = run(state, { type: "SKIP" }).state;
 
     expect(run(state, { type: "TAKE", index: 1, seat: { row: "captain", index: 0 } }).events[0])
       .toMatchObject({ reason: /seat is taken/i });
@@ -162,9 +169,9 @@ describe("what a turn costs", () => {
   it("gives each player their own energy and take back at the start of a turn", () => {
     let state = createScoreMatch(CARDS, 2);
     state = run(state, { type: "REVEAL", index: 0 }).state;
-    state = takeAnything(state);
-    state = run(state, { type: "END_TURN" }).state;
+    expect(state.energy).toBe(ENERGY_PER_TURN - 1);
 
+    state = takeAnything(state);
     expect(state.energy).toBe(ENERGY_PER_TURN);
     expect(state.takesLeft).toBe(1);
   });
@@ -181,9 +188,9 @@ describe("what a team is worth", () => {
   const card = (over: Partial<ScoreCard>): ScoreCard =>
     ({ id: "x", role: "combat", grade: "rare", points: 5, ...over });
 
-  it("doubles the captain seat", () => {
+  it("pays a captain its own points, and no more", () => {
     const c = card({ role: "captain", points: 6 });
-    expect(valueOf(c, "captain")).toBe(6 * CAPTAIN_MULTIPLIER);
+    expect(valueOf(c, "captain")).toBe(6);
   });
 
   it("charges for a card in the wrong seat", () => {
@@ -191,9 +198,9 @@ describe("what a team is worth", () => {
     expect(valueOf(c, "support")).toBe(5 - MISPLACED_PENALTY);
   });
 
-  it("doubles first, then charges, for a misplaced captain", () => {
+  it("charges for the captain seat like any other", () => {
     const c = card({ role: "support", points: 5 });
-    expect(valueOf(c, "captain")).toBe(5 * CAPTAIN_MULTIPLIER - MISPLACED_PENALTY);
+    expect(valueOf(c, "captain")).toBe(5 - MISPLACED_PENALTY);
   });
 
   it("adds a whole team up", () => {
@@ -208,11 +215,7 @@ describe("what a team is worth", () => {
 
 describe("the end", () => {
   it("finishes when both teams are full, and calls it", () => {
-    let state = createScoreMatch(CARDS, 2);
-    for (let i = 0; i < TEAM_SIZE * 2; i++) {
-      state = takeAnything(state);
-      if (!state.over) state = run(state, { type: "END_TURN" }).state;
-    }
+    const state = playOut(createScoreMatch(CARDS, 2));
 
     expect(state.over).toBe(true);
     expect(seatsFilled(state.teams.P1)).toBe(TEAM_SIZE);
@@ -223,45 +226,78 @@ describe("the end", () => {
     expect(state.winner).toBe(expected);
   });
 
-  it("finishes when the table runs out, however full the teams are", () => {
+  it("finishes when the table runs out, however empty the teams are", () => {
     let state = createScoreMatch(CARDS, 2);
-    // Deny everything, two a turn, taking nothing
-    while (available(state).length > 0 && !state.over) {
-      const index = available(state)[0];
-      state = run(state, { type: "REVEAL", index }).state;
-      state = run(state, { type: "DENY", index }).state;
-      if (!state.over) state = run(state, { type: "END_TURN" }).state;
+    // Deny two a turn and skip, until there is nothing left to take
+    let guard = 0;
+    while (available(state).length > 0 && !state.over && guard++ < 60) {
+      for (const index of available(state).slice(0, 2)) {
+        if (state.energy > 0) state = run(state, { type: "DENY", index }).state;
+      }
+      if (!state.over && state.skipsLeft[state.turn] > 0) {
+        state = run(state, { type: "SKIP" }).state;
+      } else if (!state.over) {
+        state = takeAnything(state);
+      }
     }
 
     expect(isFinished(state)).toBe(true);
     expect(state.over).toBe(true);
-    expect(state.winner).toBe("draw");
   });
 
   it("refuses anything at all once it is over", () => {
-    let state = createScoreMatch(CARDS, 2);
-    for (let i = 0; i < TEAM_SIZE * 2; i++) {
-      state = takeAnything(state);
-      if (!state.over) state = run(state, { type: "END_TURN" }).state;
-    }
+    const state = playOut(createScoreMatch(CARDS, 2));
     expect(run(state, { type: "REVEAL", index: 19 }, state.turn).events[0])
       .toMatchObject({ reason: /over/i });
   });
 
-  it("skips a player whose team is already full", () => {
+  it("passes the turn back to a player whose team is not full yet", () => {
     let state = createScoreMatch(CARDS, 2);
     const first: ScorePlayer = state.turn;
 
-    // First player fills up while the other only ever passes
-    for (let i = 0; i < TEAM_SIZE; i++) {
-      state = takeAnything(state);
-      state = run(state, { type: "END_TURN" }).state;
-      if (state.turn !== first) state = run(state, { type: "END_TURN" }).state;
+    // Both take in turn, so the teams fill together and the turn alternates
+    state = takeAnything(state);
+    expect(state.turn).not.toBe(first);
+    state = takeAnything(state);
+    expect(state.turn).toBe(first);
+    expect(seatsFilled(state.teams[first])).toBe(1);
+    expect(seatsFilled(state.teams[first === "P1" ? "P2" : "P1"])).toBe(1);
+  });
+});
+
+describe("skipping", () => {
+  it("ends a turn without taking, and is limited for the whole game", () => {
+    let state = createScoreMatch(CARDS, 2);
+    const me = state.turn;
+
+    const { state: after, events } = run(state, { type: "SKIP" });
+    expect(after.turn).not.toBe(me);
+    expect(after.skipsLeft[me]).toBe(SKIPS_PER_GAME - 1);
+    expect(seatsFilled(after.teams[me])).toBe(0);
+    expect(events[0]).toMatchObject({ type: "SKIPPED", left: SKIPS_PER_GAME - 1 });
+
+    state = after;
+    // Spend the rest, one a turn each
+    for (let i = 0; i < SKIPS_PER_GAME * 2; i++) {
+      if (state.skipsLeft[state.turn] > 0) state = run(state, { type: "SKIP" }).state;
+      else break;
+    }
+    expect(state.skipsLeft[me]).toBe(0);
+    expect(run(state, { type: "SKIP" }, me === state.turn ? me : state.turn).events[0])
+      .toMatchObject({ reason: /no skips left/i });
+  });
+
+  it("leaves taking as the only way out once the skips are gone", () => {
+    let state = createScoreMatch(CARDS, 2);
+    const me = state.turn;
+    for (let i = 0; i < SKIPS_PER_GAME; i++) {
+      state = run(state, { type: "SKIP" }, me).state;
+      if (state.turn !== me) state = run(state, { type: "SKIP" }, state.turn).state;
     }
 
-    expect(seatsFilled(state.teams[first])).toBe(TEAM_SIZE);
-    expect(state.over).toBe(false);
-    expect(state.turn).not.toBe(first);
+    expect(state.skipsLeft[me]).toBe(0);
+    const forced = takeAnything(state.turn === me ? state : run(state, { type: "SKIP" }).state);
+    expect(seatsFilled(forced.teams[me])).toBeGreaterThan(0);
   });
 });
 

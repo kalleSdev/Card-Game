@@ -55,6 +55,7 @@ function artColors(id: string): { a: string; b: string } {
 export default function ScoreCard({
   card,
   name,
+  art,
   width = CARD_SIZE.md,
   selected = false,
   spent = false,
@@ -64,6 +65,8 @@ export default function ScoreCard({
   card: ScoreCardDef;
   /** The character's name. Everything else on the card comes from the card. */
   name: string;
+  /** The picture. Without one the card falls back to its drawn placeholder. */
+  art?: string;
   width?: number;
   selected?: boolean;
   /** Taken, denied, or otherwise out of play. */
@@ -71,14 +74,15 @@ export default function ScoreCard({
   interactive?: boolean;
   onClick?: () => void;
 }) {
-  const art = artColors(card.id);
+  const tint = artColors(card.id);
   const grade = GRADE_TONE[card.grade];
   const compact = width <= CARD_COMPACT_MAX;
 
   const style = {
     "--sc-w": `${width}px`,
-    "--sc-art-a": art.a,
-    "--sc-art-b": art.b,
+    "--sc-art-a": tint.a,
+    "--sc-art-b": tint.b,
+    "--sc-art-image": art ? `url("${art}")` : "none",
     "--sc-tone": grade.tone,
     "--sc-edge": grade.edge,
     "--sc-inner": grade.inner,
@@ -102,8 +106,8 @@ export default function ScoreCard({
 
       <div className="sc__art">
         <div className="sc__art-fill" />
-        <div className="sc__sun" />
-        <div className="sc__horizon" />
+        {!art && <div className="sc__sun" />}
+        {!art && <div className="sc__horizon" />}
         <div className="sc__band" />
       </div>
 

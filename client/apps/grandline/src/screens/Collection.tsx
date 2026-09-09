@@ -66,7 +66,7 @@ export default function CollectionScreen({ store }: { store: Store }) {
           <span style={{ ...text("small"), color: COLOR.fathom }}>or</span>
           <Currency kind="berries" amount={spareValue.berries} />
           <span style={{ ...text("small"), color: COLOR.fathom, marginLeft: "auto" }}>
-            Scrapping never touches your last copy
+            Scrapping all your spares always leaves one
           </span>
         </div>
       </Panel>
@@ -213,6 +213,9 @@ function CardSheet({
   const { collection } = store;
   const [inspecting, setInspecting] = useState<PrintId | null>(null);
   const [face, setFace] = useState<"collection" | "score">("collection");
+  const [confirming, setConfirming] = useState<
+    { print: PrintId; action: "dust" | "sell"; amount: number } | null
+  >(null);
   const score = scoreCard(cardId);
   return (
     <div
@@ -311,28 +314,49 @@ function CardSheet({
                     </span>
                   </div>
 
-                  {spares > 0 && store.signedIn ? (
+                  {count > 0 && store.signedIn ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       <span style={{ ...text("small"), fontSize: 11, color: COLOR.fathom }}>
-                        {spares} spare{spares === 1 ? "" : "s"}
+                        {spares > 0 ? `${spares} spare${spares === 1 ? "" : "s"}` : "Your only copy"}
                       </span>
+
+                      {/* One at a time. On the last copy these ask first. */}
                       <div style={{ display: "flex", gap: 6 }}>
-                        <Button size="sm" tone="ghost" onClick={() => store.scrap(cardId, print, 1, "dust")}>
+                        <Button
+                          size="sm"
+                          tone="ghost"
+                          onClick={() => spares > 0
+                            ? store.scrap(cardId, print, 1, "dust")
+                            : setConfirming({ print, action: "dust", amount: 1 })}
+                        >
                           Dust {value.stardust}
                         </Button>
-                        <Button size="sm" tone="ghost" onClick={() => store.scrap(cardId, print, 1, "sell")}>
+                        <Button
+                          size="sm"
+                          tone="ghost"
+                          onClick={() => spares > 0
+                            ? store.scrap(cardId, print, 1, "sell")
+                            : setConfirming({ print, action: "sell", amount: 1 })}
+                        >
                           Sell {value.berries}
                         </Button>
                       </div>
+
+                      {/* All of them, which always leaves the last copy alone */}
                       {spares > 1 && (
-                        <Button size="sm" tone="ghost" full onClick={() => store.scrap(cardId, print, spares, "dust")}>
-                          Dust all {spares} for {spares * value.stardust}
-                        </Button>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <Button size="sm" tone="ghost" onClick={() => store.scrap(cardId, print, spares, "dust")}>
+                            Dust all {spares}
+                          </Button>
+                          <Button size="sm" tone="ghost" onClick={() => store.scrap(cardId, print, spares, "sell")}>
+                            Sell all {spares}
+                          </Button>
+                        </div>
                       )}
                     </div>
                   ) : (
                     <span style={{ ...text("small"), fontSize: 11, color: COLOR.fathom }}>
-                      {count === 1 ? "Your only copy" : "Not collected"}
+                      Not collected
                     </span>
                   )}
                 </div>
@@ -353,6 +377,19 @@ function CardSheet({
         </Panel>
       </div>
 
+      {confirming && (
+        <LastCopy
+          cardId={cardId}
+          print={confirming.print}
+          action={confirming.action}
+          onConfirm={() => {
+            void store.scrap(cardId, confirming.print, confirming.amount, confirming.action, true);
+            setConfirming(null);
+          }}
+          onCancel={() => setConfirming(null)}
+        />
+      )}
+
       {inspecting && (
         <Inspect
           card={cardFace(cardId)}
@@ -361,6 +398,63 @@ function CardSheet({
           onClose={() => setInspecting(null)}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * The last copy of a print.
+ *
+ * Scrapping a spare is routine and happens on one click. Scrapping the only
+ * copy you have is not, so it asks — once, plainly, with the card in front of
+ * you rather than a line of text about it.
+ */
+function LastCopy({ cardId, print, action, onConfirm, onCancel }: {
+  cardId: string;
+  print: PrintId;
+  action: "dust" | "sell";
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const value = DUPLICATE_VALUE[print];
+  const gain = action === "dust" ? value.stardust : value.berries;
+
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: "fixed", inset: 0, zIndex: 300,
+        background: "rgba(4,8,14,0.78)",
+        backdropFilter: "blur(8px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: SPACE.xl,
+      }}
+    >
+      <div onClick={e => e.stopPropagation()}>
+        <Panel padding={SPACE.xxl} lifted style={{ maxWidth: 520 }}>
+          <div style={{ display: "flex", gap: SPACE.xl, alignItems: "flex-start" }}>
+            <PrintCard card={cardFace(cardId)} print={print} width={CARD_SIZE.sm} interactive={false} />
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Text as="h3" role="heading">
+                {action === "dust" ? "Dust" : "Sell"} your only {PRINT_INFO[print].name}?
+              </Text>
+              <p style={{ ...text("small"), color: COLOR.mist, margin: `${SPACE.md}px 0 ${SPACE.lg}px` }}>
+                This is the last {cardName(cardId)} you hold in this print. Scrapping it takes it out
+                of your collection and out of any deck it is in, for{" "}
+                {action === "dust" ? `${gain} Stardust` : `${gain} Berries`}.
+              </p>
+
+              <div style={{ display: "flex", gap: SPACE.sm }}>
+                <Button tone="primary" size="sm" onClick={onConfirm}>
+                  Yes, {action === "dust" ? "dust" : "sell"} it
+                </Button>
+                <Button tone="ghost" size="sm" onClick={onCancel}>Keep it</Button>
+              </div>
+            </div>
+          </div>
+        </Panel>
+      </div>
     </div>
   );
 }

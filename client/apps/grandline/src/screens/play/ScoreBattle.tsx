@@ -1,35 +1,36 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  COST, ENERGY_PER_TURN, MISPLACED_PENALTY, TEAM, TEAM_SIZE,
+  COST, ENERGY_PER_TURN, MISPLACED_PENALTY, SKIPS_PER_GAME, TEAM, TEAM_SIZE,
   applyScoreIntent, createScoreMatch, playScoreTurn, scores, seatOf, seatsFilled, valueOf,
   type ScoreCard as ScoreCardDef, type ScoreIntent, type ScorePlayer, type ScoreState,
   type Seat, type SeatRef, type Team,
 } from "@cg/score";
 import {
   ARENA_CARD, ARENA_GAP, ARENA_SLOT, ARENA_WIDTH, SEAT_GROUP_GAP, TABLE_COLUMNS,
-  TURN_BAR_HEIGHT, seatCardFor, seatSlotHeight,
+  TURN_BAR_HEIGHT, plainCardHeight, seatCardFor, seatSlotHeight,
 } from "../../design/arena";
 import { COLOR, RADIUS, SPACE, text } from "../../design/tokens";
 import ScoreCard from "../../components/ScoreCard";
 import CardBack from "../../components/CardBack";
 import { Button, Panel, Text } from "../../components/primitives";
-import { SCORE_POOL, cardShortName, scoreCard } from "../../data/pool";
+import { SCORE_POOL, artUrl, cardShortName, scoreCard } from "../../data/pool";
 
 /**
  * Score Battle.
  *
- * One phase. Look at a card, lock one away, or take one straight into a seat,
- * with the seat chosen at the moment you take it.
+ * Look at a card, lock one away, or take one straight into a seat, with the
+ * seat chosen at the moment you take it. Taking is what ends a turn: the only
+ * other way out is a skip, and there are two of those a game.
  *
- * The board is symmetrical: both teams draw at the same size, on the same slot
+ * The board is symmetrical: both teams draw at the same size on the same slot
  * height, so neither side looks more important than the other. The pool is the
- * row that gives up height, because it is twenty cards you glance across
- * against seven you are building something out of. Nothing scrolls.
+ * row that gives up height when a window is short. Nothing scrolls.
  *
  * Two ways to act, and they are the two you would expect from a board game.
  * Arm an action from the bar and click the card you want it done to, or double
  * click a card to take it. A single click only brings a card forward, so
- * looking at something is never the same gesture as spending on it.
+ * looking at something is never the same gesture as spending on it, and a click
+ * on the board itself puts everything down again.
  */
 
 const BOT_THINKING_MS = 750;
@@ -53,10 +54,15 @@ export default function ScoreBattle({ opponent, onLeave }: {
 
   const total = useMemo(() => scores(state, SCORE_POOL), [state]);
 
-  /** Whoever is sitting at the keyboard right now. Both seats, in a local game. */
-  const you: ScorePlayer = opponent === "local" ? state.turn : "P1";
-  const them: ScorePlayer = you === "P1" ? "P2" : "P1";
-  const yourTurn = !state.over && state.turn === you;
+  /**
+   * The seats keep their sides for the whole game, even locally. Swapping them
+   * with the turn made a card you had just placed look as though it had moved
+   * to the other player's board.
+   */
+  const you: ScorePlayer = "P1";
+  const them: ScorePlayer = "P2";
+  const local = opponent === "local";
+  const yourTurn = !state.over && (local || state.turn === you);
 
   const play = useCallback((intent: ScoreIntent) => {
     setState(current => {
@@ -97,6 +103,13 @@ export default function ScoreBattle({ opponent, onLeave }: {
     return () => window.removeEventListener("keydown", onKey);
   }, [onLeave, armed, placing]);
 
+  /** Puts everything down: nothing selected, nothing armed. */
+  const clearAll = () => {
+    setFocused(null);
+    setArmed(null);
+    setPlacing(null);
+  };
+
   /** A click on a pool card. What it means depends on what is armed. */
   const onCard = (index: number) => {
     if (!yourTurn || placing !== null) return;
@@ -118,9 +131,7 @@ export default function ScoreBattle({ opponent, onLeave }: {
     const next = Math.floor(Math.random() * 2 ** 31);
     setSeed(next);
     setState(createScoreMatch(SCORE_POOL, next));
-    setFocused(null);
-    setArmed(null);
-    setPlacing(null);
+    clearAll();
     setNote(null);
   };
 
@@ -128,6 +139,9 @@ export default function ScoreBattle({ opponent, onLeave }: {
 
   return (
     <div
+      // A click on the board itself, rather than on anything in it, puts
+      // whatever was picked up back down.
+      onClick={clearAll}
       style={{
         position: "fixed",
         inset: 0,
@@ -137,40 +151,52 @@ export default function ScoreBattle({ opponent, onLeave }: {
           radial-gradient(1200px 700px at 50% -10%, rgba(62,143,160,0.08), transparent 70%),
           ${COLOR.abyss}`,
         display: "flex",
-        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: ARENA_GAP.band,
-        padding: `${SPACE.md}px ${SPACE.xl}px`,
+        gap: SPACE.xl,
+        padding: SPACE.lg,
       }}
     >
-      <Header
+      {/* Everything that is not the game runs down the left, out of the way */}
+      <Rail
         seed={seed}
-        local={opponent === "local"}
+        local={local}
         seat={state.turn}
         onRestart={restart}
         onLeave={onLeave}
       />
 
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: ARENA_GAP.band,
+        }}
+      >
       {/* Their side. Same size, same slot, same shape as yours. */}
       <TeamBand
-        heading={opponent === "local" ? `Seat ${them}` : "Opponent"}
+        heading={local ? "Player two" : "Opponent"}
         team={state.teams[them]}
         total={total[them]}
         card={seatCard}
         slot={slot}
         active={!state.over && state.turn === them}
+        placing={placing !== null && state.turn === them}
+        placingCard={placing !== null ? knownCard(state, placing) : null}
+        onSeat={ref => placing !== null && play({ type: "TAKE", index: placing, seat: ref })}
       />
 
       <TurnBar
         state={state}
         yourTurn={yourTurn}
+        local={local}
         note={note}
         armed={armed}
         placing={placing !== null}
         onArm={next => { setArmed(armed === next ? null : next); setPlacing(null); }}
-        onCancel={() => { setArmed(null); setPlacing(null); }}
-        onEndTurn={() => play({ type: "END_TURN" })}
+        onCancel={clearAll}
+        onSkip={() => play({ type: "SKIP" })}
       />
 
       <div
@@ -195,22 +221,23 @@ export default function ScoreBattle({ opponent, onLeave }: {
       </div>
 
       <TeamBand
-        heading={opponent === "local" ? `Seat ${you} — your turn` : "Your team"}
+        heading={local ? "Player one" : "Your team"}
         team={state.teams[you]}
         total={total[you]}
         card={seatCard}
         slot={slot}
-        active={yourTurn}
-        placing={placing !== null}
+        active={!state.over && state.turn === you}
+        placing={placing !== null && state.turn === you}
         placingCard={placing !== null ? knownCard(state, placing) : null}
         onSeat={ref => placing !== null && play({ type: "TAKE", index: placing, seat: ref })}
       />
+      </div>
 
       {state.over && (
         <Result
           state={state}
           total={total}
-          local={opponent === "local"}
+          local={local}
           onRestart={restart}
           onLeave={onLeave}
         />
@@ -232,7 +259,13 @@ function useSeatCard(): number {
 
 // ── Frame ────────────────────────────────────────────────────────────────────
 
-function Header({ seed, local, seat, onRestart, onLeave }: {
+/**
+ * The title and the two buttons that are not the game, stood on their side
+ * down the left edge. Along the top they cost the board a whole row of height;
+ * here they cost it nothing, because the board is limited by height and not by
+ * width.
+ */
+function Rail({ seed, local, seat, onRestart, onLeave }: {
   seed: number;
   local: boolean;
   seat: ScorePlayer;
@@ -240,8 +273,20 @@ function Header({ seed, local, seat, onRestart, onLeave }: {
   onLeave: () => void;
 }) {
   return (
-    <div style={{ width: ARENA_WIDTH, display: "flex", alignItems: "center", gap: SPACE.lg }}>
-      <Text as="h2" role="title">Score Battle</Text>
+    <div
+      onClick={e => e.stopPropagation()}
+      style={{
+        width: 132,
+        flex: "none",
+        alignSelf: "stretch",
+        display: "flex",
+        flexDirection: "column",
+        gap: SPACE.md,
+        padding: `${SPACE.md}px 0`,
+      }}
+    >
+      <Text as="h2" role="title">Score<br />Battle</Text>
+
       <span
         style={{
           ...text("label"),
@@ -249,32 +294,50 @@ function Header({ seed, local, seat, onRestart, onLeave }: {
           color: COLOR.current,
           border: `1px solid ${COLOR.rope}`,
           borderRadius: RADIUS.sm,
-          padding: "3px 8px",
+          padding: "4px 8px",
+          textAlign: "center",
         }}
       >
         {local ? `Local · ${seat}` : "vs Computer"}
       </span>
-      <span style={{ ...text("label"), fontSize: 9, color: COLOR.fathom }}>seed {seed.toString(36)}</span>
-      <div style={{ marginLeft: "auto", display: "flex", gap: SPACE.sm }}>
-        <Button size="sm" tone="ghost" onClick={onRestart}>New table</Button>
-        <Button size="sm" tone="ghost" onClick={onLeave}>Leave</Button>
+
+      <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: SPACE.sm }}>
+        <span style={{ ...text("label"), fontSize: 8, color: COLOR.fathom }}>
+          seed {seed.toString(36)}
+        </span>
+        <Button size="sm" tone="ghost" full onClick={onRestart}>New table</Button>
+        <Button size="sm" tone="ghost" full onClick={onLeave}>Leave</Button>
       </div>
     </div>
   );
 }
 
+/**
+ * The bar.
+ *
+ * Every control in it has a fixed width, and the message beside them takes
+ * whatever is left. A button that changes what it says must not change where it
+ * sits: a row that shuffles under the cursor is a row you have to look at twice
+ * before every click.
+ */
+const BUTTON_WIDTH = 104;
+
 function TurnBar({
-  state, yourTurn, note, armed, placing, onArm, onCancel, onEndTurn,
+  state, yourTurn, local, note, armed, placing, onArm, onCancel, onSkip,
 }: {
   state: ScoreState;
   yourTurn: boolean;
+  local: boolean;
   note: string | null;
   armed: Armed;
   placing: boolean;
   onArm: (next: Exclude<Armed, null>) => void;
   onCancel: () => void;
-  onEndTurn: () => void;
+  onSkip: () => void;
 }) {
+  const skips = state.skipsLeft[state.turn];
+  const busy = placing || armed !== null;
+
   const message = note
     ? note
     : state.over
@@ -286,12 +349,21 @@ function TurnBar({
           : armed === "reveal"
             ? "Click a face-down card to look at it."
             : armed === "deny"
-              ? "Click a face-up card to lock it away."
-              : "Double click a card to take it, or arm an action.";
+              ? "Click any card to lock it away."
+              : skips > 0
+                ? "Double click a card to take it, or arm an action."
+                : "No skips left: you have to take a card this turn.";
+
+  const whose = state.over
+    ? "Finished"
+    : local
+      ? `${state.turn === "P1" ? "Player one" : "Player two"} to play`
+      : yourTurn ? "Your turn" : "Their turn";
 
   return (
     <Panel padding={0} style={{ width: ARENA_WIDTH }}>
       <div
+        onClick={e => e.stopPropagation()}
         style={{
           display: "flex",
           alignItems: "center",
@@ -300,45 +372,76 @@ function TurnBar({
           height: TURN_BAR_HEIGHT,
         }}
       >
-        <span style={{ ...text("label"), fontSize: 10, color: yourTurn ? COLOR.current : COLOR.fathom }}>
-          {state.over ? "Finished" : yourTurn ? "Your turn" : "Their turn"}
+        <span
+          style={{
+            ...text("label"),
+            fontSize: 10,
+            color: yourTurn ? COLOR.current : COLOR.fathom,
+            width: 118,
+            flex: "none",
+          }}
+        >
+          {whose}
         </span>
-        <span style={{ ...text("data"), fontSize: 12, color: COLOR.fathom }}>
+        <span style={{ ...text("data"), fontSize: 12, color: COLOR.fathom, width: 62, flex: "none" }}>
           {seatsFilled(state.teams[state.turn])}/{TEAM_SIZE} seats
         </span>
 
-        <span style={{ ...text("small"), fontSize: 13, color: COLOR.mist, flex: 1, minWidth: 0 }}>
+        <span
+          style={{
+            ...text("small"),
+            fontSize: 13,
+            color: COLOR.mist,
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
           {message}
         </span>
 
         {/* The two actions that cost something, with the energy that pays for
             them right beside the buttons rather than across the bar. */}
         <Pips filled={state.energy} of={ENERGY_PER_TURN} label="energy" colour={COLOR.current} />
-        <Button
-          size="sm"
-          tone={armed === "reveal" ? "primary" : "secondary"}
-          onClick={() => onArm("reveal")}
-          disabled={!yourTurn || state.energy < COST.reveal}
-        >
-          Reveal · {COST.reveal}
-        </Button>
-        <Button
-          size="sm"
-          tone={armed === "deny" ? "primary" : "secondary"}
-          onClick={() => onArm("deny")}
-          disabled={!yourTurn || state.energy < COST.deny}
-        >
-          Deny · {COST.deny}
-        </Button>
+        <span style={{ width: BUTTON_WIDTH, flex: "none" }}>
+          <Button
+            size="sm"
+            full
+            tone={armed === "reveal" ? "primary" : "secondary"}
+            onClick={() => onArm("reveal")}
+            disabled={!yourTurn || state.energy < COST.reveal}
+          >
+            Reveal · {COST.reveal}
+          </Button>
+        </span>
+        <span style={{ width: BUTTON_WIDTH, flex: "none" }}>
+          <Button
+            size="sm"
+            full
+            tone={armed === "deny" ? "primary" : "secondary"}
+            onClick={() => onArm("deny")}
+            disabled={!yourTurn || state.energy < COST.deny}
+          >
+            Deny · {COST.deny}
+          </Button>
+        </span>
 
-        {/* Ending the turn sits apart from the two that spend */}
+        {/* Skipping sits apart from the two that spend energy */}
         <span style={{ width: SPACE.xl, flex: "none" }} />
-        <Pips filled={state.takesLeft} of={1} label="take" colour={COLOR.doubloon} />
-        {placing || armed ? (
-          <Button size="sm" tone="ghost" onClick={onCancel}>Cancel</Button>
-        ) : (
-          <Button size="sm" tone="ghost" onClick={onEndTurn} disabled={!yourTurn}>End turn</Button>
-        )}
+        <Pips filled={skips} of={SKIPS_PER_GAME} label="skips" colour={COLOR.doubloon} />
+        <span style={{ width: BUTTON_WIDTH, flex: "none" }}>
+          <Button
+            size="sm"
+            full
+            tone="ghost"
+            onClick={busy ? onCancel : onSkip}
+            disabled={!yourTurn || (!busy && skips < 1)}
+          >
+            {busy ? "Cancel" : "Skip"}
+          </Button>
+        </span>
       </div>
     </Panel>
   );
@@ -418,12 +521,13 @@ function TableCard({ state, index, focused, armed, live, onClick, onDoubleClick 
         <ScoreCard
           card={card}
           name={cardShortName(card.id)}
+          art={artUrl(card.id)}
           width={width}
           spent={slot.denied}
           interactive={live}
         />
       ) : (
-        <CardBack width={width} height={Math.round(width * 1.4)} dim={gone} />
+        <CardBack width={width} height={plainCardHeight(width)} dim={gone} />
       )}
 
       {slot.denied && <Stamp label="Denied" colour={COLOR.signal} />}
@@ -436,7 +540,7 @@ function TakenSlot({ width, by }: { width: number; by: ScorePlayer }) {
     <div
       style={{
         width,
-        height: Math.round(width * 1.4),
+        height: plainCardHeight(width),
         borderRadius: RADIUS.lg,
         border: `1px dashed ${COLOR.rope}`,
         display: "flex",
@@ -536,7 +640,12 @@ function TeamBand({
                     }}
                   >
                     {heldCard ? (
-                      <ScoreCard card={heldCard} name={cardShortName(heldCard.id)} width={card} />
+                      <ScoreCard
+                        card={heldCard}
+                        name={cardShortName(heldCard.id)}
+                        art={artUrl(heldCard.id)}
+                        width={card}
+                      />
                     ) : (
                       <EmptySeat width={card} />
                     )}
@@ -610,7 +719,7 @@ function EmptySeat({ width }: { width: number }) {
     <div
       style={{
         width,
-        height: Math.round(width * 1.4),
+        height: plainCardHeight(width),
         borderRadius: RADIUS.lg,
         border: `1px dashed ${COLOR.rope}`,
       }}

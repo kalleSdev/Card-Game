@@ -1,5 +1,5 @@
 import {
-  COST, ENERGY_PER_TURN, TABLE_SIZE, TAKES_PER_TURN, TEAM, TEAM_SIZE,
+  COST, ENERGY_PER_TURN, SKIPS_PER_GAME, TABLE_SIZE, TAKES_PER_TURN, TEAM, TEAM_SIZE,
   valueOf,
   type ScoreCard, type Seat,
 } from "./rules";
@@ -46,6 +46,8 @@ export interface ScoreState {
   turn: ScorePlayer;
   energy: number;
   takesLeft: number;
+  /** Passes each player has left for the whole game, not the turn. */
+  skipsLeft: Record<ScorePlayer, number>;
   /** Counts a full go each, so both players always have the same number of turns. */
   round: number;
   over: boolean;
@@ -56,12 +58,14 @@ export type ScoreIntent =
   | { type: "REVEAL"; index: number }
   | { type: "DENY"; index: number }
   | { type: "TAKE"; index: number; seat: SeatRef }
-  | { type: "END_TURN" };
+  /** Ends a turn without taking. Limited, and gone once spent. */
+  | { type: "SKIP" };
 
 export type ScoreEvent =
   | { type: "REVEALED"; index: number; by: ScorePlayer; cardId: string }
   | { type: "DENIED"; index: number; by: ScorePlayer }
   | { type: "TAKEN"; index: number; by: ScorePlayer; cardId: string; seat: SeatRef; blind: boolean }
+  | { type: "SKIPPED"; by: ScorePlayer; left: number }
   | { type: "TURN_ENDED"; by: ScorePlayer; next: ScorePlayer }
   | { type: "GAME_OVER"; winner: ScorePlayer | "draw"; scores: Record<ScorePlayer, number> }
   | { type: "REJECTED"; reason: string };
@@ -100,6 +104,7 @@ export function createScoreMatch(pool: ScoreCard[], seed: number, size = TABLE_S
     turn: seed % 2 === 0 ? "P1" : "P2",
     energy: ENERGY_PER_TURN,
     takesLeft: TAKES_PER_TURN,
+    skipsLeft: { P1: SKIPS_PER_GAME, P2: SKIPS_PER_GAME },
     round: 1,
     over: false,
     winner: null,
@@ -204,9 +209,6 @@ export function applyScoreIntent(
       if (!slot) return reject("No such card");
       if (slot.takenBy) return reject("That card has been taken");
       if (slot.denied) return reject("That card is already locked");
-      // Deny only bites something face up: it is the answer to a reveal, not a
-      // way to quietly delete cards nobody has looked at.
-      if (!slot.revealed) return reject("You can only deny a card that is face up");
       if (state.energy < COST.deny) return reject("Not enough energy");
 
       const next = withSlot(state, intent.index, { revealed: false, denied: true });
@@ -230,18 +232,35 @@ export function applyScoreIntent(
       const cardId = state.cards[intent.index] as string;
       const blind = !slot.revealed;
 
-      const next = withSlot(state, intent.index, { takenBy: actor, revealed: true });
+      let next = withSlot(state, intent.index, { takenBy: actor, revealed: true });
       next.takesLeft -= 1;
       next.teams = { ...next.teams, [actor]: place(next.teams[actor], ref, cardId) };
 
+      // Taking is how a turn ends. There is nothing left to decide once the
+      // card is in a seat, so the board does not wait to be told.
+      const handover = other(actor);
+      next = { ...next, ...freshTurn(next, handover) };
+
       return settle(next, pool, [
         { type: "TAKEN", index: intent.index, by: actor, cardId, seat: ref, blind },
+        { type: "TURN_ENDED", by: actor, next: next.turn },
       ]);
     }
 
-    case "END_TURN": {
-      const next = { ...state, ...freshTurn(state, other(actor)) };
-      return settle(next, pool, [{ type: "TURN_ENDED", by: actor, next: next.turn }]);
+    case "SKIP": {
+      if (state.skipsLeft[actor] < 1) return reject("You have no skips left");
+
+      const left = state.skipsLeft[actor] - 1;
+      const passed: ScoreState = {
+        ...state,
+        skipsLeft: { ...state.skipsLeft, [actor]: left },
+      };
+      const next = { ...passed, ...freshTurn(passed, other(actor)) };
+
+      return settle(next, pool, [
+        { type: "SKIPPED", by: actor, left },
+        { type: "TURN_ENDED", by: actor, next: next.turn },
+      ]);
     }
 
     default:

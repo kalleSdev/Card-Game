@@ -270,13 +270,16 @@ app.post("/packs/buy", async (req, reply) =>
 app.post("/collection/scrap", async (req, reply) =>
   guarded(reply, () => {
     const user = requireUser(req);
-    const { cardId, print, amount, action } = (req.body ?? {}) as {
-      cardId?: string; print?: string; amount?: number; action?: string;
+    const { cardId, print, amount, action, includeLast } = (req.body ?? {}) as {
+      cardId?: string; print?: string; amount?: number; action?: string; includeLast?: boolean;
     };
     if (!cardId) throw new Error("Which card?");
     if (!print || !(PRINTS as readonly string[]).includes(print)) throw new Error("No such print");
     if (action !== "dust" && action !== "sell") throw new Error("Dust it or sell it");
-    const result = scrapSpares(user.id, cardId, print as PrintId, Math.max(1, amount ?? 1), action as ScrapAction);
+    const result = scrapSpares(
+      user.id, cardId, print as PrintId, Math.max(1, amount ?? 1), action as ScrapAction,
+      includeLast === true,
+    );
     return { ...result, wallet: walletOf(user.id) };
   }),
 );

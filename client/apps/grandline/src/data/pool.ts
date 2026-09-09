@@ -27,9 +27,18 @@ const faces: Record<string, CardFace> = Object.fromEntries(
       atk: stats.atk,
       hp: stats.hp,
       cost: stats.cost,
+      art: artUrl(id),
     }];
   }),
 );
+
+/**
+ * Where a character's picture lives. This app serves the JJK client's public
+ * folder, so every card that has been drawn is already here under its own id.
+ */
+export function artUrl(id: string): string {
+  return `/cards/${id}.PNG`;
+}
 
 export function cardFace(id: string): CardFace {
   return faces[id] ?? { id, name: id, atk: 0, hp: 0, cost: 0 };

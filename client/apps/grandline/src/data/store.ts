@@ -36,7 +36,14 @@ export interface Store {
 
   buy: (packId: PackId) => Promise<void>;
   open: (packRowId: string) => Promise<{ pulls: Pull[]; isNew: boolean[] } | null>;
-  scrap: (cardId: string, print: PrintId, amount: number, action: SpareAction) => Promise<void>;
+  scrap: (
+    cardId: string,
+    print: PrintId,
+    amount: number,
+    action: SpareAction,
+    /** Only ever true after the player has been warned it is their last copy. */
+    includeLast?: boolean,
+  ) => Promise<void>;
 
   saveProfile: (profile: api.Profile) => void;
   saveDeck: (deck: Deck) => void;
@@ -156,9 +163,15 @@ export function useStore(): Store {
   }, [load]);
 
   const scrap = useCallback(
-    async (cardId: string, print: PrintId, amount: number, action: SpareAction) => {
+    async (
+      cardId: string,
+      print: PrintId,
+      amount: number,
+      action: SpareAction,
+      includeLast = false,
+    ) => {
       try {
-        await api.scrap(cardId, print, amount, action);
+        await api.scrap(cardId, print, amount, action, includeLast);
         await load();
         setError(null);
       } catch (err) {

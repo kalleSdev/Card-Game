@@ -26,7 +26,7 @@ import { CARD_SIZE, SPACE, tallCardHeight } from "./tokens";
 
 export const ARENA_CARD = {
   /** Twenty of these at once. The row that shrinks when a window is short. */
-  table: CARD_SIZE.xs,
+  table: CARD_SIZE.sm,
 } as const;
 
 /**
@@ -73,6 +73,9 @@ export function gridWidth(columns: number, card: number, gap: number): number {
   return columns * card + (columns - 1) * gap;
 }
 
+/** The gap between the three seat groups inside a team. */
+export const SEAT_GROUP_GAP = SPACE.lg;
+
 /** One captain, three combat, three support. */
 export const TEAM_COLUMNS = 7;
 
@@ -82,7 +85,7 @@ export const TEAM_COLUMNS = 7;
  */
 export const ARENA_WIDTH = Math.max(
   gridWidth(TABLE_COLUMNS, ARENA_CARD.table, ARENA_GAP.card),
-  gridWidth(TEAM_COLUMNS, CARD_SIZE.md, ARENA_GAP.card) + 2 * SPACE.lg,
+  gridWidth(TEAM_COLUMNS, CARD_SIZE.md, ARENA_GAP.card) + 2 * SEAT_GROUP_GAP,
 );
 
 /** A row of seats, measured the same way, so a team lines up under the table. */
@@ -90,8 +93,6 @@ export function seatRowWidth(count: number, card: number): number {
   return gridWidth(count, card, ARENA_GAP.card);
 }
 
-/** The gap between the three seat groups inside a team. */
-export const SEAT_GROUP_GAP = SPACE.lg;
 
 /**
  * Every slot is measured for the tallest card that could sit in it, so a row of
@@ -103,6 +104,20 @@ export const ARENA_SLOT = {
 
 export function seatSlotHeight(seatCard: number): number {
   return tallCardHeight(seatCard);
+}
+
+/**
+ * The height of a plain card — the shape a common or rare Score card is cut to,
+ * and the same proportions a base or foil collection card has.
+ *
+ * Face-down cards and empty seats draw at this height rather than at the slot's
+ * full height. Most of what turns over is one of the two plain grades, so this
+ * is the size that moves least when a card is revealed.
+ */
+const PLAIN_CARD_RATIO = 217 / 168;
+
+export function plainCardHeight(width: number): number {
+  return Math.round(width * PLAIN_CARD_RATIO);
 }
 
 /** The bar that says whose turn it is and what they have left to spend. */

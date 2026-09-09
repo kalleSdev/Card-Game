@@ -6,8 +6,8 @@
  * rather than logic.
  *
  * The mode is deliberately thin: no synergies, no weapons, no vows. A card is
- * worth its points, the captain seat doubles, and a card in the wrong seat
- * costs two. Everything else is what you know and what you deny.
+ * worth its points, and a card in the wrong seat costs two. Everything else is
+ * what you know and what you deny.
  */
 
 export type Seat = "captain" | "combat" | "support";
@@ -39,11 +39,17 @@ export const TABLE_SIZE = 20;
 export const ENERGY_PER_TURN = 2;
 export const COST = { reveal: 1, deny: 1 } as const;
 
-/** Taking is free, but only once a turn. That limit is the whole clock. */
+/** Taking is free, and it is what ends a turn. */
 export const TAKES_PER_TURN = 1;
 
-/** The captain seat doubles whatever sits in it. */
-export const CAPTAIN_MULTIPLIER = 2;
+/**
+ * Passing without taking, and how often anybody may.
+ *
+ * A turn ends when you take a card, so a skip is the only way to end one
+ * without adding to your team. Two a game each: enough to wait out a bad table
+ * once or twice, not enough to sit out the game.
+ */
+export const SKIPS_PER_GAME = 2;
 
 /**
  * What a card in the wrong seat costs.
@@ -63,12 +69,13 @@ export interface ScoreCard {
   points: number;
 }
 
-/** What one card in one seat is worth. Double first, then pay for the mismatch. */
+/**
+ * What one card in one seat is worth: its points, less the penalty if it is in
+ * the wrong seat. No seat multiplies anything — every seat counts the same, and
+ * the only decision a seat carries is whether the card belongs in it.
+ */
 export function valueOf(card: ScoreCard, seat: Seat): number {
-  let value = card.points;
-  if (seat === "captain") value *= CAPTAIN_MULTIPLIER;
-  if (card.role !== seat) value -= MISPLACED_PENALTY;
-  return value;
+  return card.role === seat ? card.points : card.points - MISPLACED_PENALTY;
 }
 
 /** Throws on a card whose points fall outside its grade, at import rather than mid-game. */

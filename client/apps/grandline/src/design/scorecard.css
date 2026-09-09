@@ -13,8 +13,12 @@
 .sc {
   position: relative;
   width: var(--sc-w);
-  display: flex;
-  flex-direction: column;
+  /* Border breaking: the picture is the card. Everything else floats over it,
+     so there is no plate cutting the artwork off partway down. The card keeps
+     the proportions of its collection counterpart, which is where the height
+     comes from now that the plate no longer adds any. */
+  aspect-ratio: 168 / 217;
+  display: block;
   border-radius: 10px;
   overflow: hidden;
   isolation: isolate;
@@ -66,24 +70,20 @@
    and a Score card never has to guess at a height of its own. */
 
 .sc__art {
-  position: relative;
-  aspect-ratio: 5 / 4;
+  position: absolute;
+  inset: 0;
   overflow: hidden;
+  border-radius: 10px;
   background: var(--deck);
 }
 
-/* Epic and up: the picture is taller and the plate sits over it */
-.sc--epic .sc__art,
-.sc--legendary .sc__art,
-.sc--mythic .sc__art {
-  aspect-ratio: 5 / 5.4;
+/* Epic and up are the taller cut, exactly as their collection counterparts are */
+.sc--epic {
+  aspect-ratio: 168 / 244;
 }
-.sc--epic .sc__body,
-.sc--legendary .sc__body,
-.sc--mythic .sc__body {
-  margin-top: -34px;
-  padding-top: 24px;
-  background: linear-gradient(180deg, transparent, rgba(7, 12, 19, 0.92) 42%);
+.sc--legendary,
+.sc--mythic {
+  aspect-ratio: 168 / 248;
 }
 
 /* Legendary and mythic: the black label treatment, name a size up */
@@ -99,9 +99,12 @@
 .sc__art-fill {
   position: absolute;
   inset: 0;
-  background:
+  background-image: var(--sc-art-image, none),
     radial-gradient(ellipse 120% 80% at 50% 118%, var(--sc-art-b), transparent 72%),
     linear-gradient(165deg, var(--sc-art-a), var(--sc-art-b));
+  background-size: cover, auto, auto;
+  background-position: center top, center, center;
+  background-repeat: no-repeat;
 }
 
 /* The same horizon the collection card draws, so a character reads as the same
@@ -126,8 +129,8 @@
   border: 1px solid rgba(242, 236, 223, 0.26);
 }
 
-/* A rule of the card's own colour under the art, so the grade is readable at
-   table size from the colour alone. */
+/* A rule of the card's own colour along the bottom edge, so the grade is
+   readable at table size from the colour alone. */
 .sc__band {
   position: absolute;
   left: 0;
@@ -136,39 +139,43 @@
   height: 3px;
   background: var(--sc-tone);
   opacity: 0.9;
-  z-index: 3;
+  z-index: 5;
 }
 
 /* ── The plate ───────────────────────────────────────────────────────────── */
 
-/* The plate is laid out exactly like a collection card's: the name, then a row
-   under it. A collection card puts attack, health and cost in that row; a Score
-   card puts the one number it has. Same structure, so the two faces of a
-   character are the same object at the same size. */
+/* Everything written on the card sits at the bottom, over the picture, under
+   the lightest wash the text can survive. The name is on the floor of the card;
+   the number sits just above it on the right. */
 .sc__body {
-  position: relative;
-  z-index: 3;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  /* The extra at the bottom is what a collection card spends on the descenders
-     of its stat row. Keeping it here is what makes the two faces measure the
-     same to the pixel. */
-  padding: 10px 11px 16px;
-  background: linear-gradient(180deg, rgba(7, 12, 19, 0.45), transparent);
+  align-items: stretch;
+  gap: 5px;
+  padding: 22px 11px 9px;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(5, 9, 15, 0.5) 45%,
+    rgba(5, 9, 15, 0.82) 100%
+  );
+  border-radius: 0 0 10px 10px;
 }
 
-/* Where a collection card carries ATK, HP and cost. Same height as that row,
-   so the two faces of a character measure the same. */
+/* The number, on its own line above the name */
 .sc__line {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  height: 14px;
 }
 
 .sc__name {
-  flex: 1;
+  order: 2;
   min-width: 0;
   font-family: "Fraunces", Georgia, serif;
   font-weight: 700;
@@ -176,16 +183,14 @@
   line-height: 1.15;
   letter-spacing: -0.01em;
   color: var(--foam);
-  /* Two lines of room whether the name needs them or not, so a row keeps one
-     baseline rather than stepping with name length. */
-  min-height: 2.3em;
+  text-shadow: 0 1px 6px rgba(4, 7, 12, 0.9);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-/* The only number on the card, sat where the cost sits on a collection card. */
+/* The only number on the card. */
 .sc__value {
   min-width: 28px;
   padding: 0 7px;
@@ -343,11 +348,8 @@
   -webkit-line-clamp: 1;
 }
 .sc--compact .sc__body {
-  padding: 8px 9px 13px;
-  gap: 6px;
-}
-.sc--compact .sc__line {
-  height: 13px;
+  padding: 18px 8px 7px;
+  gap: 3px;
 }
 .sc--compact .sc__value {
   font-size: 10.5px;

@@ -180,10 +180,17 @@ export const openPack = (id: string) =>
     { method: "POST" },
   );
 
-export const scrap = (cardId: string, print: PrintId, amount: number, action: "dust" | "sell") =>
+export const scrap = (
+  cardId: string,
+  print: PrintId,
+  amount: number,
+  action: "dust" | "sell",
+  /** Set only after warning the player that this is their last copy. */
+  includeLast = false,
+) =>
   call<{ removed: number; gained: number; wallet: Wallet }>("/collection/scrap", {
     method: "POST",
-    body: { cardId, print, amount, action },
+    body: { cardId, print, amount, action, includeLast },
   });
 
 export const craft = (cardId: string, print: PrintId) =>
