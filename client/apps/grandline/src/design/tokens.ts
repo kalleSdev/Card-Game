@@ -202,6 +202,18 @@ const ART_RATIO = 5.4 / 5;
 const PLATE_HEIGHT = 67;
 const PLATE_HEIGHT_COMPACT = 35;
 
+/**
+ * The tallest a card of this width ever draws: the black label plate, whose
+ * name is set a size up and lands a few pixels below everything else. Rows that
+ * can hold any print or any Score grade are measured with this, so a mixed row
+ * shares one baseline instead of stepping.
+ */
+const TALL_PLATE_EXTRA = 6;
+
+export function tallCardHeight(width: number): number {
+  return cardSlotHeight(width) + TALL_PLATE_EXTRA;
+}
+
 export function cardSlotHeight(width: number): number {
   const plate = width <= CARD_COMPACT_MAX ? PLATE_HEIGHT_COMPACT : PLATE_HEIGHT;
   return Math.ceil(width * ART_RATIO + plate);

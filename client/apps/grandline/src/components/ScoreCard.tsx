@@ -111,7 +111,9 @@ export default function ScoreCard({
 
       <div className="sc__body">
         <div className="sc__name">{name}</div>
-        <div className="sc__value">{card.points}</div>
+        <div className="sc__line">
+          <span className="sc__value">{card.points}</span>
+        </div>
       </div>
     </div>
   );

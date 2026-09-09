@@ -1,4 +1,4 @@
-import { CARD_SIZE, SPACE, cardSlotHeight } from "./tokens";
+import { CARD_SIZE, SPACE, tallCardHeight } from "./tokens";
 
 /**
  * The play surface, measured.
@@ -14,22 +14,44 @@ import { CARD_SIZE, SPACE, cardSlotHeight } from "./tokens";
  *   TABLE      the contested middle, where every click happens
  *   YOU        what you are building, and the thing you read most
  *
- * A match takes the whole window, so these are sized against a screen rather
- * than against a page with a sidebar in it. The rule is still fit: twenty cards
- * have to sit on the table at once. Your own team is the largest thing on the
- * board because it is the part you read closely; theirs matches the table,
- * since it is a glance and nothing more.
+ * A match takes the whole window and never scrolls, so these are sized against
+ * a screen rather than against a page with a sidebar in it.
+ *
+ * Two rules decide the numbers. The two teams are the same size as each other,
+ * because a board where your side is bigger than theirs reads as a board that
+ * is lying to you about the score. And the pool gives up the height when there
+ * is not enough: it is twenty cards you glance across, against seven you are
+ * building something out of.
  */
 
 export const ARENA_CARD = {
-  /** Twenty of these at once, across the full width of the window. */
-  table: CARD_SIZE.sm,
-  /** Your own team, read closely and often. The biggest thing on the board. */
-  yours: CARD_SIZE.md,
-  /** Theirs. A glance and nothing more, and the row the board can afford to
-      give up height on when a window is short. */
-  theirs: CARD_SIZE.xs,
+  /** Twenty of these at once. The row that shrinks when a window is short. */
+  table: CARD_SIZE.xs,
 } as const;
+
+/**
+ * A seat, on either side of the board, at the largest size the window can hold.
+ *
+ * The board must never scroll, and the two things that decide whether it does
+ * are the seat size and the window. Rather than pick a size that fits the worst
+ * case and looks mean on a large screen, the board asks: a tall window gets the
+ * full-size seat, a short one steps down. Both are on the CARD_SIZE scale, and
+ * the threshold is the height the full-size board actually needs.
+ */
+/**
+ * What the board actually measures at each seat size, rounded up. Taken from
+ * the rendered board rather than guessed: the full-size seat needs 1052, the
+ * step below it 940, and the smallest 894. That last one is the floor — the
+ * card scale has nothing smaller — so a window shorter than that scrolls.
+ */
+export const FULL_BOARD_HEIGHT = 1055;
+export const MID_BOARD_HEIGHT = 920;
+
+export function seatCardFor(windowHeight: number): number {
+  if (windowHeight >= FULL_BOARD_HEIGHT) return CARD_SIZE.md;
+  if (windowHeight >= MID_BOARD_HEIGHT) return CARD_SIZE.sm;
+  return CARD_SIZE.xs;
+}
 
 export const ARENA_GAP = {
   /** Between cards in the same row. */
@@ -51,19 +73,37 @@ export function gridWidth(columns: number, card: number, gap: number): number {
   return columns * card + (columns - 1) * gap;
 }
 
-/** The widest the play surface ever gets, so the bands always share an edge. */
-export const ARENA_WIDTH = gridWidth(TABLE_COLUMNS, ARENA_CARD.table, ARENA_GAP.card);
+/** One captain, three combat, three support. */
+export const TEAM_COLUMNS = 7;
+
+/**
+ * The widest the play surface ever gets, so every band shares an edge. Seven
+ * seats at full size are wider than ten pool cards, so the teams set it.
+ */
+export const ARENA_WIDTH = Math.max(
+  gridWidth(TABLE_COLUMNS, ARENA_CARD.table, ARENA_GAP.card),
+  gridWidth(TEAM_COLUMNS, CARD_SIZE.md, ARENA_GAP.card) + 2 * SPACE.lg,
+);
 
 /** A row of seats, measured the same way, so a team lines up under the table. */
 export function seatRowWidth(count: number, card: number): number {
   return gridWidth(count, card, ARENA_GAP.card);
 }
 
+/** The gap between the three seat groups inside a team. */
+export const SEAT_GROUP_GAP = SPACE.lg;
+
+/**
+ * Every slot is measured for the tallest card that could sit in it, so a row of
+ * mixed grades shares one baseline and the two teams line up with each other.
+ */
 export const ARENA_SLOT = {
-  table: cardSlotHeight(ARENA_CARD.table),
-  yours: cardSlotHeight(ARENA_CARD.yours),
-  theirs: cardSlotHeight(ARENA_CARD.theirs),
+  table: tallCardHeight(ARENA_CARD.table),
 } as const;
+
+export function seatSlotHeight(seatCard: number): number {
+  return tallCardHeight(seatCard);
+}
 
 /** The bar that says whose turn it is and what they have left to spend. */
 export const TURN_BAR_HEIGHT = 48;
