@@ -8,6 +8,7 @@ import { Button, Panel, SectionHead, Text } from "../../components/primitives";
 import { cardDb, cardFace, cardName } from "../../data/pool";
 import { draftFromDeck, randomDraft } from "../../data/draft";
 import DraftPicks from "./DraftPicks";
+import HandOver from "./HandOver";
 import BattleBoard, { type BattleOpponent } from "./BattleBoard";
 import type { Store } from "../../data/store";
 
@@ -18,12 +19,16 @@ import type { Store } from "../../data/store";
  * moment both sides have a deck the two are identical, which is why they share
  * a board and only differ in how they get here.
  *
- * A local game drafts once and plays both seats from that, which is enough to
- * sit two people at one screen. Drafting separately behind a hand-over screen
- * is the next thing this wants, and needs the hand-over to exist first.
+ * Against the computer there is one deck to build, yours. Locally there are
+ * two, and neither person may watch the other build theirs, so each is taken
+ * behind a hand-over screen: player one drafts, the keyboard changes hands,
+ * player two drafts, and it changes hands once more before the first turn.
  */
 
 export type CardMode = "draft" | "deck";
+
+/** How the two seats are named to two people sharing a screen. */
+const SEAT_NAME = { P1: "Player one", P2: "Player two" } as const;
 
 export default function CardBattle({ mode, opponent, store, onLeave }: {
   mode: CardMode;
@@ -31,29 +36,46 @@ export default function CardBattle({ mode, opponent, store, onLeave }: {
   store: Store;
   onLeave: () => void;
 }) {
-  const [yourDraft, setYourDraft] = useState<PlayerDraftResult | null>(null);
+  const local = opponent === "local";
   const title = mode === "draft" ? "Draft" : "Deck";
 
-  // The opponent's deck is drafted at random. A person sitting locally plays
-  // the same one, because both seats share a screen and neither can hide a
-  // draft from the other yet.
-  const theirDraft = useMemo(() => randomDraft(), []);
+  const [p1, setP1] = useState<PlayerDraftResult | null>(null);
+  const [p2, setP2] = useState<PlayerDraftResult | null>(null);
+
+  /** Whether whoever the screen belongs to next has said they are looking. */
+  const [ready, setReady] = useState(false);
+
+  // The computer's deck is drafted at random, once.
+  const bot = useMemo(() => randomDraft(), []);
+  const theirs = local ? p2 : bot;
 
   // The seed is drawn once and kept, because the server replays the match from
   // it and a match that cannot be replayed cannot be paid for.
   const [seed] = useState(() => Math.floor(Math.random() * 2 ** 31));
 
   const battle: BattleState | null = useMemo(() => {
-    if (!yourDraft) return null;
-    return createBattleState(yourDraft, theirDraft, cardDb, undefined, seed);
-  }, [yourDraft, theirDraft, seed]);
+    if (!p1 || !theirs) return null;
+    return createBattleState(p1, theirs, cardDb, undefined, seed);
+  }, [p1, theirs, seed]);
 
-  if (battle && yourDraft) {
+  // Both decks are in. One last hand-over, so the board opens in front of the
+  // person whose turn it actually is.
+  if (battle && p1 && theirs) {
+    if (local && !ready) {
+      return (
+        <HandOver
+          seat={SEAT_NAME.P1}
+          note="Both decks are in. You have the first turn."
+          onReady={() => setReady(true)}
+          onLeave={onLeave}
+        />
+      );
+    }
     return (
       <BattleBoard
         initial={battle}
         seed={seed}
-        drafts={{ p1: yourDraft, p2: theirDraft }}
+        drafts={{ p1, p2: theirs }}
         opponent={opponent}
         title={title}
         store={store}
@@ -62,16 +84,48 @@ export default function CardBattle({ mode, opponent, store, onLeave }: {
     );
   }
 
-  if (mode === "draft") {
-    return <DraftPicks title={title} onDone={setYourDraft} onLeave={onLeave} />;
+  // Player two builds theirs once the keyboard has changed hands.
+  if (p1 && local) {
+    if (!ready) {
+      return (
+        <HandOver
+          seat={SEAT_NAME.P2}
+          note={mode === "draft"
+            ? "Player one is done drafting. Yours is next."
+            : "Player one has chosen. Bring a deck of your own."}
+          onReady={() => setReady(true)}
+          onLeave={onLeave}
+        />
+      );
+    }
+    const done = (draft: PlayerDraftResult) => { setP2(draft); setReady(false); };
+    return mode === "draft"
+      ? <DraftPicks key="p2" title={title} seat={SEAT_NAME.P2} onDone={done} onLeave={onLeave} />
+      : <PickDeck store={store} seat={SEAT_NAME.P2} onPlay={done} onLeave={onLeave} />;
   }
 
-  return <PickDeck store={store} onPlay={setYourDraft} onLeave={onLeave} />;
+  if (mode === "draft") {
+    return (
+      <DraftPicks
+        key="p1"
+        title={title}
+        seat={local ? SEAT_NAME.P1 : undefined}
+        onDone={setP1}
+        onLeave={onLeave}
+      />
+    );
+  }
+
+  return (
+    <PickDeck store={store} seat={local ? SEAT_NAME.P1 : undefined} onPlay={setP1} onLeave={onLeave} />
+  );
 }
 
 /** Deck mode: choose one you built, or go back and build one. */
-function PickDeck({ store, onPlay, onLeave }: {
+function PickDeck({ store, seat, onPlay, onLeave }: {
   store: Store;
+  /** Whose choice this is, when two people are sharing the screen. */
+  seat?: string;
   onPlay: (draft: PlayerDraftResult) => void;
   onLeave: () => void;
 }) {
@@ -90,7 +144,7 @@ function PickDeck({ store, onPlay, onLeave }: {
     >
       <div style={{ maxWidth: 900, margin: "0 auto", display: "flex", flexDirection: "column", gap: SPACE.xl }}>
         <SectionHead
-          eyebrow="Deck"
+          eyebrow={seat ?? "Deck"}
           title="Bring a deck"
           right={<Button size="sm" tone="ghost" onClick={onLeave}>Leave</Button>}
         />

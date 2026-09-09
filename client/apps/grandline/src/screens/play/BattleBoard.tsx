@@ -11,6 +11,7 @@ import {
 } from "../../design/arena";
 import { COLOR, RADIUS, SPACE, text } from "../../design/tokens";
 import PrintCard from "../../components/PrintCard";
+import HandOver from "./HandOver";
 import { Button, Currency, Panel, Text } from "../../components/primitives";
 import { cardFace } from "../../data/pool";
 import * as api from "../../data/api";
@@ -26,6 +27,10 @@ import type { Store } from "../../data/store";
  * the middle, your five slots and leader below it, and your hand under that.
  * Both sides draw at the same size on the same slot height, so the board never
  * flatters one player over the other.
+ *
+ * Locally the board turns around between turns: the seat to move is always
+ * the one at the bottom, and a hand-over screen stands between the two so the
+ * next player is not handed a screen with the last one's hand on it.
  *
  * This version plays the plain game: no domain meter, no spells, no perks, no
  * weapons. The engine still knows about them — they are the old client's — but
@@ -73,6 +78,9 @@ export default function BattleBoard({ initial, seed, drafts, opponent, title, st
   /** Whether this game has already been handed in. */
   const sent = useRef(false);
 
+  /** Up while a local game is between two people, hiding the board. */
+  const [passing, setPassing] = useState(false);
+
   const local = opponent === "local";
   /** The seat the board is drawn from. Fixed, even locally. */
   const you: PlayerId = "P1";
@@ -88,8 +96,10 @@ export default function BattleBoard({ initial, seed, drafts, opponent, title, st
       log.current.push(intent);
       latest.current = next;
       setState(next);
+      // A local game changes hands the moment the turn does
+      if (local && !next.winner && next.activePlayer !== current.activePlayer) setPassing(true);
     }
-  }, []);
+  }, [local]);
 
   // Against the computer, P2 plays itself, on the plain ruleset this board shows
   useEffect(() => {
@@ -243,6 +253,15 @@ export default function BattleBoard({ initial, seed, drafts, opponent, title, st
           onHold={id => setHeld(held === id ? null : id)}
         />
       </div>
+
+      {passing && !state.winner && (
+        <HandOver
+          seat={seatName(actor)}
+          note="Your turn. The last player's hand is put away."
+          onReady={() => setPassing(false)}
+          onLeave={onLeave}
+        />
+      )}
 
       {state.winner && (
         <Result

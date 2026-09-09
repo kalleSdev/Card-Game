@@ -25,8 +25,10 @@ import {
 const OPTION_CARD = CARD_SIZE.lg;
 const TAKEN_CARD = CARD_SIZE.xs;
 
-export default function DraftPicks({ title, onDone, onLeave }: {
+export default function DraftPicks({ title, seat, onDone, onLeave }: {
   title: string;
+  /** Whose draft this is, when two people are sharing the screen. */
+  seat?: string;
   onDone: (draft: PlayerDraftResult) => void;
   onLeave: () => void;
 }) {
@@ -88,6 +90,9 @@ export default function DraftPicks({ title, onDone, onLeave }: {
         }}
       >
         <Text as="h2" role="title">{title}</Text>
+        {seat && (
+          <span style={{ ...text("label"), fontSize: 9, color: COLOR.fathom }}>{seat}</span>
+        )}
         <span
           style={{
             ...text("label"),
