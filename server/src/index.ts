@@ -14,6 +14,11 @@ import { PACKS, PRINTS, RANKS, COSMETIC_BY_ID, isProfileIcon, type PackId, type 
 import { applyResult, leaderboard, standingOf } from "./ranking.js";
 import { recent, postMatch, postStreak, postRank } from "./feed.js";
 import { settleScoreMatch, settleBattleMatch, ReplayError } from "./practice.js";
+import {
+  createScoreGame, getScoreGame, endScoreGame, submitScoreIntent, playScoreFor,
+  scoreViewFor, scoreTotals, rebindScoreSeat, liveScoreGames, type ScoreGame,
+} from "./scoreMatches.js";
+import type { ScorePlayer } from "@cg/score";
 import { LobbyBook } from "./lobbies.js";
 import {
   openTrade, joinTrade, cancelTrade, setOffer, confirmTrade, openTradeFor, historyFor,
@@ -55,7 +60,12 @@ app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body,
   }
 });
 
-app.get("/health", async () => ({ ok: true, matches: liveMatchIds.size, lobbies: lobbies.size }));
+app.get("/health", async () => ({
+  ok: true,
+  matches: liveMatchIds.size,
+  scoreMatches: liveScoreGames(),
+  lobbies: lobbies.size + scoreLobbies.size,
+}));
 
 app.post("/auth/register", async (req, reply) => {
   const { username, password } = (req.body ?? {}) as { username?: string; password?: string };
@@ -350,6 +360,9 @@ interface Conn {
   user?: PublicUser;
   matchId?: string;
   playerId?: PlayerId;
+  /** The Score match this socket is sitting in, which is a separate game. */
+  scoreId?: string;
+  scoreSeat?: ScorePlayer;
 }
 
 // How long a player gets to come back before they lose the match, and how long
@@ -365,6 +378,10 @@ const dropTimers = new Map<string, NodeJS.Timeout>();
 const turnTimers = new Map<string, { timer: NodeJS.Timeout; pid: PlayerId }>();
 const missedTurns = new Map<string, { pid: PlayerId; count: number }>();
 const lobbies = new LobbyBook<Conn>();
+// Score rooms carry no deck: the table is dealt by the server when they meet
+const scoreLobbies = new LobbyBook<Conn, null>();
+const scoreSeatOfUser = new Map<string, { gameId: string; player: ScorePlayer }>();
+const scoreTimers = new Map<string, NodeJS.Timeout>();
 const liveMatchIds = new Set<string>();
 
 const send = (ws: WebSocket, msg: ServerMessage) => {
@@ -448,6 +465,121 @@ function randomDraft(universe: UniverseId): PlayerDraftResult {
     extraIds: rest,
     weaponIds: [],
   };
+}
+
+// ── Score Battle, between two people ─────────────────────────────────────────
+
+function startScoreMatch(a: Conn, b: Conn, universe: UniverseId) {
+  const seatFor = (c: Conn) => ({
+    name: c.user?.username ?? "Player",
+    userId: c.user?.id,
+    send: (m: unknown) => send(c.socket, m as ServerMessage),
+  });
+
+  const game = createScoreGame(universe, seatFor(a), seatFor(b));
+
+  a.scoreId = game.id; a.scoreSeat = "P1";
+  b.scoreId = game.id; b.scoreSeat = "P2";
+  if (a.user) scoreSeatOfUser.set(a.user.id, { gameId: game.id, player: "P1" });
+  if (b.user) scoreSeatOfUser.set(b.user.id, { gameId: game.id, player: "P2" });
+
+  send(a.socket, { type: "scoreMatched", matchId: game.id, you: "P1", opponentName: game.seats.P2.name });
+  send(b.socket, { type: "scoreMatched", matchId: game.id, you: "P2", opponentName: game.seats.P1.name });
+  broadcastScore(game);
+  armScoreTimer(game);
+}
+
+/** Every seat gets the table with the other side's secrets left out. */
+function broadcastScore(game: ScoreGame) {
+  for (const player of ["P1", "P2"] as ScorePlayer[]) {
+    game.seats[player].send({ type: "scoreState", state: scoreViewFor(game, player) });
+  }
+}
+
+/**
+ * A seat that stops answering has its turn played by the bot. Nobody loses for
+ * dropping out of a Score match: the table empties either way, and a finished
+ * game pays both players.
+ */
+function armScoreTimer(game: ScoreGame) {
+  const existing = scoreTimers.get(game.id);
+  if (existing) clearTimeout(existing);
+  if (game.state.over) { scoreTimers.delete(game.id); return; }
+
+  const timer = setTimeout(() => {
+    const live = getScoreGame(game.id);
+    if (!live || live.state.over) return;
+    playScoreFor(live, live.state.turn);
+    afterScoreTurn(live);
+  }, TURN_SECONDS * 1000);
+  scoreTimers.set(game.id, timer);
+}
+
+/** What happens after anything moves a Score match along. */
+function afterScoreTurn(game: ScoreGame) {
+  broadcastScore(game);
+  if (game.state.over) finishScoreMatch(game);
+  else armScoreTimer(game);
+}
+
+function finishScoreMatch(game: ScoreGame) {
+  settleScore(game);
+  const timer = scoreTimers.get(game.id);
+  if (timer) clearTimeout(timer);
+  scoreTimers.delete(game.id);
+  for (const [userId, seat] of scoreSeatOfUser) {
+    if (seat.gameId === game.id) scoreSeatOfUser.delete(userId);
+  }
+  endScoreGame(game.id);
+}
+
+/**
+ * Pays out a finished Score match. This one does count for the ladder: the
+ * other side was a person, which is the whole difference between this and a
+ * practice game.
+ */
+function settleScore(game: ScoreGame) {
+  const winner = game.state.winner;
+  if (!winner) return;
+  const totals = scoreTotals(game);
+  const turns = game.state.round;
+
+  for (const player of ["P1", "P2"] as ScorePlayer[]) {
+    const seat = game.seats[player];
+    const conn = [...conns.values()].find(c => c.scoreId === game.id && c.scoreSeat === player);
+    if (!seat.userId || !conn?.user) continue;
+
+    const opponent = game.seats[player === "P1" ? "P2" : "P1"].name;
+    const won = winner === player;
+    recordResult(seat.userId, opponent, won, turns);
+    postMatch(conn.user, opponent, won, turns);
+
+    let rankChange = null;
+    try {
+      rankChange = applyResult(seat.userId, won);
+      if (rankChange.streak >= 3) postStreak(conn.user, rankChange.streak);
+      if (rankChange.rankedUp || rankChange.rankedDown) {
+        postRank(conn.user, rankChange.rank, rankChange.rankName, rankChange.rankedUp, rankChange.after);
+      }
+    } catch (err) {
+      console.warn("ranking failed", conn.user.username, err);
+    }
+
+    try {
+      const payout = payOutMatch(seat.userId, won, game.universe);
+      send(conn.socket, {
+        type: "rewards",
+        packs: payout.packs.map(pack => ({ id: pack.id, packId: pack.packId })),
+        berries: payout.berries,
+        rank: rankChange,
+      });
+    } catch (err) {
+      console.warn("payout failed", conn.user.username, err);
+    }
+  }
+
+  // A draw is a draw, but the score is worth saying out loud in the logs
+  if (winner === "draw") console.warn("score draw", game.id, totals.P1, totals.P2);
 }
 
 // Gives whoever is to move a deadline. A player who lets it run out has their
@@ -570,14 +702,45 @@ function handle(conn: Conn, msg: ClientMessage) {
       if (bad) return send(conn.socket, { type: "error", reason: bad });
       lobbies.close(lobby.code);
       return startMatch(
-        { conn: lobby.host, draft: lobby.draft },
+        { conn: lobby.host, draft: lobby.payload },
         { conn, draft: msg.draft },
         lobby.universe,
       );
     }
 
+    case "createScoreLobby": {
+      const universe = msg.universe ?? DEFAULT_UNIVERSE;
+      const lobby = scoreLobbies.create(conn, conn.user.username, null, universe);
+      return send(conn.socket, { type: "lobbyOpen", code: lobby.code });
+    }
+
+    case "joinScoreLobby": {
+      const lobby = scoreLobbies.find(msg.code);
+      if (!lobby) return send(conn.socket, { type: "error", reason: "No room with that code" });
+      if (lobby.host.socket === conn.socket) {
+        return send(conn.socket, { type: "error", reason: "That is your own room" });
+      }
+      if (lobby.host.socket.readyState !== lobby.host.socket.OPEN) {
+        scoreLobbies.close(lobby.code);
+        return send(conn.socket, { type: "error", reason: "The host is no longer connected" });
+      }
+      scoreLobbies.close(lobby.code);
+      return startScoreMatch(lobby.host, conn, lobby.universe);
+    }
+
+    case "scoreIntent": {
+      const game = conn.scoreId ? getScoreGame(conn.scoreId) : undefined;
+      if (!game || !conn.scoreSeat) {
+        return send(conn.socket, { type: "error", reason: "You are not in a match" });
+      }
+      const refused = submitScoreIntent(game, conn.scoreSeat, msg.intent);
+      if (refused) return send(conn.socket, { type: "error", reason: refused });
+      return afterScoreTurn(game);
+    }
+
     case "cancelLobby":
       lobbies.closeFor(conn);
+      scoreLobbies.closeFor(conn);
       return;
 
     case "practice": {
@@ -610,9 +773,33 @@ function handle(conn: Conn, msg: ClientMessage) {
   }
 }
 
+// Puts a player who dropped back into their Score seat, if it is still going.
+function resumeScoreMatch(conn: Conn): boolean {
+  if (!conn.user) return false;
+  const seat = scoreSeatOfUser.get(conn.user.id);
+  if (!seat) return false;
+  const game = getScoreGame(seat.gameId);
+  if (!game || game.state.over) { scoreSeatOfUser.delete(conn.user.id); return false; }
+
+  conn.scoreId = game.id;
+  conn.scoreSeat = seat.player;
+  rebindScoreSeat(game, seat.player, m => send(conn.socket, m as ServerMessage));
+
+  const other: ScorePlayer = seat.player === "P1" ? "P2" : "P1";
+  send(conn.socket, {
+    type: "scoreMatched",
+    matchId: game.id,
+    you: seat.player,
+    opponentName: game.seats[other].name,
+  });
+  broadcastScore(game);
+  return true;
+}
+
 // Puts a player who dropped back into their seat, if the match is still going.
 function resumeMatch(conn: Conn) {
   if (!conn.user) return;
+  if (resumeScoreMatch(conn)) return;
   const seat = seatOfUser.get(conn.user.id);
   if (!seat) return;
   const match = getMatch(seat.matchId);
@@ -641,6 +828,10 @@ function resumeMatch(conn: Conn) {
 // short window to come back before the win is handed over.
 function handleDisconnect(conn: Conn) {
   lobbies.closeFor(conn);
+  scoreLobbies.closeFor(conn);
+  // A Score seat is left where it is: the bot covers it, and the player can
+  // come back to a game that has moved on rather than to a loss.
+  if (conn.scoreId) parkScoreSeat(conn);
   const match = conn.matchId ? getMatch(conn.matchId) : undefined;
   if (!match || !conn.playerId || match.state.winner) return;
 
@@ -660,6 +851,8 @@ function handleDisconnect(conn: Conn) {
 
 function dropFromMatch(conn: Conn) {
   lobbies.closeFor(conn);
+  scoreLobbies.closeFor(conn);
+  dropFromScore(conn);
   const match: Match | undefined = conn.matchId ? getMatch(conn.matchId) : undefined;
   if (!match || !conn.playerId) return;
   const other: PlayerId = conn.playerId === "P1" ? "P2" : "P1";
@@ -668,6 +861,29 @@ function dropFromMatch(conn: Conn) {
   finishMatch(match, forfeit(match, conn.playerId, "Left the match"));
   conn.matchId = undefined;
   conn.playerId = undefined;
+}
+
+/** Stops writing to a socket that has gone, and lets the bot take the seat. */
+function parkScoreSeat(conn: Conn) {
+  const game = conn.scoreId ? getScoreGame(conn.scoreId) : undefined;
+  if (!game || !conn.scoreSeat || game.state.over) return;
+  rebindScoreSeat(game, conn.scoreSeat, () => {});
+  game.seats[conn.scoreSeat === "P1" ? "P2" : "P1"].send({
+    type: "opponentDisconnected",
+    seconds: TURN_SECONDS,
+  });
+}
+
+/** Leaving a Score match hands the rest of it to the bot. */
+function dropFromScore(conn: Conn) {
+  const game = conn.scoreId ? getScoreGame(conn.scoreId) : undefined;
+  conn.scoreId = undefined;
+  const seat = conn.scoreSeat;
+  conn.scoreSeat = undefined;
+  if (!game || !seat || game.state.over) return;
+  if (conn.user) scoreSeatOfUser.delete(conn.user.id);
+  rebindScoreSeat(game, seat, () => {});
+  game.seats[seat === "P1" ? "P2" : "P1"].send({ type: "opponentLeft" });
 }
 
 const wss = new WebSocketServer({ noServer: true });

@@ -1,5 +1,6 @@
 import type { BattleState, BattleEvent, BattleIntent } from "@cg/battle";
 import type { PlayerId, PlayerDraftResult } from "@cg/contracts";
+import type { ScoreIntent, ScorePlayer, ScoreState } from "@cg/score";
 
 /**
  * What goes over the socket.
@@ -17,6 +18,10 @@ export type ClientMessage =
   | { type: "createLobby"; draft: PlayerDraftResult }
   | { type: "joinLobby"; code: string; draft: PlayerDraftResult }
   | { type: "cancelLobby" }
+  // The same for Score, which brings no deck: the table is dealt on the server
+  | { type: "createScoreLobby" }
+  | { type: "joinScoreLobby"; code: string }
+  | { type: "scoreIntent"; intent: ScoreIntent }
   | { type: "intent"; intent: BattleIntent }
   | { type: "surrender" }
   | { type: "leave" };
@@ -37,6 +42,9 @@ export type ServerMessage =
   | { type: "matched"; matchId: string; you: PlayerId; opponentName: string }
   // Full state, already redacted for whoever is receiving it
   | { type: "state"; state: BattleState; events: BattleEvent[] }
+  | { type: "scoreMatched"; matchId: string; you: ScorePlayer; opponentName: string }
+  // The table, with every card still face down blanked out
+  | { type: "scoreState"; state: ScoreState }
   | { type: "opponentLeft" }
   | {
       type: "rewards";

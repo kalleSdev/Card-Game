@@ -4,11 +4,12 @@ import type { UniverseId } from "./universes.js";
 // Private rooms. One player opens a lobby and gets a short code, the other
 // joins with it. No global queue, so nobody is ever paired with a stranger.
 
-export interface Lobby<Host> {
+export interface Lobby<Host, Payload = PlayerDraftResult> {
   code: string;
   host: Host;
   hostName: string;
-  draft: PlayerDraftResult;
+  /** What the host brought. A deck for a card battle, nothing for Score. */
+  payload: Payload;
   universe: UniverseId;
   createdAt: number;
 }
@@ -20,8 +21,8 @@ const CODE_LENGTH = 5;
 // Lobbies nobody joins should not sit around for the life of the process
 const LOBBY_TTL_MS = 30 * 60 * 1000;
 
-export class LobbyBook<Host> {
-  private byCode = new Map<string, Lobby<Host>>();
+export class LobbyBook<Host, Payload = PlayerDraftResult> {
+  private byCode = new Map<string, Lobby<Host, Payload>>();
 
   private newCode(): string {
     for (let attempt = 0; attempt < 50; attempt++) {
@@ -41,18 +42,18 @@ export class LobbyBook<Host> {
     }
   }
 
-  create(host: Host, hostName: string, draft: PlayerDraftResult, universe: UniverseId): Lobby<Host> {
+  create(host: Host, hostName: string, payload: Payload, universe: UniverseId): Lobby<Host, Payload> {
     this.sweep();
     this.closeFor(host);
-    const lobby: Lobby<Host> = {
-      code: this.newCode(), host, hostName, draft, universe, createdAt: Date.now(),
+    const lobby: Lobby<Host, Payload> = {
+      code: this.newCode(), host, hostName, payload, universe, createdAt: Date.now(),
     };
     this.byCode.set(lobby.code, lobby);
     return lobby;
   }
 
   /** Codes are matched loosely, so pasted whitespace or lowercase still works. */
-  find(code: string): Lobby<Host> | undefined {
+  find(code: string): Lobby<Host, Payload> | undefined {
     this.sweep();
     return this.byCode.get(normaliseCode(code));
   }

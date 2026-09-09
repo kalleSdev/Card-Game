@@ -1,4 +1,5 @@
 import type { BattleState, BattleEvent, BattleIntent } from "@cg/battle";
+import type { ScoreIntent, ScorePlayer, ScoreState } from "@cg/score";
 import type { PlayerId, PlayerDraftResult } from "@cg/contracts";
 import type { UniverseId } from "./universes.js";
 
@@ -14,6 +15,10 @@ export type ClientMessage =
   | { type: "cancelLobby" }
   // Play the computer instead of waiting for someone
   | { type: "practice"; draft: PlayerDraftResult; universe?: UniverseId }
+  // The same, for a Score match. It brings no deck: the table is dealt here.
+  | { type: "createScoreLobby"; universe?: UniverseId }
+  | { type: "joinScoreLobby"; code: string }
+  | { type: "scoreIntent"; intent: ScoreIntent }
   | { type: "intent"; intent: BattleIntent }
   | { type: "surrender" }
   | { type: "leave" };
@@ -24,6 +29,9 @@ export type ServerMessage =
   | { type: "matched"; matchId: string; you: PlayerId; opponentName: string }
   // Full state, already redacted for the receiving player
   | { type: "state"; state: BattleState; events: BattleEvent[] }
+  | { type: "scoreMatched"; matchId: string; you: ScorePlayer; opponentName: string }
+  // The table, with every card still face down blanked out
+  | { type: "scoreState"; state: ScoreState }
   | { type: "opponentLeft" }
   // What the finished match paid: packs to open, and Berries
   | {

@@ -3,6 +3,7 @@ import { ENERGY_PER_TURN, TABLE_SIZE, TEAM, TEAM_SIZE } from "@cg/score";
 import { COLOR, RADIUS, SPACE, text } from "../design/tokens";
 import { Button, Panel, SectionHead, Text } from "../components/primitives";
 import ScoreBattle from "./play/ScoreBattle";
+import OnlineScore from "./play/OnlineScore";
 import CardBattle, { type CardOpponent } from "./play/CardBattle";
 import type { Store } from "../data/store";
 
@@ -14,8 +15,9 @@ import type { Store } from "../data/store";
  * because two people at one keyboard is the easiest way to play a new mode with
  * somebody, and it needs no server at all.
  *
- * Online is a room and a code rather than a queue. Score has no online yet: the
- * server only knows how to run a card battle between two people.
+ * Online is a room and a code rather than a queue: one person opens a room and
+ * reads out five letters, the other types them in. Nothing sits in a queue and
+ * nothing runs between matches.
  */
 
 type Mode = "score" | "draft" | "deck";
@@ -41,7 +43,7 @@ const MODES: ModeDef[] = [
       `${ENERGY_PER_TURN} energy a turn: look, or lock one away`,
     ],
     ready: true,
-    online: false,
+    online: true,
   },
   {
     id: "draft",
@@ -73,9 +75,12 @@ export default function PlayScreen({ store }: { store: Store }) {
   const [playing, setPlaying] = useState<{ mode: Mode; opponent: CardOpponent } | null>(null);
 
   if (playing?.mode === "score") {
+    if (playing.opponent === "online") {
+      return <OnlineScore store={store} onLeave={() => setPlaying(null)} />;
+    }
     return (
       <ScoreBattle
-        opponent={playing.opponent === "local" ? "local" : "ai"}
+        opponent={playing.opponent}
         store={store}
         onLeave={() => setPlaying(null)}
       />
@@ -176,7 +181,7 @@ export default function PlayScreen({ store }: { store: Store }) {
       <p style={{ ...text("small"), color: COLOR.fathom, maxWidth: 620 }}>
         A local game runs both seats on this screen, so two people can play across one keyboard, or
         over a share. Online puts you in a room with a code to pass on: no queue, and nothing to
-        keep running between matches. Score is local and against the computer for now.
+        keep running between matches.
       </p>
     </div>
   );

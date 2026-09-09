@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   COST, ENERGY_PER_TURN, MISPLACED_PENALTY, SKIPS_PER_GAME, TEAM, TEAM_SIZE,
   applyScoreIntent, createScoreMatch, playScoreTurn, scores, seatOf, seatsFilled, valueOf,
@@ -52,12 +52,8 @@ export default function ScoreBattle({ opponent, store, onLeave }: {
 }) {
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 2 ** 31));
   const [state, setState] = useState<ScoreState>(() => createScoreMatch(SCORE_POOL, seed));
-  const [focused, setFocused] = useState<number | null>(null);
-  const [armed, setArmed] = useState<Armed>(null);
-  const [placing, setPlacing] = useState<number | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [payout, setPayout] = useState<Reward>(null);
-  const { seat: seatCard, table: tableCard } = useBoardSizes();
 
   /**
    * Every intent played, in order, so the server can replay the match instead
@@ -78,15 +74,12 @@ export default function ScoreBattle({ opponent, store, onLeave }: {
   /** Whether this game has already been handed in. */
   const sent = useRef(false);
 
-  const total = useMemo(() => scores(state, SCORE_POOL), [state]);
-
   /**
    * The seats keep their sides for the whole game, even locally. Swapping them
    * with the turn made a card you had just placed look as though it had moved
    * to the other player's board.
    */
   const you: ScorePlayer = "P1";
-  const them: ScorePlayer = "P2";
   const local = opponent === "local";
   const yourTurn = !state.over && (local || state.turn === you);
 
@@ -100,8 +93,6 @@ export default function ScoreBattle({ opponent, store, onLeave }: {
       latest.current = next;
       setState(next);
     }
-    setArmed(null);
-    setPlacing(null);
   }, []);
 
   // Against the computer, P2 plays itself. In a local game both seats are yours.
@@ -131,6 +122,92 @@ export default function ScoreBattle({ opponent, store, onLeave }: {
       .then(result => setPayout(result ?? "refused"));
   }, [state.over, opponent, store, seed, you]);
 
+  const restart = () => {
+    const next = Math.floor(Math.random() * 2 ** 31);
+    setSeed(next);
+    setState(createScoreMatch(SCORE_POOL, next));
+    log.current = [];
+    sent.current = false;
+    setPayout(null);
+    setNote(null);
+  };
+
+  return (
+    <ScoreTable
+      state={state}
+      you={you}
+      yourTurn={yourTurn}
+      local={local}
+      note={note}
+      seed={seed}
+      badge={local ? `Local · ${state.turn}` : "vs Computer"}
+      onIntent={play}
+      onRestart={restart}
+      onLeave={onLeave}
+    >
+      {state.over && (
+        <Result
+          state={state}
+          total={scores(state, SCORE_POOL)}
+          local={local}
+          payout={payout}
+          onRestart={restart}
+          onLeave={onLeave}
+        />
+      )}
+    </ScoreTable>
+  );
+}
+
+/**
+ * The table itself: two teams, the pool between them, and the bar that acts.
+ *
+ * It holds the game in its hands but none of the rules — what is picked up,
+ * what is armed, what is being placed — and turns all of that into intents for
+ * whoever is running the match. That is what lets the same table draw a game
+ * against the computer and a game the server is running for two people.
+ */
+export function ScoreTable({
+  state, you, yourTurn, local, note, seed, badge, onIntent, onRestart, onLeave, children,
+}: {
+  state: ScoreState;
+  /** The seat drawn along the bottom. */
+  you: ScorePlayer;
+  yourTurn: boolean;
+  /** Both seats played on one screen. */
+  local: boolean;
+  note: string | null;
+  /** The deal this table came from. Online there is none: the seed is the deal. */
+  seed?: number;
+  /** The line under the title in the rail: who you are playing. */
+  badge: string;
+  onIntent: (intent: ScoreIntent) => void;
+  /** Only offered where a new table costs nothing, which online it does not. */
+  onRestart?: () => void;
+  onLeave: () => void;
+  children?: ReactNode;
+}) {
+  const [focused, setFocused] = useState<number | null>(null);
+  const [armed, setArmed] = useState<Armed>(null);
+  const [placing, setPlacing] = useState<number | null>(null);
+  const { seat: seatCard, table: tableCard } = useBoardSizes();
+
+  const them: ScorePlayer = you === "P1" ? "P2" : "P1";
+  const total = useMemo(() => scores(state, SCORE_POOL), [state]);
+
+  /** Puts everything down: nothing selected, nothing armed. */
+  const clearAll = () => {
+    setFocused(null);
+    setArmed(null);
+    setPlacing(null);
+  };
+
+  const play = (intent: ScoreIntent) => {
+    onIntent(intent);
+    setArmed(null);
+    setPlacing(null);
+  };
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
@@ -146,17 +223,9 @@ export default function ScoreBattle({ opponent, store, onLeave }: {
     return () => window.removeEventListener("keydown", onKey);
   }, [onLeave, armed, placing]);
 
-  /** Puts everything down: nothing selected, nothing armed. */
-  const clearAll = () => {
-    setFocused(null);
-    setArmed(null);
-    setPlacing(null);
-  };
-
   /** A click on a pool card. What it means depends on what is armed. */
   const onCard = (index: number) => {
     if (!yourTurn || placing !== null) return;
-    setNote(null);
     if (armed === "reveal") return play({ type: "REVEAL", index });
     if (armed === "deny") return play({ type: "DENY", index });
     setFocused(focused === index ? null : index);
@@ -168,17 +237,6 @@ export default function ScoreBattle({ opponent, store, onLeave }: {
     setArmed(null);
     setFocused(index);
     setPlacing(index);
-  };
-
-  const restart = () => {
-    const next = Math.floor(Math.random() * 2 ** 31);
-    setSeed(next);
-    setState(createScoreMatch(SCORE_POOL, next));
-    log.current = [];
-    sent.current = false;
-    setPayout(null);
-    clearAll();
-    setNote(null);
   };
 
   const slot = seatSlotHeight(seatCard);
@@ -204,13 +262,7 @@ export default function ScoreBattle({ opponent, store, onLeave }: {
       }}
     >
       {/* Everything that is not the game runs down the left, out of the way */}
-      <Rail
-        seed={seed}
-        local={local}
-        seat={state.turn}
-        onRestart={restart}
-        onLeave={onLeave}
-      />
+      <Rail seed={seed} badge={badge} onRestart={onRestart} onLeave={onLeave} />
 
       <div
         style={{
@@ -280,16 +332,7 @@ export default function ScoreBattle({ opponent, store, onLeave }: {
       />
       </div>
 
-      {state.over && (
-        <Result
-          state={state}
-          total={total}
-          local={local}
-          payout={payout}
-          onRestart={restart}
-          onLeave={onLeave}
-        />
-      )}
+      {children}
     </div>
   );
 }
@@ -313,11 +356,10 @@ function useBoardSizes(): { seat: number; table: number } {
  * here they cost it nothing, because the board is limited by height and not by
  * width.
  */
-function Rail({ seed, local, seat, onRestart, onLeave }: {
-  seed: number;
-  local: boolean;
-  seat: ScorePlayer;
-  onRestart: () => void;
+function Rail({ seed, badge, onRestart, onLeave }: {
+  seed?: number;
+  badge: string;
+  onRestart?: () => void;
   onLeave: () => void;
 }) {
   return (
@@ -346,14 +388,18 @@ function Rail({ seed, local, seat, onRestart, onLeave }: {
           textAlign: "center",
         }}
       >
-        {local ? `Local · ${seat}` : "vs Computer"}
+        {badge}
       </span>
 
       <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: SPACE.sm }}>
-        <span style={{ ...text("label"), fontSize: 8, color: COLOR.fathom }}>
-          seed {seed.toString(36)}
-        </span>
-        <Button size="sm" tone="ghost" full onClick={onRestart}>New table</Button>
+        {seed !== undefined && (
+          <span style={{ ...text("label"), fontSize: 8, color: COLOR.fathom }}>
+            seed {seed.toString(36)}
+          </span>
+        )}
+        {onRestart && (
+          <Button size="sm" tone="ghost" full onClick={onRestart}>New table</Button>
+        )}
         <Button size="sm" tone="ghost" full onClick={onLeave}>Leave</Button>
       </div>
     </div>

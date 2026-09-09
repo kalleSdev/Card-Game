@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { BattleIntent, BattleState } from "@cg/battle";
+import type { ScoreIntent, ScorePlayer, ScoreState } from "@cg/score";
 import type { PlayerDraftResult, PlayerId } from "@cg/contracts";
 import { getToken, socketUrl } from "./api";
 import type { ClientMessage, RankChange, ServerMessage } from "./protocol";
@@ -45,6 +46,9 @@ export interface Net {
   you: PlayerId | null;
   opponentName: string | null;
   state: BattleState | null;
+  /** The Score table, when that is the game being played. */
+  scoreState: ScoreState | null;
+  scoreYou: ScorePlayer | null;
   /** Seconds the opponent has left to come back, while they are dropped. */
   away: number | null;
   /** How the match ended, when it was not by the rules. */
@@ -52,6 +56,9 @@ export interface Net {
   rewards: Rewards | null;
   host: (draft: PlayerDraftResult) => void;
   join: (code: string, draft: PlayerDraftResult) => void;
+  hostScore: () => void;
+  joinScore: (code: string) => void;
+  sendScore: (intent: ScoreIntent) => void;
   cancel: () => void;
   send: (intent: BattleIntent) => void;
   surrender: () => void;
@@ -69,6 +76,8 @@ export function useNet(enabled: boolean): Net {
   const [you, setYou] = useState<PlayerId | null>(null);
   const [opponentName, setOpponentName] = useState<string | null>(null);
   const [state, setState] = useState<BattleState | null>(null);
+  const [scoreState, setScoreState] = useState<ScoreState | null>(null);
+  const [scoreYou, setScoreYou] = useState<ScorePlayer | null>(null);
   const [away, setAway] = useState<number | null>(null);
   const [endedBecause, setEndedBecause] = useState<string | null>(null);
   const [rewards, setRewards] = useState<Rewards | null>(null);
@@ -124,6 +133,18 @@ export function useNet(enabled: boolean): Net {
           case "state":
             setState(msg.state);
             break;
+          case "scoreMatched":
+            setScoreYou(msg.you);
+            setOpponentName(msg.opponentName);
+            setCode(null);
+            setEndedBecause(null);
+            setRewards(null);
+            setAway(null);
+            setStatus("playing");
+            break;
+          case "scoreState":
+            setScoreState(msg.state);
+            break;
           case "rewards":
             setRewards({ packs: msg.packs, berries: msg.berries, rank: msg.rank });
             break;
@@ -160,12 +181,18 @@ export function useNet(enabled: boolean): Net {
   }, [enabled]);
 
   return {
-    status, error, code, you, opponentName, state, away, endedBecause, rewards,
+    status, error, code, you, opponentName, state, scoreState, scoreYou, away, endedBecause, rewards,
     host: useCallback((draft: PlayerDraftResult) => post({ type: "createLobby", draft }), [post]),
     join: useCallback(
       (lobby: string, draft: PlayerDraftResult) => post({ type: "joinLobby", code: lobby.trim().toUpperCase(), draft }),
       [post],
     ),
+    hostScore: useCallback(() => post({ type: "createScoreLobby" }), [post]),
+    joinScore: useCallback(
+      (lobby: string) => post({ type: "joinScoreLobby", code: lobby.trim().toUpperCase() }),
+      [post],
+    ),
+    sendScore: useCallback((intent: ScoreIntent) => post({ type: "scoreIntent", intent }), [post]),
     cancel: useCallback(() => { post({ type: "cancelLobby" }); setCode(null); setStatus("ready"); }, [post]),
     send: useCallback((intent: BattleIntent) => post({ type: "intent", intent }), [post]),
     surrender: useCallback(() => post({ type: "surrender" }), [post]),
