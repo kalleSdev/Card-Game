@@ -51,3 +51,33 @@ const SHORT: Record<string, string> = {
 export function shortNameFor(id: string, fullName: string): string {
   return SHORT[id] ?? fullName.split(" ")[0];
 }
+
+/**
+ * Names that do not fit a card's plate on one line.
+ *
+ * Measured rather than guessed: a card in the binder is 150px wide, which
+ * leaves 128px of plate, and the name is set in Fraunces 700 at 15px. At that
+ * size these six run from 123px to 141px, so they wrap onto a second line and
+ * take up half the plate doing it. Everything else lands at 109px or under and
+ * fits with room to spare.
+ *
+ * A wrapped name is worse than a short one: the character is called by their
+ * known name anyway. Re-measure this list if the plate or the type changes.
+ */
+const SPILLS = new Set([
+  "megumi",    // Megumi Fushiguro, 141px
+  "higuruma",  // Higuruma Hiromi, 135px
+  "takaba",    // Takaba Fumihiko, 131px
+  "nobara",    // Nobara Kugisaki, 125px
+  "kashimo",   // Hajime Kashimo, 125px
+  "sukuna",    // Ryomen Sukuna, 123px
+]);
+
+/**
+ * The name a card actually shows. Small cards always use the known name; large
+ * ones use the full name unless it would wrap.
+ */
+export function displayNameFor(id: string, fullName: string, compact: boolean): string {
+  if (compact || SPILLS.has(id)) return shortNameFor(id, fullName);
+  return fullName;
+}

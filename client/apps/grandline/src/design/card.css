@@ -281,7 +281,14 @@
   position: absolute;
   inset: 0;
   z-index: 1;
-  background: linear-gradient(160deg, rgba(214, 65, 47, 0.85), rgba(90, 12, 12, 0.75));
+  /* Red at the top, running to black at the bottom. The card should read as
+     ink on a dark plate rather than as a red wash. */
+  background: linear-gradient(
+    160deg,
+    rgba(214, 65, 47, 0.9) 0%,
+    rgba(120, 20, 18, 0.85) 52%,
+    rgba(10, 6, 8, 0.9) 100%
+  );
   mix-blend-mode: color;
 }
 /* Halftone, drawn rather than loaded. */
@@ -312,22 +319,24 @@
   background:
     linear-gradient(
       118deg,
-      rgba(224, 169, 59, 0.05) 0%,
-      rgba(255, 240, 208, 0.1) 26%,
-      rgba(224, 169, 59, 0.045) 50%,
-      rgba(255, 232, 190, 0.09) 74%,
-      rgba(224, 169, 59, 0.055) 100%
+      rgba(224, 169, 59, 0.1) 0%,
+      rgba(255, 240, 208, 0.18) 26%,
+      rgba(224, 169, 59, 0.08) 50%,
+      rgba(255, 232, 190, 0.16) 74%,
+      rgba(224, 169, 59, 0.1) 100%
     ),
-    repeating-linear-gradient(118deg, transparent 0 3px, rgba(255, 214, 140, 0.03) 3px 4px);
+    repeating-linear-gradient(118deg, transparent 0 3px, rgba(255, 214, 140, 0.055) 3px 4px);
 }
 .pc--altArt .pc__leaf::after {
+  /* The 4★ foil's sweep, in gold. It used to be a third of this strength,
+     which read as nothing at all on a card that is supposed to be a step up. */
   background-image: linear-gradient(
     115deg,
-    transparent 30%,
-    rgba(224, 169, 59, 0.1) 42%,
-    rgba(255, 242, 214, 0.16) 50%,
-    rgba(214, 155, 60, 0.09) 58%,
-    transparent 70%
+    transparent 28%,
+    rgba(224, 169, 59, 0.28) 41%,
+    rgba(255, 244, 216, 0.42) 50%,
+    rgba(214, 155, 60, 0.26) 59%,
+    transparent 72%
   );
 }
 .pc--altArt.pc--interactive:hover .pc__leaf::after {
@@ -380,14 +389,17 @@
     repeating-linear-gradient(105deg, transparent 0 6px, rgba(255, 255, 255, 0.024) 6px 7px);
 }
 .pc--secret .pc__leaf::after {
+  /* A rainbow glint rather than a warm smear: the colours are further apart and
+     the band is brighter, so the sweep catches like foil under a light. */
   background-image: linear-gradient(
     112deg,
-    transparent 26%,
-    rgba(255, 150, 110, 0.055) 38%,
-    rgba(255, 226, 178, 0.085) 45%,
-    rgba(140, 226, 216, 0.075) 52%,
-    rgba(170, 145, 236, 0.07) 59%,
-    transparent 72%
+    transparent 24%,
+    rgba(255, 130, 96, 0.17) 34%,
+    rgba(255, 232, 186, 0.26) 42%,
+    rgba(120, 236, 222, 0.22) 50%,
+    rgba(150, 130, 244, 0.2) 58%,
+    rgba(255, 140, 110, 0.14) 66%,
+    transparent 78%
   );
   transition-duration: 980ms;
 }
@@ -488,13 +500,13 @@
 .pc--holoOne .pc__leaf::after {
   background-image: linear-gradient(
     112deg,
-    transparent 20%,
-    rgba(255, 226, 236, 0.11) 33%,
-    rgba(255, 255, 255, 0.2) 42%,
-    rgba(214, 255, 244, 0.14) 50%,
-    rgba(220, 234, 255, 0.15) 58%,
-    rgba(244, 226, 255, 0.11) 67%,
-    transparent 80%
+    transparent 18%,
+    rgba(255, 190, 214, 0.24) 30%,
+    rgba(255, 255, 255, 0.34) 40%,
+    rgba(178, 255, 236, 0.28) 49%,
+    rgba(186, 216, 255, 0.3) 58%,
+    rgba(232, 196, 255, 0.24) 68%,
+    transparent 82%
   );
   transition-duration: 1040ms;
 }
@@ -589,6 +601,14 @@
   opacity: 0.9;
 }
 
+/* Black label's rule is black, not bone. The whole print is an obsidian
+   restrike and the one line of colour on it should say so. */
+.pc--blackLabel .pc__band {
+  background: linear-gradient(90deg, #05070a, #1c1c1f 50%, #05070a);
+  opacity: 1;
+  box-shadow: 0 -1px 0 rgba(232, 226, 212, 0.18);
+}
+
 /* ── The name, per print ───────────────────────────────────────────────────
    Alt art and above each set their name differently, because a print that
    changes the picture should change the lettering with it. */
@@ -617,4 +637,62 @@
 .pc--compact.pc--holoOne .pc__name {
   font-size: 12.5px;
   letter-spacing: 0.05em;
+}
+
+/* ── The lettering, per print ──────────────────────────────────────────────
+   The four border-breaking prints each set the name in their own face. A print
+   that changes the picture should change the writing with it, and by the time a
+   card is this rare the name is part of the artwork rather than a label on it. */
+
+/* Alt art: the display face, heavier and tighter than a base card's. */
+.pc--altArt .pc__name {
+  font-size: 16.5px;
+  font-weight: 900;
+  letter-spacing: -0.015em;
+}
+
+/* Secret: outlined, geometric, drawn rather than printed. The fill is kept
+   faint so the letters read as struck through the card. */
+.pc--secret .pc__name {
+  font-family: "Archivo", system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 0.02em;
+  color: rgba(242, 236, 223, 0.18);
+  -webkit-text-stroke: 0.7px rgba(255, 236, 228, 0.95);
+  paint-order: stroke fill;
+}
+
+/* Black label: cryptic and italic, the one print whose name looks older than
+   the card it is on. */
+.pc--blackLabel .pc__name {
+  font-family: "Almendra", "Fraunces", Georgia, serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.01em;
+  color: #efe9dc;
+}
+
+/* Holo one: script, flowing, the lightest thing on the card. */
+.pc--holoOne .pc__name {
+  font-family: "Great Vibes", "Fraunces", Georgia, cursive;
+  font-weight: 400;
+  font-size: 22px;
+  line-height: 1.05;
+  letter-spacing: 0.01em;
+  color: #f8fbff;
+}
+
+.pc--compact.pc--secret .pc__name {
+  font-size: 12px;
+  -webkit-text-stroke-width: 0.55px;
+}
+.pc--compact.pc--blackLabel .pc__name {
+  font-size: 14.5px;
+}
+.pc--compact.pc--holoOne .pc__name {
+  font-size: 17px;
+  letter-spacing: 0;
 }

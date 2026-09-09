@@ -2,7 +2,7 @@ import { createEngine, createInitialState } from "@cg/engine";
 import { deriveStats } from "@cg/battle";
 import { assertGraded, scoreCardsFrom, type ScoreCard } from "@cg/score";
 import type { CardFace } from "../components/PrintCard";
-import { shortNameFor } from "./names";
+import { displayNameFor, shortNameFor } from "./names";
 
 /**
  * The card pool.
@@ -22,7 +22,7 @@ const faces: Record<string, CardFace> = Object.fromEntries(
     const stats = deriveStats(def);
     return [id, {
       id,
-      name: def.name,
+      name: displayNameFor(id, def.name, false),
       shortName: shortNameFor(id, def.name),
       atk: stats.atk,
       hp: stats.hp,
@@ -44,8 +44,14 @@ export function cardFace(id: string): CardFace {
   return faces[id] ?? { id, name: id, atk: 0, hp: 0, cost: 0 };
 }
 
+/** What a card calls itself on a card. Full name unless that would wrap. */
 export function cardName(id: string): string {
   return faces[id]?.name ?? id;
+}
+
+/** The name as written down, wrapping or not, for anywhere with room for it. */
+export function fullCardName(id: string): string {
+  return cardDb[id]?.name ?? id;
 }
 
 export function cardShortName(id: string): string {
