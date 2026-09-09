@@ -102,7 +102,7 @@ describe("what a turn costs", () => {
     let state = createScoreMatch(CARDS, 2);
     state = run(state, { type: "DENY", index: 4 }).state;
 
-    expect(state.table[4]).toMatchObject({ denied: true, revealed: false });
+    expect(state.table[4]).toMatchObject({ denied: true, revealed: true });
     expect(available(state)).not.toContain(4);
     expect(run(state, { type: "REVEAL", index: 4 }).events[0]).toMatchObject({ reason: /locked/i });
 
@@ -110,10 +110,10 @@ describe("what a turn costs", () => {
     expect(run(state, { type: "TAKE", index: 4, seat }).events[0]).toMatchObject({ reason: /locked/i });
   });
 
-  it("denies a card nobody has looked at, which is the point of doing it early", () => {
+  it("denies a card nobody has looked at, and shows what it was", () => {
     let state = createScoreMatch(CARDS, 2);
     state = run(state, { type: "DENY", index: 0 }).state;
-    expect(state.table[0].denied).toBe(true);
+    expect(state.table[0]).toMatchObject({ denied: true, revealed: true });
     expect(state.energy).toBe(ENERGY_PER_TURN - 1);
   });
 

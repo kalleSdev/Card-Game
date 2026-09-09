@@ -31,6 +31,19 @@ function artColors(id: string): { a: string; b: string } {
 }
 
 /**
+ * Which prints run their picture to the card's edge, with the writing over it
+ * rather than on a plate below it. Base and foil keep the plate.
+ */
+const BREAKING: Record<PrintId, boolean> = {
+  base: false,
+  foil: false,
+  altArt: true,
+  blackLabel: true,
+  secret: true,
+  holoOne: true,
+};
+
+/**
  * Which prints carry foiling. Base is the plain one by definition, and foil
  * already has its own treatment across the art.
  */
@@ -40,7 +53,6 @@ const FOILED: Record<PrintId, boolean> = {
   altArt: true,
   blackLabel: true,
   secret: true,
-  signed: true,
   holoOne: true,
 };
 
@@ -103,22 +115,12 @@ export default function PrintCard({
         {!drawn && <div className="pc__sun" />}
         {!drawn && <div className="pc__horizon" />}
         {print === "holoOne" && <div className="pc__hue" />}
-        {print === "signed" && (
-          <svg className="pc__signature" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-            <path
-              d="M12 74 C 26 52, 34 84, 46 60 S 62 40, 70 62 C 76 76, 84 52, 92 44"
-              fill="none"
-              stroke="#F2ECDF"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              opacity="0.92"
-            />
-            <path d="M60 82 L 90 78" fill="none" stroke="#F2ECDF" strokeWidth="1.4" strokeLinecap="round" opacity="0.7" />
-          </svg>
-        )}
       </div>
 
       {FOILED[print] && <div className="pc__leaf" />}
+      {/* The colour rule along the bottom edge, on the prints that break their
+          border. The plain two draw nothing here. */}
+      {BREAKING[print] && <div className="pc__band" />}
 
       <div className="pc__body">
         <div className="pc__name">{compact ? card.shortName ?? card.name : card.name}</div>

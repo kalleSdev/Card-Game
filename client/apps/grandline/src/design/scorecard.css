@@ -285,20 +285,10 @@
   );
 }
 
-/* ── Mythic: the only glow in the mode ───────────────────────────────────── */
-
-.sc--mythic {
-  border-color: rgba(255, 138, 214, 0.75);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 138, 214, 0.3),
-    0 0 24px rgba(255, 110, 200, 0.22);
-}
-.sc--mythic:hover {
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 138, 214, 0.4),
-    0 0 34px rgba(255, 110, 200, 0.34),
-    0 8px 28px rgba(0, 0, 0, 0.45);
-}
+/* ── Mythic: the loudest foil, and no glow ─────────────────────────────────
+   It used to carry a halo, which read as a rendering effect rather than as a
+   card. The foil does the work instead: a wider, brighter sweep than the two
+   below it, over a pink film. */
 
 .sc--mythic .sc__leaf {
   opacity: 1;
@@ -338,6 +328,10 @@
   color: #ffeaf7;
 }
 
+.sc--spent .sc__leaf {
+  opacity: 0.25;
+}
+
 /* ── Compact ─────────────────────────────────────────────────────────────── */
 
 .sc--compact .sc__name {
@@ -365,11 +359,12 @@
 
 /* ── Out of play ─────────────────────────────────────────────────────────── */
 
+/* Out of play, but still readable: a denied card is information, and hiding it
+   would take that back. */
 .sc--spent {
-  opacity: 0.34;
-  filter: saturate(0.45);
+  opacity: 0.6;
+  filter: saturate(0.55);
 }
-.sc--spent .sc__leaf,
-.sc--mythic.sc--spent {
+.sc--spent {
   box-shadow: none;
 }

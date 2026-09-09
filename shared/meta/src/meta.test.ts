@@ -11,23 +11,25 @@ import {
 const POOL = ["luffy", "zoro", "nami", "usopp", "sanji", "chopper", "robin", "franky"];
 
 describe("prints", () => {
-  it("has one standard and one variant for the tiers that split", () => {
+  it("splits only the tier that has a variant in it", () => {
     expect(PRINTS_BY_TIER[3]).toHaveLength(1);
     expect(PRINTS_BY_TIER[4]).toHaveLength(1);
+    // Alt art and its black label restrike
     expect(PRINTS_BY_TIER[5]).toHaveLength(2);
-    expect(PRINTS_BY_TIER[6]).toHaveLength(2);
+    expect(PRINTS_BY_TIER[6]).toHaveLength(1);
+    expect(PRINTS_BY_TIER[7]).toHaveLength(1);
   });
 
   it("marks exactly the second print of a split tier as the variant", () => {
     expect(PRINT_INFO.blackLabel.isVariant).toBe(true);
-    expect(PRINT_INFO.signed.isVariant).toBe(true);
+    expect(PRINT_INFO.blackLabel.isVariant).toBe(true);
     expect(PRINT_INFO.altArt.isVariant).toBe(false);
     expect(PRINT_INFO.secret.isVariant).toBe(false);
   });
 
   it("round trips a print key, even for a card id with a colon in it", () => {
-    const key = printKey("straw:hat", "signed");
-    expect(parsePrintKey(key)).toEqual({ cardId: "straw:hat", print: "signed" });
+    const key = printKey("straw:hat", "secret");
+    expect(parsePrintKey(key)).toEqual({ cardId: "straw:hat", print: "secret" });
   });
 
   it("returns nothing for a key naming a print that does not exist", () => {
@@ -37,7 +39,7 @@ describe("prints", () => {
 
   it("orders prints worst to best", () => {
     const sorted = [...PRINTS].sort((a, b) => printRank(a) - printRank(b));
-    expect(sorted).toEqual(["base", "foil", "altArt", "blackLabel", "secret", "signed", "holoOne"]);
+    expect(sorted).toEqual(["base", "foil", "altArt", "blackLabel", "secret", "holoOne"]);
   });
 });
 
@@ -71,10 +73,10 @@ describe("rate tables", () => {
   });
 
   it("quotes a rate straight off the table", () => {
-    expect(effectiveRate("base", STANDARD_RATES)).toBe(90.65);
+    expect(effectiveRate("base", STANDARD_RATES)).toBe(90.7);
     expect(effectiveRate("altArt", STANDARD_RATES)).toBe(1);
-    expect(effectiveRate("holoOne", STANDARD_RATES)).toBe(0.05);
-    expect(effectiveRate("holoOne", DIAMOND_RATES)).toBe(0.1);
+    expect(effectiveRate("holoOne", STANDARD_RATES)).toBe(0.1);
+    expect(effectiveRate("holoOne", DIAMOND_RATES)).toBe(0.2);
   });
 
   it("puts base at whatever the other prints leave", () => {
@@ -107,17 +109,17 @@ describe("rate tables", () => {
 
   it("rolls the six print rates up into four tier rates", () => {
     const standard = tierRates(STANDARD_RATES);
-    expect(standard[3]).toBeCloseTo(90.65, 6);
+    expect(standard[3]).toBeCloseTo(90.7, 6);
     expect(standard[4]).toBeCloseTo(7.5, 6);
     expect(standard[5]).toBeCloseTo(1.5, 6);
-    expect(standard[6]).toBeCloseTo(0.3, 6);
-    expect(standard[7]).toBeCloseTo(0.05, 6);
+    expect(standard[6]).toBeCloseTo(0.2, 6);
+    expect(standard[7]).toBeCloseTo(0.1, 6);
     const diamond = tierRates(DIAMOND_RATES);
-    expect(diamond[3]).toBeCloseTo(71.3, 6);
+    expect(diamond[3]).toBeCloseTo(71.4, 6);
     expect(diamond[4]).toBeCloseTo(25, 6);
     expect(diamond[5]).toBeCloseTo(3, 6);
-    expect(diamond[6]).toBeCloseTo(0.6, 6);
-    expect(diamond[7]).toBeCloseTo(0.1, 6);
+    expect(diamond[6]).toBeCloseTo(0.4, 6);
+    expect(diamond[7]).toBeCloseTo(0.2, 6);
     expect(Object.values(standard).reduce((a, b) => a + b, 0)).toBeCloseTo(100, 6);
     expect(Object.values(tierRates(DIAMOND_RATES)).reduce((a, b) => a + b, 0)).toBeCloseTo(100, 6);
   });
@@ -125,7 +127,7 @@ describe("rate tables", () => {
   it("keeps a variant rarer than the print it sits beside", () => {
     for (const rates of [STANDARD_RATES, DIAMOND_RATES]) {
       expect(rates.blackLabel).toBeLessThan(rates.altArt);
-      expect(rates.signed).toBeLessThan(rates.secret);
+      expect(rates.holoOne).toBeLessThan(rates.secret);
     }
   });
 });
@@ -212,7 +214,7 @@ describe("opening packs", () => {
     }
     expect(pulls).toBe(80_000);
     // Base and foil are common enough to pin tightly
-    expect(((seen.base ?? 0) / pulls) * 100).toBeCloseTo(90.65, 0);
+    expect(((seen.base ?? 0) / pulls) * 100).toBeCloseTo(90.7, 0);
     expect(((seen.foil ?? 0) / pulls) * 100).toBeCloseTo(7.5, 0);
     // The rare prints get a wider window: this many pulls only expects about
     // 40 holo ones, so exact agreement would be a fluke
@@ -220,7 +222,7 @@ describe("opening packs", () => {
     expect(((seen.altArt ?? 0) / pulls) * 100).toBeLessThan(1.3);
     expect(seen.blackLabel ?? 0).toBeGreaterThan(300);
     expect(seen.secret ?? 0).toBeGreaterThan(120);
-    expect(seen.signed ?? 0).toBeGreaterThan(50);
+    expect(seen.holoOne ?? 0).toBeGreaterThan(50);
     expect(seen.holoOne ?? 0).toBeGreaterThan(15);
   });
 

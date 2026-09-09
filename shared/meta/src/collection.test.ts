@@ -47,9 +47,9 @@ describe("holding prints", () => {
   });
 
   it("shows the best print held", () => {
-    const c = build([["luffy", "base", 3], ["luffy", "foil", 1], ["luffy", "signed", 1]]);
-    expect(bestPrintOf(c, "luffy")).toBe("signed");
-    expect(bestTierOf(c, "luffy")).toBe(6);
+    const c = build([["luffy", "base", 3], ["luffy", "foil", 1], ["luffy", "holoOne", 1]]);
+    expect(bestPrintOf(c, "luffy")).toBe("holoOne");
+    expect(bestTierOf(c, "luffy")).toBe(7);
     expect(bestTierOf(c, "zoro")).toBeNull();
   });
 
@@ -97,7 +97,7 @@ describe("scrapping spares", () => {
   });
 
   it("values the whole pile of spares without counting the keepers", () => {
-    const c = build([["luffy", "base", 3], ["zoro", "signed", 1], ["nami", "foil", 2]]);
+    const c = build([["luffy", "base", 3], ["zoro", "holoOne", 1], ["nami", "foil", 2]]);
     const value = valueOfAllSpares(c);
     expect(value.stardust).toBe(2 * DUPLICATE_VALUE.base.stardust + 1 * DUPLICATE_VALUE.foil.stardust);
     expect(value.berries).toBe(2 * DUPLICATE_VALUE.base.berries + 1 * DUPLICATE_VALUE.foil.berries);
@@ -128,7 +128,7 @@ describe("collection stats", () => {
   });
 
   it("does not count a card that has left the pool", () => {
-    const c = build([["retired", "signed", 1], ["luffy", "base", 1]]);
+    const c = build([["retired", "holoOne", 1], ["luffy", "base", 1]]);
     const stats = statsFor(c, POOL);
     expect(stats.cardsOwned).toBe(1);
     expect(stats.printsOwned).toBe(1);
@@ -191,7 +191,7 @@ describe("decks", () => {
     const deck = { ...emptyDeck("d1", "x"), prints: { luffy: "secret" as const } };
     expect(printForDeck(deck, c, "luffy")).toBe("secret");
 
-    const gone = { ...emptyDeck("d1", "x"), prints: { luffy: "signed" as const } };
+    const gone = { ...emptyDeck("d1", "x"), prints: { luffy: "holoOne" as const } };
     expect(printForDeck(gone, c, "luffy")).toBe("secret");
   });
 });

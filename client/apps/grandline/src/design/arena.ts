@@ -24,34 +24,40 @@ import { CARD_SIZE, SPACE, tallCardHeight } from "./tokens";
  * building something out of.
  */
 
+/**
+ * How big the board draws, at the largest size the window can hold.
+ *
+ * The board must never scroll, and two things decide whether it does: the seats
+ * and the pool. Rather than pick sizes that fit the worst case and look mean on
+ * a large screen, the board asks the window and steps down the CARD_SIZE scale.
+ *
+ * The pool gives up its size first. It is twenty cards you glance across
+ * against seven you are building a team out of, so when something has to shrink
+ * it should be the shelf and not the hand.
+ *
+ * Each threshold is the height that board actually measures, rounded up, taken
+ * from the rendered page rather than guessed. The last step is the floor: below
+ * it there is nothing smaller on the scale, and a shorter window scrolls.
+ */
+export interface BoardSizes {
+  seat: number;
+  table: number;
+}
+
+const BOARD_STEPS: { minHeight: number; sizes: BoardSizes }[] = [
+  { minHeight: 1100, sizes: { seat: CARD_SIZE.lg, table: CARD_SIZE.sm } },
+  { minHeight: 1010, sizes: { seat: CARD_SIZE.md, table: CARD_SIZE.xs } },
+  { minHeight: 0, sizes: { seat: CARD_SIZE.sm, table: CARD_SIZE.xs } },
+];
+
+export function boardSizesFor(windowHeight: number): BoardSizes {
+  return (BOARD_STEPS.find(step => windowHeight >= step.minHeight) ?? BOARD_STEPS[2]).sizes;
+}
+
+/** The widest the pool ever draws, which is what sets the arena's width. */
 export const ARENA_CARD = {
-  /** Twenty of these at once. The row that shrinks when a window is short. */
   table: CARD_SIZE.sm,
 } as const;
-
-/**
- * A seat, on either side of the board, at the largest size the window can hold.
- *
- * The board must never scroll, and the two things that decide whether it does
- * are the seat size and the window. Rather than pick a size that fits the worst
- * case and looks mean on a large screen, the board asks: a tall window gets the
- * full-size seat, a short one steps down. Both are on the CARD_SIZE scale, and
- * the threshold is the height the full-size board actually needs.
- */
-/**
- * What the board actually measures at each seat size, rounded up. Taken from
- * the rendered board rather than guessed: the full-size seat needs 1052, the
- * step below it 940, and the smallest 894. That last one is the floor — the
- * card scale has nothing smaller — so a window shorter than that scrolls.
- */
-export const FULL_BOARD_HEIGHT = 1055;
-export const MID_BOARD_HEIGHT = 920;
-
-export function seatCardFor(windowHeight: number): number {
-  if (windowHeight >= FULL_BOARD_HEIGHT) return CARD_SIZE.md;
-  if (windowHeight >= MID_BOARD_HEIGHT) return CARD_SIZE.sm;
-  return CARD_SIZE.xs;
-}
 
 export const ARENA_GAP = {
   /** Between cards in the same row. */
@@ -74,7 +80,7 @@ export function gridWidth(columns: number, card: number, gap: number): number {
 }
 
 /** The gap between the three seat groups inside a team. */
-export const SEAT_GROUP_GAP = SPACE.lg;
+export const SEAT_GROUP_GAP = SPACE.md;
 
 /** One captain, three combat, three support. */
 export const TEAM_COLUMNS = 7;
@@ -85,8 +91,11 @@ export const TEAM_COLUMNS = 7;
  */
 export const ARENA_WIDTH = Math.max(
   gridWidth(TABLE_COLUMNS, ARENA_CARD.table, ARENA_GAP.card),
-  gridWidth(TEAM_COLUMNS, CARD_SIZE.md, ARENA_GAP.card) + 2 * SEAT_GROUP_GAP,
+  gridWidth(TEAM_COLUMNS, CARD_SIZE.lg, ARENA_GAP.card) + 2 * SEAT_GROUP_GAP,
 );
+
+/** The strip down the left that holds everything which is not the game. */
+export const ARENA_RAIL_WIDTH = 104;
 
 /** A row of seats, measured the same way, so a team lines up under the table. */
 export function seatRowWidth(count: number, card: number): number {
@@ -98,9 +107,9 @@ export function seatRowWidth(count: number, card: number): number {
  * Every slot is measured for the tallest card that could sit in it, so a row of
  * mixed grades shares one baseline and the two teams line up with each other.
  */
-export const ARENA_SLOT = {
-  table: tallCardHeight(ARENA_CARD.table),
-} as const;
+export function tableSlotHeight(tableCard: number): number {
+  return tallCardHeight(tableCard);
+}
 
 export function seatSlotHeight(seatCard: number): number {
   return tallCardHeight(seatCard);

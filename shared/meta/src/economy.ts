@@ -18,7 +18,6 @@ export const DUPLICATE_VALUE: Record<PrintId, DuplicateValue> = {
   altArt:     { stardust: 100,   berries: 90    },
   blackLabel: { stardust: 250,   berries: 220   },
   secret:     { stardust: 400,   berries: 400   },
-  signed:     { stardust: 1000,  berries: 1000  },
   holoOne:    { stardust: 2500,  berries: 2500  },
 };
 

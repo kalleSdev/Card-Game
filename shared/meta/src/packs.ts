@@ -15,24 +15,22 @@ export type RateTable = Readonly<Record<PrintId, number>>;
 /** Silver and gold packs, cards and cosmetics alike. */
 export const STANDARD_RATES: RateTable = {
   // Base takes whatever the others leave, so the column always totals 100
-  base: 90.65,
+  base: 90.7,
   foil: 7.5,
   altArt: 1,
   blackLabel: 0.5,
   secret: 0.2,
-  signed: 0.1,
-  holoOne: 0.05,
+  holoOne: 0.1,
 };
 
 /** Diamond packs. Better on every line, not just the top. */
 export const DIAMOND_RATES: RateTable = {
-  base: 71.3,
+  base: 71.4,
   foil: 25,
   altArt: 2,
   blackLabel: 1,
   secret: 0.4,
-  signed: 0.2,
-  holoOne: 0.1,
+  holoOne: 0.2,
 };
 
 assertSumsTo100("STANDARD_RATES", Object.values(STANDARD_RATES));

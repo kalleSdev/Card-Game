@@ -6,8 +6,8 @@ import {
   type Seat, type SeatRef, type Team,
 } from "@cg/score";
 import {
-  ARENA_CARD, ARENA_GAP, ARENA_SLOT, ARENA_WIDTH, SEAT_GROUP_GAP, TABLE_COLUMNS,
-  TURN_BAR_HEIGHT, plainCardHeight, seatCardFor, seatSlotHeight,
+  ARENA_GAP, ARENA_RAIL_WIDTH, ARENA_WIDTH, SEAT_GROUP_GAP, TABLE_COLUMNS,
+  TURN_BAR_HEIGHT, boardSizesFor, plainCardHeight, seatSlotHeight, tableSlotHeight,
 } from "../../design/arena";
 import { COLOR, RADIUS, SPACE, text } from "../../design/tokens";
 import ScoreCard from "../../components/ScoreCard";
@@ -50,7 +50,7 @@ export default function ScoreBattle({ opponent, onLeave }: {
   const [armed, setArmed] = useState<Armed>(null);
   const [placing, setPlacing] = useState<number | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const seatCard = useSeatCard();
+  const { seat: seatCard, table: tableCard } = useBoardSizes();
 
   const total = useMemo(() => scores(state, SCORE_POOL), [state]);
 
@@ -153,8 +153,8 @@ export default function ScoreBattle({ opponent, onLeave }: {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        gap: SPACE.xl,
-        padding: SPACE.lg,
+        gap: SPACE.lg,
+        padding: SPACE.md,
       }}
     >
       {/* Everything that is not the game runs down the left, out of the way */}
@@ -202,7 +202,7 @@ export default function ScoreBattle({ opponent, onLeave }: {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: `repeat(${TABLE_COLUMNS}, ${ARENA_CARD.table}px)`,
+          gridTemplateColumns: `repeat(${TABLE_COLUMNS}, ${tableCard}px)`,
           gap: ARENA_GAP.card,
         }}
       >
@@ -211,6 +211,7 @@ export default function ScoreBattle({ opponent, onLeave }: {
             key={index}
             state={state}
             index={index}
+            width={tableCard}
             focused={focused === index}
             armed={armed}
             live={yourTurn && placing === null && !tableSlot.denied && !tableSlot.takenBy}
@@ -246,15 +247,15 @@ export default function ScoreBattle({ opponent, onLeave }: {
   );
 }
 
-/** The seat size the window can hold, kept current as it is resized. */
-function useSeatCard(): number {
+/** The sizes the window can hold, kept current as it is resized. */
+function useBoardSizes(): { seat: number; table: number } {
   const [height, setHeight] = useState(() => window.innerHeight);
   useEffect(() => {
     const onResize = () => setHeight(window.innerHeight);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
-  return seatCardFor(height);
+  return boardSizesFor(height);
 }
 
 // ── Frame ────────────────────────────────────────────────────────────────────
@@ -276,7 +277,7 @@ function Rail({ seed, local, seat, onRestart, onLeave }: {
     <div
       onClick={e => e.stopPropagation()}
       style={{
-        width: 132,
+        width: ARENA_RAIL_WIDTH,
         flex: "none",
         alignSelf: "stretch",
         display: "flex",
@@ -474,9 +475,10 @@ function Pips({ filled, of, label, colour }: {
 
 // ── The pool ─────────────────────────────────────────────────────────────────
 
-function TableCard({ state, index, focused, armed, live, onClick, onDoubleClick }: {
+function TableCard({ state, index, width, focused, armed, live, onClick, onDoubleClick }: {
   state: ScoreState;
   index: number;
+  width: number;
   focused: boolean;
   armed: Armed;
   live: boolean;
@@ -485,7 +487,6 @@ function TableCard({ state, index, focused, armed, live, onClick, onDoubleClick 
 }) {
   const slot = state.table[index];
   const card = knownCard(state, index);
-  const width = ARENA_CARD.table;
   const gone = Boolean(slot.takenBy) || slot.denied;
 
   // A card the armed action could actually be used on
@@ -497,24 +498,26 @@ function TableCard({ state, index, focused, armed, live, onClick, onDoubleClick 
       onClick={live ? onClick : undefined}
       onDoubleClick={live ? onDoubleClick : undefined}
       style={{
-        height: ARENA_SLOT.table,
+        height: tableSlotHeight(width),
         display: "flex",
         alignItems: "flex-end",
         justifyContent: "center",
         position: "relative",
         cursor: live ? "pointer" : "default",
-        outline: focused
-          ? `2px solid ${COLOR.current}`
-          : targeted
-            ? `1px solid ${armed === "deny" ? COLOR.signal : COLOR.current}`
-            : "none",
-        outlineOffset: 3,
         borderRadius: RADIUS.lg,
         transform: focused ? "translateY(-6px)" : "none",
         transition: "transform 160ms cubic-bezier(0.2,0,0.2,1)",
         userSelect: "none",
       }}
     >
+      {/* A line down the left edge rather than a box around the card. A box
+          reads as a selection rectangle from a file manager; a rule beside the
+          card reads as a marker laid next to it. */}
+      <Marker
+        show={focused || targeted}
+        colour={armed === "deny" ? COLOR.signal : COLOR.current}
+        strong={focused}
+      />
       {slot.takenBy ? (
         <TakenSlot width={width} by={slot.takenBy} />
       ) : card ? (
@@ -532,6 +535,26 @@ function TableCard({ state, index, focused, armed, live, onClick, onDoubleClick 
 
       {slot.denied && <Stamp label="Denied" colour={COLOR.signal} />}
     </div>
+  );
+}
+
+/** The rule laid beside a card the cursor or an armed action is pointing at. */
+function Marker({ show, colour, strong }: { show: boolean; colour: string; strong: boolean }) {
+  return (
+    <span
+      style={{
+        position: "absolute",
+        left: -7,
+        top: "18%",
+        bottom: "18%",
+        width: 2,
+        borderRadius: 2,
+        background: colour,
+        opacity: show ? (strong ? 0.95 : 0.45) : 0,
+        transition: "opacity 140ms ease",
+        pointerEvents: "none",
+      }}
+    />
   );
 }
 
@@ -569,7 +592,7 @@ function Stamp({ label, colour }: { label: string; colour: string }) {
         fontSize: 9,
         letterSpacing: "0.2em",
         color: colour,
-        background: "rgba(7,12,19,0.5)",
+        background: "rgba(7,12,19,0.28)",
         borderRadius: RADIUS.lg,
       }}
     >
@@ -614,7 +637,7 @@ function TeamBand({
         <span style={{ ...text("label"), fontSize: 8, color: COLOR.fathom }}>points</span>
       </div>
 
-      <div style={{ display: "flex", gap: SEAT_GROUP_GAP, justifyContent: "center" }}>
+      <div style={{ display: "flex", gap: SEAT_GROUP_GAP, justifyContent: "space-between" }}>
         {ROWS.map(({ row, count }) => (
           <div key={row} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span style={{ ...text("label"), fontSize: 8, color: COLOR.fathom }}>{row}</span>

@@ -241,15 +241,6 @@
   border-color: rgba(224, 169, 59, 0.6);
   box-shadow: inset 0 0 0 1px rgba(224, 169, 59, 0.16);
 }
-.pc--altArt .pc__art {
-  aspect-ratio: 5 / 5.4;
-}
-.pc--altArt .pc__body {
-  margin-top: -34px;
-  z-index: 2;
-  background: linear-gradient(180deg, transparent, rgba(7, 12, 19, 0.92) 42%);
-  padding-top: 24px;
-}
 
 /* ── 5★ black label ───────────────────────────────────────────────────────
    The alt art restruck in monochrome on black. No colour anywhere, no frame on
@@ -260,18 +251,8 @@
   background: #05070a;
   border-color: rgba(232, 226, 212, 0.5);
 }
-.pc--blackLabel .pc__art {
-  aspect-ratio: 5 / 5.4;
-  background: #05070a;
-}
 .pc--blackLabel .pc__art-fill {
   filter: grayscale(1) contrast(1.25) brightness(0.72);
-}
-.pc--blackLabel .pc__body {
-  margin-top: -34px;
-  z-index: 2;
-  background: linear-gradient(180deg, transparent, #05070a 42%);
-  padding-top: 24px;
 }
 .pc--blackLabel .pc__name {
   font-size: 17px;
@@ -292,9 +273,6 @@
   background: #12080a;
   box-shadow: inset 0 0 0 1px rgba(214, 65, 47, 0.2);
 }
-.pc--secret .pc__art {
-  aspect-ratio: 5 / 5.4;
-}
 .pc--secret .pc__art-fill {
   filter: grayscale(1) contrast(1.5);
 }
@@ -312,62 +290,14 @@
   position: absolute;
   inset: 0;
   z-index: 2;
-  background-image: radial-gradient(rgba(7, 12, 19, 0.55) 1px, transparent 1.6px);
-  background-size: 5px 5px;
+  /* Softer and wider than it was: still a halftone, but the picture under it
+     stays readable rather than being screened out. */
+  background-image: radial-gradient(rgba(7, 12, 19, 0.32) 1px, transparent 1.7px);
+  background-size: 6px 6px;
   mix-blend-mode: multiply;
-}
-.pc--secret .pc__body {
-  margin-top: -34px;
-  z-index: 3;
-  background: linear-gradient(180deg, transparent, #12080a 42%);
-  padding-top: 24px;
+  opacity: 0.75;
 }
 
-/* ── 6★ signed ────────────────────────────────────────────────────────────
-   The secret print with a signature struck across it. One in 2,500. */
-.pc--signed {
-  --pc-accent: #ff6a4d;
-  border-color: rgba(255, 106, 77, 0.9);
-  background: #12080a;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 106, 77, 0.28),
-    0 0 24px rgba(214, 65, 47, 0.22);
-}
-.pc--signed .pc__art {
-  aspect-ratio: 5 / 5.4;
-}
-.pc--signed .pc__art-fill {
-  filter: grayscale(1) contrast(1.5);
-}
-.pc--signed .pc__art::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background: linear-gradient(160deg, rgba(214, 65, 47, 0.85), rgba(90, 12, 12, 0.75));
-  mix-blend-mode: color;
-}
-.pc--signed .pc__art::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  background-image: radial-gradient(rgba(7, 12, 19, 0.55) 1px, transparent 1.6px);
-  background-size: 5px 5px;
-  mix-blend-mode: multiply;
-}
-.pc__signature {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  pointer-events: none;
-}
-.pc--signed .pc__body {
-  margin-top: -34px;
-  z-index: 5;
-  background: linear-gradient(180deg, transparent, #12080a 42%);
-  padding-top: 24px;
-}
 
 /* A duplicate in a pack opening: dimmed back so the eye skips it. */
 .pc--duplicate {
@@ -465,37 +395,6 @@
   background-position: 0 0;
 }
 
-/* 6★ signed — the same film and the same turning streak, a shade richer and a
-   touch wider. The only print that gets to be slightly more than subtle. */
-.pc--signed .pc__leaf {
-  background:
-    linear-gradient(180deg, rgba(255, 236, 214, 0.05), transparent 22%),
-    linear-gradient(
-      105deg,
-      rgba(255, 150, 110, 0.07) 0%,
-      rgba(255, 220, 168, 0.085) 20%,
-      rgba(150, 228, 222, 0.075) 44%,
-      rgba(178, 150, 232, 0.085) 68%,
-      rgba(255, 170, 130, 0.07) 100%
-    ),
-    repeating-linear-gradient(105deg, transparent 0 4px, rgba(255, 255, 255, 0.026) 4px 5px);
-}
-.pc--signed .pc__leaf::after {
-  background-image: linear-gradient(
-    112deg,
-    transparent 22%,
-    rgba(255, 150, 110, 0.075) 35%,
-    rgba(255, 232, 190, 0.115) 43%,
-    rgba(150, 232, 222, 0.1) 51%,
-    rgba(182, 152, 242, 0.095) 59%,
-    rgba(255, 170, 130, 0.06) 66%,
-    transparent 78%
-  );
-  transition-duration: 980ms;
-}
-.pc--signed.pc--interactive:hover .pc__leaf::after {
-  background-position: 0 0;
-}
 
 /* ── 7★ holo one ──────────────────────────────────────────────────────────
    The same struck treatment as the 6★ prints, but printed in white instead of
@@ -511,9 +410,6 @@
     inset 0 0 0 1px rgba(237, 243, 255, 0.35),
     0 0 30px rgba(200, 220, 255, 0.18);
 }
-.pc--holoOne .pc__art {
-  aspect-ratio: 5 / 5.4;
-}
 /* Bleached, where secret is inked */
 .pc--holoOne .pc__art-fill {
   filter: grayscale(1) brightness(1.35) contrast(0.95) saturate(0);
@@ -525,11 +421,11 @@
   z-index: 1;
   background: linear-gradient(
     148deg,
-    rgba(255, 176, 200, 0.4) 0%,
-    rgba(255, 226, 168, 0.36) 22%,
-    rgba(178, 255, 214, 0.34) 45%,
-    rgba(168, 216, 255, 0.38) 68%,
-    rgba(216, 180, 255, 0.4) 100%
+    rgba(255, 168, 196, 0.55) 0%,
+    rgba(255, 222, 152, 0.5) 22%,
+    rgba(162, 255, 210, 0.48) 45%,
+    rgba(152, 210, 255, 0.53) 68%,
+    rgba(212, 168, 255, 0.55) 100%
   );
   mix-blend-mode: color;
 }
@@ -560,24 +456,6 @@
   background-image: radial-gradient(rgba(255, 255, 255, 0.62) 1px, transparent 1.6px);
   background-size: 5px 5px;
   mix-blend-mode: overlay;
-}
-.pc--holoOne .pc__body {
-  /* Deeper overlap than the other prints so the picture runs well past the
-     name, but the art box itself is the standard one: a Holo One has to be the
-     same object as a Black Label, not a taller card. The overlap is set so the
-     finished card measures exactly what a Black Label does. */
-  margin-top: -43px;
-  z-index: 4;
-  padding-top: 38px;
-  /* A long ramp that never reaches full black, so the picture keeps running
-     under the name rather than stopping at a hard edge. */
-  background: linear-gradient(
-    180deg,
-    rgba(10, 13, 18, 0) 0%,
-    rgba(10, 13, 18, 0.35) 32%,
-    rgba(10, 13, 18, 0.72) 62%,
-    rgba(10, 13, 18, 0.9) 100%
-  );
 }
 /* The art runs past the plate, held by a vignette so the stats stay readable
    over it. */
@@ -628,4 +506,115 @@
    it is the same print, just one you already had. */
 .pc--duplicate .pc__leaf {
   opacity: 0.35;
+}
+
+/* ── Border breaking, from alt art up ──────────────────────────────────────
+   The picture is the whole card. Nothing is cropped to make room for a plate,
+   so the illustration runs to all four edges and the writing floats over the
+   bottom of it under the lightest wash the text can survive.
+
+   These prints keep the heights they always had, which now come from the card
+   itself rather than from stacking an art box on top of a plate. */
+.pc--altArt,
+.pc--secret {
+  aspect-ratio: 168 / 243;
+}
+.pc--blackLabel,
+.pc--holoOne {
+  aspect-ratio: 168 / 248;
+}
+
+.pc--altArt .pc__art,
+.pc--blackLabel .pc__art,
+.pc--secret .pc__art,
+.pc--holoOne .pc__art {
+  position: absolute;
+  inset: 0;
+  aspect-ratio: auto;
+  border-radius: 10px;
+}
+
+.pc--altArt .pc__body,
+.pc--blackLabel .pc__body,
+.pc--secret .pc__body,
+.pc--holoOne .pc__body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  margin: 0;
+  gap: 4px;
+  padding: 26px 11px 10px;
+  border-radius: 0 0 10px 10px;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(5, 9, 15, 0.48) 46%,
+    rgba(5, 9, 15, 0.84) 100%
+  );
+}
+
+/* The name sits on the floor of the card, with the numbers above it, which is
+   the same order the Score card uses. One reading order across both faces. */
+.pc--altArt .pc__name,
+.pc--blackLabel .pc__name,
+.pc--secret .pc__name,
+.pc--holoOne .pc__name {
+  order: 2;
+  min-height: 0;
+  text-shadow: 0 1px 6px rgba(4, 7, 12, 0.92);
+}
+.pc--altArt .pc__stats,
+.pc--blackLabel .pc__stats,
+.pc--secret .pc__stats,
+.pc--holoOne .pc__stats {
+  order: 1;
+  text-shadow: 0 1px 5px rgba(4, 7, 12, 0.9);
+}
+
+/* A rule of the print's own colour along the bottom edge, the way a Score card
+   carries its grade. Readable across a table before any of the writing is. */
+.pc--altArt .pc__band,
+.pc--blackLabel .pc__band,
+.pc--secret .pc__band,
+.pc--holoOne .pc__band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  z-index: 7;
+  background: var(--pc-accent);
+  opacity: 0.9;
+}
+
+/* ── The name, per print ───────────────────────────────────────────────────
+   Alt art and above each set their name differently, because a print that
+   changes the picture should change the lettering with it. */
+.pc--altArt .pc__name {
+  font-size: 16.5px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+.pc--secret .pc__name {
+  font-size: 16.5px;
+  font-weight: 800;
+  letter-spacing: -0.005em;
+  font-style: italic;
+}
+.pc--holoOne .pc__name {
+  /* The one print that goes the other way: light, wide and quiet, so it reads
+     as pressed foil rather than as ink. */
+  font-weight: 300;
+  font-size: 16px;
+  letter-spacing: 0.07em;
+}
+.pc--compact.pc--altArt .pc__name,
+.pc--compact.pc--secret .pc__name {
+  font-size: 13px;
+}
+.pc--compact.pc--holoOne .pc__name {
+  font-size: 12.5px;
+  letter-spacing: 0.05em;
 }

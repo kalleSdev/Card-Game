@@ -54,7 +54,6 @@ export const PRINT_COLOR: Record<PrintId, string> = {
   altArt: "#E0A93B",
   blackLabel: "#E8E2D4",
   secret: "#D6412F",
-  signed: "#FF6A4D",
   holoOne: "#EDF3FF",
 };
 

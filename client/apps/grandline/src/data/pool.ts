@@ -71,3 +71,29 @@ export const LEADER_POOL: string[] = POOL.filter(id => {
   const rarity = cardDb[id].rarity;
   return rarity === "SSS" || rarity === "SS" || rarity === "X";
 });
+
+/**
+ * Pulling every card's picture into the browser cache, once, at start.
+ *
+ * A card is an object, not a frame with a picture arriving inside it a moment
+ * later. Without this the first sight of any card is its border and its
+ * gradient, then a pop as the art lands — which reads as a page assembling
+ * itself rather than as a card being turned over.
+ *
+ * The whole set is thirty-odd images and it is fetched in the background, so
+ * nothing waits on it: by the time the binder or a board is on screen the
+ * pictures are already decoded and paint with the card. Fetch failures are
+ * ignored on purpose, because a missing picture still leaves a usable card.
+ */
+let preloaded = false;
+
+export function preloadCardArt(): void {
+  if (preloaded || typeof window === "undefined") return;
+  preloaded = true;
+
+  for (const id of POOL) {
+    const image = new Image();
+    image.decoding = "async";
+    image.src = artUrl(id);
+  }
+}

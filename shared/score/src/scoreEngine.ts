@@ -25,7 +25,7 @@ export interface SeatRef {
 }
 
 export interface TableSlot {
-  /** Face up to both players. A deny can turn this back off. */
+  /** Face up to both players. Denying a card turns it face up too. */
   revealed: boolean;
   /** Locked out of the game for good. Nobody can take or reveal it again. */
   denied: boolean;
@@ -211,7 +211,10 @@ export function applyScoreIntent(
       if (slot.denied) return reject("That card is already locked");
       if (state.energy < COST.deny) return reject("Not enough energy");
 
-      const next = withSlot(state, intent.index, { revealed: false, denied: true });
+      // Denying turns the card face up as it locks it. Everybody should be
+      // able to see what was taken out of the game, including the player who
+      // spent the energy doing it.
+      const next = withSlot(state, intent.index, { revealed: true, denied: true });
       next.energy -= COST.deny;
       return settle(next, pool, [{ type: "DENIED", index: intent.index, by: actor }]);
     }

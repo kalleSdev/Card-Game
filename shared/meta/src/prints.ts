@@ -9,7 +9,6 @@ export const PRINTS = [
   "altArt",      // 5★ new illustration, breaks the card border
   "blackLabel",  // 5★ alt art restruck in monochrome on black, borderless
   "secret",      // 6★ alt art in the red manga treatment, plus VFX
-  "signed",      // 6★ secret with a signature struck across it
   "holoOne",     // 7★ the same treatment struck in white, running rainbow
 ] as const;
 
@@ -32,7 +31,6 @@ export const PRINT_INFO: Record<PrintId, PrintInfo> = {
   altArt:     { id: "altArt",     tier: 5, name: "Alt Art",     short: "Alt Art",  isVariant: false },
   blackLabel: { id: "blackLabel", tier: 5, name: "Black Label", short: "B. Label", isVariant: true  },
   secret:     { id: "secret",     tier: 6, name: "Secret",      short: "Secret",   isVariant: false },
-  signed:     { id: "signed",     tier: 6, name: "Signed",      short: "Signed",   isVariant: true  },
   holoOne:    { id: "holoOne",    tier: 7, name: "Holo One",    short: "Holo One", isVariant: false },
 };
 
@@ -41,7 +39,7 @@ export const PRINTS_BY_TIER: Record<PrintTier, readonly PrintId[]> = {
   3: ["base"],
   4: ["foil"],
   5: ["altArt", "blackLabel"],
-  6: ["secret", "signed"],
+  6: ["secret"],
   7: ["holoOne"],
 };
 

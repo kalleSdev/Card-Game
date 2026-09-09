@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Shell from "./components/Shell";
 import DesignLanguage from "./screens/DesignLanguage";
 import CollectionScreen from "./screens/Collection";
@@ -11,12 +11,17 @@ import FeedScreen from "./screens/Feed";
 import PlayScreen from "./screens/Play";
 import SignIn from "./screens/SignIn";
 import { useStore } from "./data/store";
+import { preloadCardArt } from "./data/pool";
 import { COLOR, SPACE, text } from "./design/tokens";
 import { Panel, Text } from "./components/primitives";
 
 export default function App() {
   const [page, setPage] = useState("collection");
   const store = useStore();
+
+  // Every card's picture, fetched once in the background, so a card is never
+  // drawn as an empty frame waiting for its art.
+  useEffect(() => { preloadCardArt(); }, []);
 
   if (store.loading) return <Loading />;
 
