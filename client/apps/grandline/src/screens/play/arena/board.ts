@@ -58,16 +58,44 @@ function round(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-/** The slab: the whole board, tapering away from you. */
-export function slabPath(): string {
+/**
+ * The slab: the whole board, tapering away from you.
+ *
+ * `spread` carries its two side edges outwards on a wider screen. Only the
+ * edges move: the taper between them is the same taper, so the board grows
+ * without being stretched, and everything cut into it stays where it was.
+ */
+export function slabPath(spread = 0): string {
   return roundedPolygon(
     [
-      { x: BOARD.farX0, y: BOARD.farY },
-      { x: BOARD.farX1, y: BOARD.farY },
-      { x: BOARD.nearX1, y: BOARD.nearY },
-      { x: BOARD.nearX0, y: BOARD.nearY },
+      { x: BOARD.farX0 - spread, y: BOARD.farY },
+      { x: BOARD.farX1 + spread, y: BOARD.farY },
+      { x: BOARD.nearX1 + spread, y: BOARD.nearY },
+      { x: BOARD.nearX0 - spread, y: BOARD.nearY },
     ],
     BOARD.round,
+  );
+}
+
+/**
+ * The step the slab stands on, on a screen wider than the composition.
+ *
+ * Without it a wide board is one enormous flat plate with a small hole in the
+ * middle. With it the board is two tiers: the apron reaches the edges of the
+ * screen and the slab sits on top of it, which is a shape rather than an
+ * expanse. It is the same material, one level down, and it is drawn only when
+ * there is room for it.
+ */
+export function apronPath(spread: number): string {
+  const out = spread + 26;
+  return roundedPolygon(
+    [
+      { x: BOARD.farX0 - out, y: BOARD.farY - 20 },
+      { x: BOARD.farX1 + out, y: BOARD.farY - 20 },
+      { x: BOARD.nearX1 + out, y: BOARD.nearY + BOARD.lip + 12 },
+      { x: BOARD.nearX0 - out, y: BOARD.nearY + BOARD.lip + 12 },
+    ],
+    BOARD.round + 10,
   );
 }
 
@@ -77,14 +105,14 @@ export function slabPath(): string {
  * This is the whole reason the board reads as a thick object rather than a
  * picture of one: you can see how deep it is.
  */
-export function lipPath(): string {
+export function lipPath(spread = 0): string {
   const inset = BOARD.round / 3;
   return roundedPolygon(
     [
-      { x: BOARD.nearX0, y: BOARD.nearY },
-      { x: BOARD.nearX1, y: BOARD.nearY },
-      { x: BOARD.nearX1 - inset, y: BOARD.nearY + BOARD.lip },
-      { x: BOARD.nearX0 + inset, y: BOARD.nearY + BOARD.lip },
+      { x: BOARD.nearX0 - spread, y: BOARD.nearY },
+      { x: BOARD.nearX1 + spread, y: BOARD.nearY },
+      { x: BOARD.nearX1 + spread - inset, y: BOARD.nearY + BOARD.lip },
+      { x: BOARD.nearX0 - spread + inset, y: BOARD.nearY + BOARD.lip },
     ],
     BOARD.round / 2,
   );

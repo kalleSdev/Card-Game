@@ -3,7 +3,7 @@ import {
 } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import {
-  buttonSocket, deckSocket, lipPath, plinthPath, rimLeft, rimRight, slabPath, wellPath,
+  apronPath, buttonSocket, deckSocket, lipPath, plinthPath, rimLeft, rimRight, slabPath, wellPath,
 } from "./board";
 
 /**
@@ -35,10 +35,15 @@ const EDGE = 3;
 const LIT = 0.75;
 const DARK = 0.6;
 
-export default function Structure({ theme }: { theme: ArenaTheme }) {
-  const slab = slabPath();
+export default function Structure({ theme, spread = 0 }: {
+  theme: ArenaTheme;
+  /** How far past the gameplay composition this board reaches on each side. */
+  spread?: number;
+}) {
+  const slab = slabPath(spread);
   const well = wellPath();
-  const lip = lipPath();
+  const lip = lipPath(spread);
+  const apron = spread > 8 ? apronPath(spread) : null;
   const farPlinth = plinthPath("far");
   const nearPlinth = plinthPath("near");
   const decks = [deckSocket("far"), deckSocket("near")];
@@ -46,7 +51,7 @@ export default function Structure({ theme }: { theme: ArenaTheme }) {
 
   return (
     <svg
-      viewBox={`0 0 ${W} ${H}`}
+      viewBox={`${-spread} 0 ${W + spread * 2} ${H}`}
       preserveAspectRatio="none"
       aria-hidden
       style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}
@@ -112,7 +117,18 @@ export default function Structure({ theme }: { theme: ArenaTheme }) {
         <clipPath id="st-well-clip"><path d={well} /></clipPath>
       </defs>
 
-      {/* ── The slab ─────────────────────────────────────────────────────── */}
+      {/* ── The board ────────────────────────────────────────────────────── */}
+      {/* On a wide screen the slab stands on a step that carries the board out
+          to the edges of the room, so the extra width is a tier of the object
+          rather than more of the same flat plate. */}
+      {apron && (
+        <g filter="url(#st-cast)">
+          <path d={apron} fill="url(#st-slab)" opacity="0.92" />
+          <path d={apron} fill="url(#st-falloff)" />
+          <path d={apron} fill="none" stroke={theme.frameEdge} strokeWidth={2} />
+        </g>
+      )}
+
       <g filter="url(#st-cast)">
         <path d={lip} fill="url(#st-lip)" />
         <path d={slab} fill="url(#st-slab)" />
@@ -121,8 +137,8 @@ export default function Structure({ theme }: { theme: ArenaTheme }) {
       <g clipPath="url(#st-slab-clip)">
         {/* Lit, then unlit, in that order, so the far corner from the lamp is
             the one that goes dark rather than the middle of the board. */}
-        <rect x="0" y="0" width={W} height={H} fill="url(#st-lamp)" style={{ mixBlendMode: "soft-light" }} />
-        <rect x="0" y="0" width={W} height={H} fill="url(#st-falloff)" />
+        <rect x={-spread} y="0" width={W + spread * 2} height={H} fill="url(#st-lamp)" style={{ mixBlendMode: "soft-light" }} />
+        <rect x={-spread} y="0" width={W + spread * 2} height={H} fill="url(#st-falloff)" />
 
         {/* The edge where the slab's face turns over into its near edge. */}
         <path
@@ -170,12 +186,12 @@ export default function Structure({ theme }: { theme: ArenaTheme }) {
       <path d={farPlinth} fill="none" stroke={theme.frameEdge} strokeWidth={2} />
       <path d={nearPlinth} fill="none" stroke={theme.frameEdge} strokeWidth={2} />
       <g clipPath="url(#st-slab-clip)">
-        <rect x="0" y="0" width={W} height={H} fill="url(#st-lamp)" style={{ mixBlendMode: "soft-light" }} opacity={0.5} />
+        <rect x={-spread} y="0" width={W + spread * 2} height={H} fill="url(#st-lamp)" style={{ mixBlendMode: "soft-light" }} opacity={0.5} />
       </g>
 
       {/* A carved line following each rim, a hand's width in from the edge.
           It is what stops the rim reading as a plain border. */}
-      <RimGroove theme={theme} />
+      <RimGroove theme={theme} spread={spread} />
     </svg>
   );
 }
@@ -247,8 +263,8 @@ function Socket({ theme, x, y, w, h, r }: {
  * parallel to the outside instead would drift away from the well and the board
  * would look like it had been assembled out of two different objects.
  */
-function RimGroove({ theme }: { theme: ArenaTheme }) {
-  const inset = 26;
+function RimGroove({ theme, spread }: { theme: ArenaTheme; spread: number }) {
+  const inset = 26 + spread;
   const steps = 24;
   const points: string[] = [];
 

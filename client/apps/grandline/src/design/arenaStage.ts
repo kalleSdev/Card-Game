@@ -337,11 +337,35 @@ export function depthTransform(z: number): string {
 }
 
 /**
- * The scale that fits the stage on this screen, with a hair of margin so the
- * board never touches the edge of the window.
+ * How the board is framed on a given screen.
+ *
+ * The 1440 x 1120 stage is the gameplay composition and nothing else: the well,
+ * the plinths, the sockets, the cards and their sizes all live in it and none
+ * of them ever move. What is elastic is the board around them.
+ *
+ * A screen wider than the gameplay composition does not get bigger cards and
+ * does not get a stretched board. It gets more board: the slab carries on
+ * outwards past the rim until it runs out of screen, the way a real board
+ * would if you sat closer to a wider table. `spread` is how much further it
+ * reaches on each side, in stage units.
+ *
+ * The scale is chosen so the gameplay composition always fits whole. On a
+ * short or narrow screen that means the board stops filling every pixel, which
+ * is the right way round: a cropped battlefield is worse than a margin.
  */
-export function stageScale(width: number, height: number): number {
-  return Math.min(width / STAGE.width, height / STAGE.height) * 0.985;
+export interface StageFrame {
+  /** How much of a stage unit a screen pixel is worth. */
+  scale: number;
+  /** The stage's width at this scale, which is at least the composition's. */
+  width: number;
+  /** How far the board reaches past the composition on each side. */
+  spread: number;
+}
+
+export function frameFor(width: number, height: number): StageFrame {
+  const scale = Math.min(width / STAGE.width, height / STAGE.height);
+  const stageWidth = Math.max(STAGE.width, width / scale);
+  return { scale, width: stageWidth, spread: (stageWidth - STAGE.width) / 2 };
 }
 
 /**
@@ -351,20 +375,20 @@ export function stageScale(width: number, height: number): number {
  * same thing: a window event is late by a frame and misses anything that
  * resizes the page without resizing the window.
  */
-export function useStageFit(): { ref: RefObject<HTMLDivElement>; scale: number } {
+export function useStageFit(): { ref: RefObject<HTMLDivElement>; frame: StageFrame } {
   const ref = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(() => stageScale(window.innerWidth, window.innerHeight));
+  const [frame, setFrame] = useState(() => frameFor(window.innerWidth, window.innerHeight));
 
   useEffect(() => {
     const box = ref.current;
     if (!box) return;
     const watch = new ResizeObserver(entries => {
       const size = entries[0]?.contentRect;
-      if (size && size.width > 0 && size.height > 0) setScale(stageScale(size.width, size.height));
+      if (size && size.width > 0 && size.height > 0) setFrame(frameFor(size.width, size.height));
     });
     watch.observe(box);
     return () => watch.disconnect();
   }, []);
 
-  return { ref, scale };
+  return { ref, frame };
 }

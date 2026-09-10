@@ -21,12 +21,16 @@ import { surfacePath, wellPath } from "./board";
 const W = STAGE.width;
 const H = STAGE.height;
 
-export default function Surface({ theme }: { theme: ArenaTheme }) {
+export default function Surface({ theme, spread = 0 }: {
+  theme: ArenaTheme;
+  /** Only widens the box this is drawn into. The surface itself never moves. */
+  spread?: number;
+}) {
   const surface = surfacePath();
 
   return (
     <svg
-      viewBox={`0 0 ${W} ${H}`}
+      viewBox={`${-spread} 0 ${W + spread * 2} ${H}`}
       preserveAspectRatio="none"
       aria-hidden
       style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}
@@ -87,8 +91,8 @@ export default function Surface({ theme }: { theme: ArenaTheme }) {
           opacity="0.7"
         />
 
-        <rect x="0" y={WELL.farY} width={W} height={WELL.height / 2} fill="url(#sf-haze)" />
-        <rect x="0" y={WELL.seamY} width={W} height={WELL.height / 2} fill="url(#sf-fall)" />
+        <rect x={-spread} y={WELL.farY} width={W + spread * 2} height={WELL.height / 2} fill="url(#sf-haze)" />
+        <rect x={-spread} y={WELL.seamY} width={W + spread * 2} height={WELL.height / 2} fill="url(#sf-fall)" />
 
         <path
           d={`M ${WELL.nearX0} ${WELL.seamY} L ${WELL.nearX1} ${WELL.seamY}`}

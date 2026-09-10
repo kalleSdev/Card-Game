@@ -1,5 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
-import { DEPTH, LAYER, LAYER_TAKES_CLICKS, depthTransform, type LayerName } from "../../../design/arenaStage";
+import {
+  DEPTH, LAYER, LAYER_TAKES_CLICKS, STAGE, depthTransform, type LayerName,
+} from "../../../design/arenaStage";
 
 /**
  * One layer of the board.
@@ -19,19 +21,32 @@ import { DEPTH, LAYER, LAYER_TAKES_CLICKS, depthTransform, type LayerName } from
  * whose contents are flat anyway — a hand of cards, a sheet of haze — and it is
  * why the flag is on the layer rather than on the board.
  */
-export default function Layer({ name, crop = false, style, children }: {
+export default function Layer({ name, crop = false, core = false, spread = 0, style, children }: {
   name: LayerName;
   /** True for a layer whose contents are cut off at the board's edge. */
   crop?: boolean;
+  /**
+   * True for a layer that holds gameplay geometry.
+   *
+   * Those layers are exactly as wide as the composition and sit in the middle
+   * of the board however wide the board has become, so nothing the rules care
+   * about moves when the screen does. Everything else spans the whole board.
+   */
+  core?: boolean;
+  spread?: number;
   style?: CSSProperties;
   children?: ReactNode;
 }) {
+  const box: CSSProperties = core
+    ? { left: spread, top: 0, width: STAGE.width, height: STAGE.height }
+    : { inset: 0 };
+
   return (
     <div
       data-layer={name}
       style={{
         position: "absolute",
-        inset: 0,
+        ...box,
         zIndex: LAYER[name],
         transform: depthTransform(DEPTH[name]),
         transformOrigin: "center",

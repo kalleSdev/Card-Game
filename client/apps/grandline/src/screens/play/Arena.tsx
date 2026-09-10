@@ -58,7 +58,7 @@ export function Arena({
   children?: ReactNode;
 }) {
   const [theme, setTheme] = useArenaTheme();
-  const { ref: fit, scale } = useStageFit();
+  const { ref: fit, frame } = useStageFit();
   const tilt = useTilt();
   const [held, setHeld] = useState<string | null>(null);
   useEffect(() => { setHeld(null); }, [state.activePlayer]);
@@ -135,7 +135,9 @@ export function Arena({
 
       <div
         style={{
-          width: STAGE.width,
+          // As wide as the screen, never narrower than the composition. The
+          // board fills the extra; the game inside it does not.
+          width: frame.width,
           height: STAGE.height,
           // The stage is a fixed object that gets scaled, never squeezed: as a
           // flex child it would otherwise shrink to the window and every
@@ -146,24 +148,24 @@ export function Arena({
           // here may crop or filter, because either one would flatten them all
           // back into a single sheet.
           transformStyle: "preserve-3d",
-          transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale(${scale})`,
+          transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale(${frame.scale})`,
           transformOrigin: "center",
           transition: `transform ${TILT.settle}ms cubic-bezier(0.2,0,0.2,1)`,
         }}
       >
         {/* The board as an object: slab, rim, plinths, sockets */}
         <Layer name="structure">
-          <Structure theme={theme} />
+          <Structure theme={theme} spread={frame.spread} />
         </Layer>
 
         {/* The surface, set down inside the well */}
         <Layer name="surface">
-          <Surface theme={theme} />
+          <Surface theme={theme} spread={frame.spread} />
         </Layer>
 
         {/* Everything the rules know about. Cropped at the board's edge, which
             is what lets a hand hang off it the way it does on a table. */}
-        <Layer name="play" crop>
+        <Layer name="play" core spread={frame.spread} crop>
           {/* Their hand, hanging from the top rail. Cropped again, because a
               back has nothing on it worth the room a whole card would take. */}
           <div
@@ -252,7 +254,7 @@ export function Arena({
 
         {/* The air between the two ends of the board. It goes over the far
             cards rather than under them, because that is where the air is. */}
-        <Layer name="highlight">
+        <Layer name="highlight" core spread={frame.spread}>
           <div
             style={{
               position: "absolute",
@@ -267,7 +269,7 @@ export function Arena({
         </Layer>
 
         {/* Writing, the decks, and the one button */}
-        <Layer name="hud">
+        <Layer name="hud" core spread={frame.spread}>
           <RimName theme={theme} y={FAR_RIM_Y} name={headingFor(top)} far />
           <RimName theme={theme} y={NEAR_RIM_Y} name={headingFor(bottom)} />
 
