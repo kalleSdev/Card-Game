@@ -14,9 +14,12 @@ import { useEffect, useRef, useState, type RefObject } from "react";
  * corners for whatever is resting on it. Everything else is measured off those
  * parts, so moving a part moves what sits on it.
  *
- * The board is seen from slightly above and in front, so it narrows towards the
- * far end and its near edge shows its thickness. That is not decoration: it is
- * what tells a player which end is theirs before they have read anything.
+ * The camera is almost overhead. There is still a taper and the near edge still
+ * shows its thickness, because without those the board is a diagram; but both
+ * are shallow, because a player is looking down at a table rather than across
+ * one. The whole camera lives in four pairs of numbers below — the slab's edges
+ * and the well's — plus how much smaller the far side draws. Nothing else in
+ * the arena decides the angle.
  */
 
 export const STAGE = {
@@ -34,10 +37,21 @@ export const BOARD = {
   /** The slab's far edge, and where its near edge begins. */
   farY: 96,
   nearY: 976,
-  /** How much of the slab's thickness shows along the near edge. */
-  lip: 28,
-  farX0: 150,
-  farX1: 1290,
+  /**
+   * How much of the slab's thickness shows along the near edge.
+   *
+   * From almost overhead you catch the edge rather than see the side of it.
+   */
+  lip: 20,
+  /**
+   * The far edge is 7% narrower than the near one.
+   *
+   * That is the whole angle of the camera. Enough that the near rim reads as
+   * the nearer one, little enough that the table reads as a table seen from
+   * above rather than a stage seen from a seat.
+   */
+  farX0: 106,
+  farX1: 1334,
   nearX0: 60,
   nearX1: 1380,
   round: 46,
@@ -47,8 +61,8 @@ export const BOARD = {
 export const WELL = {
   farY: 250,
   nearY: 770,
-  farX0: 300,
-  farX1: 1140,
+  farX0: 246,
+  farX1: 1194,
   nearX0: 200,
   nearX1: 1240,
   /** How far the surface sits below the rim it is set into. */
@@ -97,11 +111,17 @@ export const PLINTH = {
   get centreX() { return STAGE.width / 2; },
 } as const;
 
-/** How much smaller everything on the far side of the board draws. */
-export const FAR_SCALE = 0.88;
+/**
+ * How much smaller everything on the far side of the board draws.
+ *
+ * Barely. From overhead the far end of a table is hardly further away than the
+ * near end, and a card that shrank noticeably would be saying the camera is
+ * somewhere it is not.
+ */
+export const FAR_SCALE = 0.96;
 
 /** How much of the far half is taken by the air between here and there. */
-export const HAZE = 0.16;
+export const HAZE = 0.1;
 
 export const CARD_RATIO = 217 / 168;
 
@@ -304,7 +324,7 @@ export const PERSPECTIVE = 2400;
  * surface can afford.
  */
 export const TILT = {
-  degrees: 1.6,
+  degrees: 0.5,
   /** How far the room slides the other way, which is what sells the distance. */
   sceneDrift: 14,
   settle: 220,
