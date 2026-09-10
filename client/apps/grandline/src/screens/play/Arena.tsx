@@ -2,8 +2,9 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { PlayerId } from "@cg/contracts";
 import type { BattleCard, BattleIntent, BattlePlayer, BattleState } from "@cg/battle";
 import {
-  BOARD, CENTRE, FAR_SCALE, HAND, HAZE, PERSPECTIVE, STAGE, TILT, WELL,
-  cardBand, leaderSeat, slabEdges, station, useStageFit, wellEdges, type Side,
+  BOARD, CENTRE, FAR_SCALE, HAND, HAZE, PERSPECTIVE, RAIL, STAGE, TILT, WELL,
+  cardBand, leaderSeat, railSeat, slabEdges, station, useStageFit,
+  type Band, type RailSeat, type Side,
 } from "../../design/arenaStage";
 import { ARENA_THEME_LIST, useArenaTheme, type ArenaTheme, type ArenaThemeId } from "../../design/arenaThemes";
 import { text } from "../../design/tokens";
@@ -167,21 +168,20 @@ export function Arena({
         {/* Everything the rules know about. Cropped at the board's edge, which
             is what lets a hand hang off it the way it does on a table. */}
         <Layer name="play" core spread={frame.spread} crop>
-          {/* Their hand, hanging from the top rail. Cropped again, because a
-              back has nothing on it worth the room a whole card would take. */}
+          {/* Their hand, held beyond the far edge. Nothing crops it but the
+              board's own edge: each card carries its own clip, so the row has
+              no box behind it to read as one. */}
           <div
             style={{
               position: "absolute",
               left: 0,
-              top: HAND.farTop,
+              top: HAND.far.pivotY,
               width: STAGE.width,
-              height: HAND.farHeight,
-              overflow: "hidden",
               display: "flex",
               justifyContent: "center",
             }}
           >
-            <EnemyHand count={state.players[top].hand.length} />
+            <EnemyHand theme={theme} count={state.players[top].hand.length} />
           </div>
 
           {/* Scaled about the board's far edge rather than about the plinth's
@@ -445,9 +445,19 @@ function Channel({ theme, end, player }: {
 }
 
 /**
- * The strip down the left: which game this is, whose turn it is, which table
- * you are playing on, and the way out. None of it is the game, which is why it
- * is all in one place away from the middle.
+ * The board's information area, down the left rim.
+ *
+ * Which game this is, whose turn it is, which table you are playing on and the
+ * way out. It used to be a column of web type stacked on bare wood, which is
+ * what it looked like. Now the board is cut for it — two plaques, a socket for
+ * each table and a slot for the button — and this puts the words and the
+ * controls into those holes. Nothing here draws a box: every edge you can see
+ * belongs to the board.
+ *
+ * Type goes one of two ways depending on what it is sitting on. Inside a recess
+ * it is pale with a dark line above it, because that is what paint in a hole
+ * looks like. On bare wood it is the board's own dark ink with a light line
+ * under it, which is what a cut letter looks like on a lit surface.
  */
 function LeftRail({ theme, title, badge, turn, line, note, onTheme, onLeave }: {
   theme: ArenaTheme;
@@ -459,114 +469,179 @@ function LeftRail({ theme, title, badge, turn, line, note, onTheme, onLeave }: {
   onTheme: (id: ArenaThemeId) => void;
   onLeave: () => void;
 }) {
+  const seat = railSeat(ARENA_THEME_LIST.length);
+
+  return (
+    <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+      {/* The match, on the upper plaque. */}
+      <Plaque seat={seat} band={seat.plaque}>
+        <span
+          style={{
+            ...text("title"),
+            fontSize: 17,
+            lineHeight: 1.05,
+            letterSpacing: "0.04em",
+            color: theme.frame.light,
+            textShadow: SUNK,
+          }}
+        >
+          {title}
+        </span>
+        <span
+          style={{
+            ...text("label"),
+            fontSize: 7.5,
+            lineHeight: 1.5,
+            color: theme.gold.light,
+            opacity: 0.9,
+            textShadow: SUNK,
+          }}
+        >
+          {badge}
+        </span>
+      </Plaque>
+
+      {/* The turn, on the lower one. */}
+      <Plaque seat={seat} band={seat.status}>
+        <span
+          style={{
+            ...text("label"),
+            fontSize: 8.5,
+            lineHeight: 1.3,
+            color: theme.gold.light,
+            textShadow: SUNK,
+          }}
+        >
+          {line}
+        </span>
+        <span
+          style={{
+            ...text("data"),
+            fontSize: 14,
+            lineHeight: 1,
+            color: theme.frame.light,
+            textShadow: SUNK,
+          }}
+        >
+          Turn {turn}
+        </span>
+      </Plaque>
+
+      {/* Anything the board has to say, cut into the wood between the plaques
+          and the controls rather than given a plate of its own. */}
+      {note && (
+        <div
+          style={{
+            position: "absolute",
+            left: seat.x,
+            top: seat.note.top,
+            width: seat.width,
+            display: "flex",
+            justifyContent: "center",
+            ...text("small"),
+            fontSize: 9.5,
+            lineHeight: 1.35,
+            textAlign: "center",
+            color: theme.ink,
+            textShadow: CUT,
+          }}
+        >
+          {note}
+        </div>
+      )}
+
+      {/* One stone per table, each in its own socket. */}
+      {ARENA_THEME_LIST.map((option, i) => {
+        const gem = seat.gems[i];
+        const here = option.id === theme.id;
+        return (
+          <button
+            key={option.id}
+            title={`${option.name} — ${option.blurb}`}
+            onClick={() => onTheme(option.id)}
+            style={{
+              position: "absolute",
+              left: gem.cx - RAIL.gem / 2,
+              top: gem.cy - RAIL.gem / 2,
+              width: RAIL.gem,
+              height: RAIL.gem,
+              borderRadius: "50%",
+              padding: 0,
+              cursor: "pointer",
+              pointerEvents: "auto",
+              background: `linear-gradient(150deg, ${option.felt.light}, ${option.felt.dark})`,
+              // Brass round every stone, brighter on the one you are playing
+              // on. A set stone keeps its ring whether it is chosen or not;
+              // what changes is how much light the ring is catching.
+              border: `1px solid ${here ? theme.gold.light : theme.gold.dark}`,
+              boxShadow: here
+                ? `inset 0 1px 0 rgba(255,255,255,0.45), 0 0 4px ${theme.gold.light}`
+                : "inset 0 1px 2px rgba(0,0,0,0.5)",
+            }}
+          />
+        );
+      })}
+
+      {/* The way out, sitting in its slot. */}
+      <button
+        onClick={onLeave}
+        style={{
+          position: "absolute",
+          left: seat.leave.x,
+          top: seat.leave.y,
+          width: seat.leave.width,
+          height: seat.leave.height,
+          pointerEvents: "auto",
+          cursor: "pointer",
+          borderRadius: RAIL.seat,
+          background: `linear-gradient(180deg, ${theme.wing.light}, ${theme.wing.mid})`,
+          border: `1px solid ${theme.wingEdge}`,
+          boxShadow: `inset 0 1px 0 ${theme.frame.light}, 0 1px 2px ${theme.shadow}`,
+          ...text("label"),
+          fontSize: 8,
+          color: theme.ink,
+        }}
+      >
+        Leave
+      </button>
+    </div>
+  );
+}
+
+/** Paint in a hole: pale, with the wall's shadow falling across the top of it. */
+const SUNK = "0 1px 0 rgba(0,0,0,0.55)";
+
+/**
+ * A letter cut into a lit surface: the board's own ink, with the light catching
+ * the lower wall of the cut.
+ */
+const CUT = "0 1px 0 rgba(255,255,255,0.32)";
+
+/** The words that go in one of the rail's two plaques. */
+function Plaque({ seat, band, children }: {
+  seat: RailSeat;
+  band: Band;
+  children: ReactNode;
+}) {
   return (
     <div
       style={{
         position: "absolute",
-        // On the left rim, between the board's edge and the well. The rim
-        // tapers, so both numbers are asked for at the seam where it is
-        // narrowest and the rail therefore fits at every depth.
-        left: slabEdges(WELL.seamY).x0 + 10,
-        top: WELL.farY + 10,
-        width: wellEdges(WELL.seamY).x0 - slabEdges(WELL.seamY).x0 - 30,
-        height: WELL.height - 20,
+        left: seat.x,
+        top: band.top,
+        width: seat.width,
+        height: band.height,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: 10,
-        padding: "20px 0",
-        // The rail's own buttons are the only things on it worth pressing, and
-        // its layer refuses the cursor, so the rail asks for it back.
-        pointerEvents: "auto",
+        justifyContent: "center",
+        gap: 6,
+        padding: `0 ${RAIL.seat * 2}px`,
+        boxSizing: "border-box",
+        textAlign: "center",
       }}
     >
-      <span
-        style={{
-          ...text("title"),
-          fontSize: 19,
-          lineHeight: 1.05,
-          color: theme.ink,
-          textAlign: "center",
-        }}
-      >
-        {title}
-      </span>
-
-      <span
-        style={{
-          ...text("label"),
-          fontSize: 7,
-          color: theme.ink,
-          border: `1px solid ${theme.wingEdge}`,
-          borderRadius: 999,
-          padding: "4px 8px",
-          maxWidth: 78,
-          textAlign: "center",
-          lineHeight: 1.35,
-        }}
-      >
-        {badge}
-      </span>
-
-      <span style={{ ...text("label"), fontSize: 8, color: theme.ink, textAlign: "center", lineHeight: 1.4 }}>
-        {line}
-      </span>
-      <span style={{ ...text("data"), fontSize: 11, color: theme.inkSoft }}>Turn {turn}</span>
-
-      {note && (
-        <span
-          style={{
-            ...text("small"),
-            fontSize: 10,
-            color: theme.inkSoft,
-            textAlign: "center",
-            lineHeight: 1.3,
-          }}
-        >
-          {note}
-        </span>
-      )}
-
-      <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-        <span style={{ ...text("label"), fontSize: 7, color: theme.inkSoft }}>Table</span>
-        <div style={{ display: "flex", gap: 6 }}>
-          {ARENA_THEME_LIST.map(option => (
-            <button
-              key={option.id}
-              title={`${option.name} — ${option.blurb}`}
-              onClick={() => onTheme(option.id)}
-              style={{
-                width: 15,
-                height: 15,
-                borderRadius: "50%",
-                cursor: "pointer",
-                padding: 0,
-                background: `linear-gradient(150deg, ${option.felt.light}, ${option.felt.dark})`,
-                border: option.id === theme.id
-                  ? `2px solid ${theme.ink}`
-                  : `1px solid ${theme.wingEdge}`,
-              }}
-            />
-          ))}
-        </div>
-
-        <button
-          onClick={onLeave}
-          style={{
-            ...text("label"),
-            fontSize: 8,
-            color: theme.ink,
-            background: `linear-gradient(180deg, ${theme.wing.light}, ${theme.wing.mid})`,
-            border: `1px solid ${theme.wingEdge}`,
-            borderRadius: 8,
-            padding: "7px 10px",
-            cursor: "pointer",
-            width: 70,
-          }}
-        >
-          Leave
-        </button>
-      </div>
+      {children}
     </div>
   );
 }

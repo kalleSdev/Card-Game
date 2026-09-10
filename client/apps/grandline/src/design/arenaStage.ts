@@ -307,6 +307,97 @@ export const PLINTH = {
 } as const;
 
 /**
+ * The information area, carved down the left rim.
+ *
+ * Which game this is, whose turn it is, which table you are playing on and the
+ * way out. None of it is the game, so it is all at one end of the board away
+ * from the middle — but it is still part of the board, so it is cut into the
+ * rim rather than laid on it.
+ *
+ * Three fittings rather than one panel: a plaque at the top for the match, a
+ * plaque under it for the turn, and the controls at the bottom. A single box
+ * behind all of it would be the thing this is trying to stop being.
+ *
+ * The column is one x and one width for its whole height, taken where the rim
+ * is narrowest at each end — the slab's edge at the top, the well's at the
+ * bottom, since both slide left as the board comes towards you. Its two ends
+ * are mirrors of each other about the seam, which is the only symmetry a strip
+ * down one side can have.
+ */
+export const RAIL = {
+  /** Clear rim either side of the column. */
+  margin: 10,
+  /** Air between two fittings, and between the words and the controls. */
+  gap: 20,
+  wide: 44,
+  /** The plaque that carries the match, and the one that carries the turn. */
+  plaque: 80,
+  status: 62,
+  /** A theme gem, the air between two of them, and the way out. */
+  gem: 20,
+  gemGap: 14,
+  leave: 32,
+  /** How far a fitting's contents sit inside the recess cut for them. */
+  seat: 4,
+  /** The socket a gem sits in reaches this far past it. */
+  gemRing: 4,
+  get height() {
+    return this.plaque + this.gap + this.status + this.wide
+      + (this.gem + this.gemRing * 2) + this.gap + this.leave;
+  },
+} as const;
+
+export interface RailSeat {
+  x: number;
+  width: number;
+  /** The match: its name, and who it is against. */
+  plaque: Band;
+  /** Whose turn it is, and which turn. */
+  status: Band;
+  /** Bare rim between the plaques and the controls, where a note is engraved. */
+  note: Band;
+  /** One socket per table you can play on. */
+  gems: { cx: number; cy: number; radius: number }[];
+  /** The way out. */
+  leave: { x: number; y: number; width: number; height: number };
+}
+
+export function railSeat(gems: number): RailSeat {
+  // The column is centred on the board's own middle, so its four fittings read
+  // as one thing rather than as two clusters at opposite ends of the rim, and
+  // the bare wood it leaves over is shared equally above and below it.
+  const top = CENTRE.y - RAIL.height / 2;
+  const bottom = top + RAIL.height;
+  const x = slabEdges(top).x0 + RAIL.margin;
+  const width = wellEdges(bottom).x0 - RAIL.margin - x;
+
+  const statusTop = top + RAIL.plaque + RAIL.gap;
+  const gemRadius = RAIL.gem / 2 + RAIL.gemRing;
+  const gemCy = statusTop + RAIL.status + RAIL.wide + gemRadius;
+  const leaveTop = gemCy + gemRadius + RAIL.gap;
+  const row = gems * RAIL.gem + (gems - 1) * RAIL.gemGap;
+
+  return {
+    x,
+    width,
+    plaque: { top, height: RAIL.plaque },
+    status: { top: statusTop, height: RAIL.status },
+    // Under the whole column, on bare rim, in the room the board has left
+    // over before the well's own near edge.
+    note: {
+      top: bottom + RAIL.gap,
+      height: WELL.nearY - RAIL.gap - (bottom + RAIL.gap),
+    },
+    gems: Array.from({ length: gems }, (_unused, i) => ({
+      cx: x + width / 2 - row / 2 + RAIL.gem / 2 + i * (RAIL.gem + RAIL.gemGap),
+      cy: gemCy,
+      radius: gemRadius,
+    })),
+    leave: { x: x + RAIL.seat * 3, y: leaveTop, width: width - RAIL.seat * 6, height: RAIL.leave },
+  };
+}
+
+/**
  * Where the two hands hang off the board's ends.
  *
  * Both are held over the board's outer edge by the same amount, so a card in
@@ -320,19 +411,99 @@ export const HAND = {
   /** How far a hand card's outer edge rides over the board's own edge. */
   lift: 16,
   get nearTop() { return BOARD.nearY - this.lift; },
-  get farTop() { return BOARD.farY - 28; },
   /**
-   * How much of a card back shows: down to where the far station begins.
+   * Their hand, as a fan held beyond the far edge of the table.
    *
-   * The two run into each other otherwise. A hand of five or more reaches
-   * across the whole width of the board, so it would cover the top of the
-   * socket the ability dial is seated in, and a hole with cards lying over its
-   * rim stops reading as a hole. The hand stops at the socket's outer edge
-   * instead of at a number, so it cannot creep back over it if either moves.
+   * The near hand is a fan pivoting on its bottom edge, camber pushing the
+   * middle card furthest onto the board, and it runs off the bottom of the
+   * stage because the stage stops before the card does. The far hand is that
+   * same object reflected: it pivots on its top edge, its camber pushes the
+   * middle card furthest onto the board from the other direction, and it runs
+   * off the top of the stage. What differs is only how much of it there is to
+   * see, because there is less room above the board than below it.
+   *
+   * `reach` is the exact mirror of where the near hand's cards begin, so the
+   * deepest card at each end of the board stops at the same distance from its
+   * own leader: level with the window, sixteen units over the plinth's outer
+   * edge, and clear of the dial, the channel and every fitting on the rim.
    */
-  get farHeight() {
-    const socket = station("far").ability;
-    return socket.cy - socket.radius - this.farTop;
+  far: {
+    /** Degrees of splay per card from the middle of the fan. */
+    tilt: 2.2,
+    /**
+     * How much of a card hides behind the one before it.
+     *
+     * Less than yours hides behind its neighbour, for two reasons. There is far
+     * less of each of their cards to see, so what there is has to be wide
+     * enough to read as a card; and a wider fan puts the cards at its ends out
+     * past the leader's plinth, where the rim is bare and they can come further
+     * onto the board.
+     */
+    overlap: 30,
+    /**
+     * How far onto the board a card may reach where the leader's plinth is
+     * behind it: level with the window, which is the mirror of where the near
+     * hand's own cards begin.
+     */
+    get reach() { return leaderSeat("far").y; },
+    /**
+     * How far it may reach anywhere else: level with the outer edge of the
+     * energy channel, so a card at the end of the fan comes further onto the
+     * rim without ever lying over a fitting cut into it.
+     */
+    get deep() { return station("far").channel.y; },
+    /**
+     * The line the fan is held on.
+     *
+     * A whole card above the shallowest reach, which puts it off the top of the
+     * stage. That is the point: the cards are not cropped to a band, they are
+     * whole cards held beyond the edge of the table, and what bounds each one
+     * at the bottom is its own rounded edge rather than a line drawn across the
+     * row. The layer's own crop takes care of the rest, at the edge of the
+     * screen, where a crop is honest.
+     */
+    get pivotY() { return this.reach - CARD.playHeight; },
+    /**
+     * How far a card may come onto the board, given where it is and how far the
+     * fan has turned it.
+     *
+     * The deepest it can go without lying over anything cut into the rim: the
+     * leader's plinth stops it level with the window, the dial's socket stops
+     * it at the socket, and out on bare rim it reaches the channel's line. So
+     * the middle of the fan tucks away behind the plinth and its ends come
+     * forward, and the row has a shape instead of an edge.
+     *
+     * `turn` is the card's own rotation, which carries its lower corners
+     * sideways: a card at the end of the fan leans out over rim its upright
+     * self would never have reached.
+     *
+     * The answer is taken on both sides of the board's middle and the shallower
+     * one wins. The fan is symmetrical, so its silhouette has to be — and the
+     * two rims are not mirror images of each other, since the dial's socket
+     * sits closer in on the left than the energy channel does on the right.
+     */
+    floorFor(x0: number, turn: number): number {
+      const shift = CARD.playHeight * Math.sin((turn * Math.PI) / 180);
+      const from = x0 + shift;
+      const to = from + CARD.play;
+
+      const socket = station("far").ability;
+      const bands: [number, number, number][] = [
+        [CENTRE.x - PLINTH.width / 2, CENTRE.x + PLINTH.width / 2, this.reach],
+        [socket.cx - socket.radius, socket.cx + socket.radius, socket.cy - socket.radius],
+      ];
+
+      let floor = this.deep;
+      for (const side of [0, 1]) {
+        // The card's own span, then the same span reflected about the middle.
+        const a = side === 0 ? from : CENTRE.x * 2 - to;
+        const b = side === 0 ? to : CENTRE.x * 2 - from;
+        for (const [start, end, limit] of bands) {
+          if (b > start && a < end) floor = Math.min(floor, limit);
+        }
+      }
+      return floor;
+    },
   },
 } as const;
 

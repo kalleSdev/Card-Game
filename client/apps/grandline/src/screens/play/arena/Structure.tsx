@@ -1,7 +1,8 @@
 import {
-  BOARD, LIGHT, PLINTH, RIM, STAGE, STATION, WELL, slabEdges, station, type Side,
+  BOARD, LIGHT, PLINTH, RAIL, RIM, STAGE, STATION, WELL, railSeat, slabEdges, station,
+  type Side,
 } from "../../../design/arenaStage";
-import type { ArenaTheme } from "../../../design/arenaThemes";
+import { ARENA_THEME_LIST, type ArenaTheme } from "../../../design/arenaThemes";
 import {
   apronPath, buttonSocket, deckSocket, lipPath, plinthPath, slabPath, wellBandPath,
   wellOffsetPath, wellPath,
@@ -15,6 +16,11 @@ import Materials, { MATERIAL_MIX, materialFill, type MaterialName } from "./mate
  * bands, a stone block at each end holding a leader, and sockets cut into the
  * right hand rim for the decks and the button. Nothing here knows about the
  * game; it is the thing the game is played on.
+ *
+ * The left rim is cut for the board's information: two shallow plaques, three
+ * gem sockets and a slot for the way out. Three small holes rather than one
+ * large one, because a single box behind all of it is exactly the panel this is
+ * trying not to be.
  *
  * Each end of the rim is also a player's station, and the board is cut for it:
  * a plinth for the leader, a round socket to its left for the ability dial, and
@@ -269,6 +275,9 @@ export default function Structure({ theme, spread = 0 }: {
       {(["far", "near"] as Side[]).map(side => (
         <StationRecesses key={side} theme={theme} side={side} />
       ))}
+
+      {/* ── The information area, down the left rim ──────────────────────── */}
+      <RailRecesses theme={theme} />
     </svg>
   );
 }
@@ -406,6 +415,56 @@ function Recess({ theme, x, y, w, h, r, round = false }: {
         opacity={LIT * 0.55}
       />
       {shape(0, { fill: "none", stroke: theme.gold.dark, strokeWidth: 1.5, opacity: 0.75 })}
+    </g>
+  );
+}
+
+/**
+ * The holes cut down the left rim for the board's information.
+ *
+ * Two shallow plaques and, at the bottom, a socket for each table you can play
+ * on and a slot for the way out. All of them are the same `Recess` as the deck
+ * wells and the energy channel, so the information area is made of the same
+ * thing the rest of the board is made of.
+ */
+function RailRecesses({ theme }: { theme: ArenaTheme }) {
+  const seat = railSeat(ARENA_THEME_LIST.length);
+
+  return (
+    <g>
+      {[seat.plaque, seat.status].map(band => (
+        <Recess
+          key={band.top}
+          theme={theme}
+          x={seat.x}
+          y={band.top}
+          w={seat.width}
+          h={band.height}
+          r={RAIL.seat * 2}
+        />
+      ))}
+
+      {seat.gems.map(gem => (
+        <Recess
+          key={gem.cx}
+          theme={theme}
+          x={gem.cx - gem.radius}
+          y={gem.cy - gem.radius}
+          w={gem.radius * 2}
+          h={gem.radius * 2}
+          r={gem.radius}
+          round
+        />
+      ))}
+
+      <Recess
+        theme={theme}
+        x={seat.leave.x - RAIL.seat}
+        y={seat.leave.y - RAIL.seat}
+        w={seat.leave.width + RAIL.seat * 2}
+        h={seat.leave.height + RAIL.seat * 2}
+        r={RAIL.seat * 2}
+      />
     </g>
   );
 }

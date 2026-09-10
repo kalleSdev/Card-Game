@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { BattleCard } from "@cg/battle";
-import { CARD, ENERGY, HAND, LEADER, MOTION } from "../../../design/arenaStage";
+import { CARD, CENTRE, ENERGY, HAND, LEADER, MOTION } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import { COLOR, MOTION as APP_MOTION, RADIUS, SPACE, text } from "../../../design/tokens";
 import PrintCard from "../../../components/PrintCard";
@@ -174,54 +174,113 @@ export function Hand({ theme, cards, energy, held, live, onHold }: {
 }
 
 /**
- * Their hand.
+ * Their hand: a fan held beyond the far edge of the table.
  *
- * Backs, overlapped twice as hard as yours, because there is nothing on them to
- * read and the row only has to be countable. They hang from the top rail and the
- * board crops them, so this is a plain row with its cards hung from the top
- * edge.
+ * The same object as yours, reflected. Yours pivots on its bottom edge and runs
+ * off the bottom of the stage; theirs pivots on its top edge and runs off the
+ * top, because there is less room above the board than below it. Each card
+ * splays a little further from the middle of the fan than the one before it, and
+ * the middle of the fan reaches furthest onto the board — which is what a hand
+ * held out towards you does.
+ *
+ * Every card is its own object. That is the whole point of the arrangement: one
+ * row-wide box with the cards cropped inside it is a dark rectangle with a
+ * pattern on it, and no amount of shading fixes that. Instead each card carries
+ * its own clip, its own splay, its own reach and its own shadow, so what the
+ * eye gets is a row of overlapping cards at slightly different angles and
+ * depths. Their sides stay crisp and lit; only their lower halves go into the
+ * shadow of the board's far edge, which is why the row's bottom is a soft arc
+ * following the camber rather than a line.
  *
  * The number of backs drawn stops at the energy cap. A hand can in principle run
  * longer than that, and a row of nineteen would walk off the side of the board,
  * so past the cap the last back carries the count instead.
  */
-export function EnemyHand({ count }: { count: number }): JSX.Element {
+export function EnemyHand({ theme, count }: { theme: ArenaTheme; count: number }): JSX.Element {
   const shown = Math.min(count, ENERGY.sockets);
+  const { tilt, overlap, reach } = HAND.far;
+  const middle = (shown - 1) / 2;
+  const stride = CARD.play - overlap;
+  /** Where the row starts, so a card can be asked what is behind it. */
+  const rowLeft = CENTRE.x - (CARD.play + (shown - 1) * stride) / 2;
 
   return (
     <div style={{ display: "flex", alignItems: "flex-start" }}>
-      {Array.from({ length: shown }, (_, i) => (
-        <div
-          key={i}
-          style={{
-            position: "relative",
-            marginLeft: i === 0 ? 0 : -CARD.handOverlap * 2,
-          }}
-        >
-          <CardBack width={CARD.play} height={CARD.playHeight} />
-          {i === shown - 1 && count > shown && (
+      {Array.from({ length: shown }, (_unused, i) => {
+        const step = i - middle;
+        const x0 = rowLeft + i * stride;
+        // How far this card may come onto the board, which depends on what is
+        // cut into the rim under it. Over the leader's plinth the cards tuck
+        // away to almost nothing; out at the ends of the fan, where the rim is
+        // bare, they come further forward. That difference is what stops the
+        // row reading as one shape.
+        const drop = Math.round(HAND.far.floorFor(x0, step * tilt) - reach);
+
+        return (
+          <div
+            key={i}
+            style={{
+              position: "relative",
+              marginLeft: i === 0 ? 0 : -overlap,
+              width: CARD.play,
+              height: CARD.playHeight,
+              transform: `translateY(${drop}px) rotate(${step * tilt}deg)`,
+              // The held end, off the top of the stage: the end that stays put
+              // while the rest of the fan opens out.
+              transformOrigin: "50% 0%",
+              zIndex: i,
+              // Lit from the lamp like everything else, so the shadow falls
+              // down and to the right and lands on the card next door. It is
+              // what separates one back from the next.
+              filter: `drop-shadow(2px 5px 6px ${theme.shadow})`,
+            }}
+          >
+            <CardBack width={CARD.play} height={CARD.playHeight} />
+
+            {/*
+              What the board's lamp does to the one edge of their card you can
+              see. Most of the strip that shows sits over the dark beyond the
+              board's far edge, and a near black card back on a near black room
+              is the dark strip this arrangement is trying to stop being — so
+              the lamp is allowed to catch the bottom edge and the last third
+              above it. Three lines rather than one: the lit edge itself, the
+              wash above it, and the board's own dark under it, which is what
+              separates one card from the card behind it.
+            */}
             <span
               style={{
                 position: "absolute",
-                left: "50%",
-                // Halfway down the strip of the card that actually shows, since
-                // the board crops these to their band. Centring it on the card
-                // would put it under the rail.
-                top: HAND.farHeight / 2,
-                transform: "translate(-50%, -50%)",
-                padding: `${SPACE.xs}px ${SPACE.sm}px`,
-                borderRadius: RADIUS.pill,
-                background: COLOR.abyss,
-                border: `1px solid ${COLOR.cable}`,
-                color: COLOR.foam,
-                ...text("data"),
+                inset: 0,
+                borderRadius: RADIUS.lg,
+                background: `linear-gradient(0deg, ${theme.lamp}2E, transparent 32%)`,
+                boxShadow: `inset 0 -2px 0 ${theme.frame.light}, inset 0 -7px 6px -4px ${theme.lamp}55`,
+                pointerEvents: "none",
               }}
-            >
-              {count}
-            </span>
-          )}
-        </div>
-      ))}
+            />
+
+            {i === shown - 1 && count > shown && (
+              <span
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  // Just above the card's own bottom edge, since that is the
+                  // part of it there is to see.
+                  bottom: 14,
+                  transform: "translateX(-50%)",
+                  padding: `${SPACE.xs}px ${SPACE.sm}px`,
+                  borderRadius: RADIUS.pill,
+                  background: COLOR.abyss,
+                  border: `1px solid ${COLOR.cable}`,
+                  color: COLOR.foam,
+                  ...text("data"),
+                }}
+              >
+                {count}
+              </span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
