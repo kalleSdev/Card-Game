@@ -1,15 +1,17 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { PlayerId } from "@cg/contracts";
 import type { BattleCard, BattleIntent, BattleState } from "@cg/battle";
 import {
-  ARENA_CARDS, ARENA_GAPS, BAND, BANNER, ENERGY_PIPS, FELT, LEADER, RIGHT, STAGE,
-  cardHeight, useStageScale,
+  BAND, ENERGY, FELT, FIELD, HAND_RAIL, RAIL, STAGE, useStageFit,
 } from "../../design/arenaStage";
-import { ARENA_THEME_LIST, useArenaTheme, type ArenaTheme } from "../../design/arenaThemes";
-import { RADIUS, text } from "../../design/tokens";
-import PrintCard from "../../components/PrintCard";
-import CardBack from "../../components/CardBack";
-import { cardFace } from "../../data/pool";
+import { ARENA_THEME_LIST, useArenaTheme, type ArenaTheme, type ArenaThemeId } from "../../design/arenaThemes";
+import { text } from "../../design/tokens";
+import Chrome from "./arena/Chrome";
+import LeaderNiche from "./arena/LeaderNiche";
+import EnergyRail from "./arena/EnergyRail";
+import BoardRow from "./arena/BoardRow";
+import RightRail from "./arena/RightRail";
+import { EnemyHand, Hand } from "./arena/Hands";
 
 /**
  * The arena: the board Draft and Deck are both played on.
@@ -17,25 +19,27 @@ import { cardFace } from "../../data/pool";
  * One painted object, drawn at a fixed size and scaled to the screen, so the
  * two halves are the same size as each other on every monitor and neither
  * player is given the bigger end of the table. Both sides carry the same
- * furniture in the same places — a hand along the outer edge, a wing band with
- * the leader standing in the middle of it, and half the surface — and the only
+ * furniture in the same places — a hand along the outer edge, a leader standing
+ * in a window in the middle of its banner, half the surface — and the only
  * thing that tells them apart is the colour behind the leader.
  *
- * It holds no rules. Whatever is driving the match hands it a state and takes
- * back intents, which is what lets the same board draw a game running in this
- * browser and a game the server is running for two people.
+ * This file holds no rules and paints nothing. It places the pieces on the
+ * stage and turns clicks into intents, which is what lets the same board draw a
+ * game running in this browser and a game the server is running for two people.
  *
- * The furniture, and why each piece is where it is:
+ * Where each piece lives, and why:
  *
- *   hand rail      Along the outer edge, closest to the player it belongs to.
- *                  Theirs is face down: it only has to be countable.
- *   wing band      The leader in the middle where both players look, the dial
- *                  beside it, and the energy on the outside corner.
- *   surface        The contested middle, split by a seam. Cards are laid from
- *                  the centre outwards so a board with two on it still reads as
- *                  a pair rather than as two cards stranded at one end.
- *   right rail     The decks, and the one button that ends a turn.
- *   left rail      Everything that is not the game.
+ *   Chrome        The board itself. Painted once, behind everything, and never
+ *                 clicked, so nothing else has to think about how it looks.
+ *   hands         Along the outer edges, nearest the player they belong to.
+ *                 Yours is read; theirs is only counted, so it is face down.
+ *   leader niche  In the middle of its banner, where both players look. The
+ *                 leader's numbers are set into the board under it rather than
+ *                 printed on the picture, because a leader is a thing being
+ *                 worn down rather than a card you read.
+ *   board rows    The contested middle, split by the seam.
+ *   right rail    The two decks and the one button that ends a turn.
+ *   left rail     Everything that is not the game.
  */
 
 export function Arena({
@@ -57,7 +61,8 @@ export function Arena({
   children?: ReactNode;
 }) {
   const [theme, setTheme] = useArenaTheme();
-  const scale = useStageScale();
+  const { ref: fit, scale } = useStageFit();
+  const tilt = useTilt();
   const [held, setHeld] = useState<string | null>(null);
   useEffect(() => { setHeld(null); }, [state.activePlayer]);
 
@@ -106,17 +111,26 @@ export function Arena({
     return () => window.removeEventListener("keydown", onKey);
   }, [onLeave, onIntent, held, state.pendingAttackerId, state.activePlayer]);
 
+  const half = FELT.height / 2;
+
   const headingFor = (pid: PlayerId) =>
-    local ? seatName(pid) : pid === you ? "You" : opponentName ?? "Opponent";
+    local ? seatName(pid) : pid === you ? "Your hand" : opponentName ?? "Opponent";
 
   return (
     <div
+      ref={fit}
       style={{
         position: "fixed",
         inset: 0,
         zIndex: 200,
         overflow: "hidden",
-        background: `radial-gradient(120% 90% at 50% 40%, #14161B 0%, #08090C 70%)`,
+        // The board is an object on a table, so there is a table under it:
+        // boards lit from above, grain running across, and the light falling
+        // off towards the corners.
+        background: `
+          radial-gradient(60% 45% at 50% 42%, rgba(255,255,255,0.05), transparent 70%),
+          repeating-linear-gradient(92deg, rgba(255,255,255,0.014) 0 2px, transparent 2px 46px),
+          radial-gradient(130% 100% at 50% 42%, ${theme.table} 0%, #05070A 82%)`,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -126,98 +140,95 @@ export function Arena({
         style={{
           width: STAGE.width,
           height: STAGE.height,
-          transform: `scale(${scale})`,
+          // The stage is a fixed object that gets scaled, never squeezed: as a
+          // flex child it would otherwise shrink to the window and every
+          // measurement on the board would be off by whatever that took.
+          flex: "none",
+          transform: `perspective(2400px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale(${scale})`,
           transformOrigin: "center",
+          transition: "transform 220ms cubic-bezier(0.2,0,0.2,1)",
           position: "relative",
+          // A hand hangs off the bottom edge of the board, the way it does on a
+          // table. The stage crops it rather than letting it run off the screen.
+          overflow: "hidden",
           borderRadius: 34,
-          background: theme.frame.face,
-          boxShadow: `
-            0 40px 90px ${theme.frame.shadow},
-            inset 0 2px 0 ${theme.frame.inlay},
-            inset 0 -3px 0 rgba(0,0,0,0.28)`,
-          border: `2px solid ${theme.frame.edge}`,
+          filter: `drop-shadow(0 30px 60px ${theme.shadow})`,
         }}
       >
-        {/* The dark bezel the panels are set into */}
+        <Chrome theme={theme} />
+
+        {/* Their hand, hanging from the top rail. Cropped, because a back has
+            nothing on it worth the room a whole card would take. */}
         <div
           style={{
             position: "absolute",
-            inset: STAGE.frame - 4,
-            borderRadius: 26,
-            background: "transparent",
-            border: "3px solid rgba(10,12,16,0.82)",
-            pointerEvents: "none",
-            zIndex: 20,
+            left: FIELD.left,
+            top: BAND.enemyHand.top,
+            width: FIELD.width,
+            height: BAND.enemyHand.height,
+            overflow: "hidden",
+            display: "flex",
+            justifyContent: "center",
+            zIndex: 6,
           }}
-        />
-
-        {/* Their hand, face down along the top edge */}
-        <HandRail
-          theme={theme}
-          band={BAND.enemyHand}
-          facing="down"
-          label={headingFor(top)}
-          count={state.players[top].hand.length}
         >
           <EnemyHand count={state.players[top].hand.length} />
-        </HandRail>
+        </div>
 
-        <WingBand
+        <LeaderNiche
           theme={theme}
-          band={BAND.enemyWing}
           side={top === you ? "you" : "them"}
           facing="down"
-          heading={headingFor(top)}
-          player={state.players[top]}
-          active={!state.winner && actor === top}
+          card={state.players[top].leader}
           attackable={Boolean(attacking) && top !== acting}
-          onLeader={top === acting ? undefined : onTheirLeader}
+          active={!state.winner && actor === top}
+          onClick={top === acting ? undefined : onTheirLeader}
         />
-
-        {/* The surface, one piece with a seam across the middle */}
-        <Felt theme={theme} />
 
         <BoardRow
           theme={theme}
-          band={BAND.enemyFelt}
+          band={{ top: FELT.top, height: half }}
           align="top"
           player={state.players[top]}
           attackable={Boolean(attacking) && top !== acting}
-          selected={top === acting ? attacking : null}
+          selected={top === acting ? attacking ?? null : null}
           onCard={top === acting ? onMine : onTheirs}
           onSlot={held && top === acting && yourTurn ? onSlot : undefined}
         />
 
         <BoardRow
           theme={theme}
-          band={BAND.yourFelt}
+          band={{ top: FELT.top + half, height: half }}
           align="bottom"
           player={state.players[bottom]}
           attackable={Boolean(attacking) && bottom !== acting}
-          selected={bottom === acting ? attacking : null}
+          selected={bottom === acting ? attacking ?? null : null}
           onCard={bottom === acting ? onMine : onTheirs}
           onSlot={held && bottom === acting && yourTurn ? onSlot : undefined}
         />
 
-        <WingBand
+        <LeaderNiche
           theme={theme}
-          band={BAND.yourWing}
           side={bottom === you ? "you" : "them"}
           facing="up"
-          heading={headingFor(bottom)}
-          player={state.players[bottom]}
-          active={!state.winner && actor === bottom}
+          card={state.players[bottom].leader}
           attackable={Boolean(attacking) && bottom !== acting}
-          onLeader={bottom === acting ? undefined : onTheirLeader}
+          active={!state.winner && actor === bottom}
+          onClick={bottom === acting ? undefined : onTheirLeader}
         />
 
-        <HandRail
-          theme={theme}
-          band={BAND.yourHand}
-          facing="up"
-          label={local ? `${seatName(acting)} · hand` : "Your hand"}
-          count={mine.hand.length}
-          note={held ? "Pick a slot to put it in" : note ?? "Click a card to pick it up"}
+        {/* Your hand, sitting over the bottom rail and cropped by the board's
+            edge. Pointing at a card brings it up far enough to read. */}
+        <div
+          style={{
+            position: "absolute",
+            left: FIELD.left,
+            top: BAND.yourHand.top,
+            width: FIELD.width,
+            display: "flex",
+            justifyContent: "center",
+            zIndex: 14,
+          }}
         >
           <Hand
             theme={theme}
@@ -227,19 +238,32 @@ export function Arena({
             live={yourTurn}
             onHold={id => setHeld(held === id ? null : id)}
           />
-        </HandRail>
+        </div>
 
-        {/* Everything that is not the game, down the left */}
-        <LeftRail
-          theme={theme}
-          title={title}
-          badge={badge}
-          turn={state.turn}
-          onTheme={setTheme}
-          onLeave={onLeave}
-        />
+        {/* Who is sitting at each end. The rail is the only place a name
+            belongs: everywhere else on this board is the game itself. */}
+        <RailName theme={theme} y={HAND_RAIL.topY} name={headingFor(top)} />
+        <RailName theme={theme} y={HAND_RAIL.bottomY} name={headingFor(bottom)} />
 
-        {/* The decks and the button, down the right */}
+        {/* Energy, on the rail each player's hand sits against */}
+        <RailSlot theme={theme} y={HAND_RAIL.topY}>
+          <EnergyRail
+            theme={theme}
+            have={state.players[top].energy}
+            max={state.players[top].maxEnergy}
+            label="Energy"
+          />
+        </RailSlot>
+
+        <RailSlot theme={theme} y={HAND_RAIL.bottomY}>
+          <EnergyRail
+            theme={theme}
+            have={state.players[bottom].energy}
+            max={state.players[bottom].maxEnergy}
+            label="Energy"
+          />
+        </RailSlot>
+
         <RightRail
           theme={theme}
           topDeck={state.players[top].deck.length}
@@ -250,709 +274,136 @@ export function Arena({
           onCancel={() => play({ type: "CANCEL_ATTACK", pid: acting })}
         />
 
-        {/* The turn, said once, across the seam where both players look */}
-        <TurnFlag theme={theme} state={state} yourTurn={yourTurn} local={local} note={note} />
+        <LeftRail
+          theme={theme}
+          title={title}
+          badge={badge}
+          turn={state.turn}
+          line={turnLine(state, yourTurn, local)}
+          note={note}
+          onTheme={setTheme}
+          onLeave={onLeave}
+        />
       </div>
 
       {children}
     </div>
   );
+}
+
+/**
+ * A degree or so of tilt towards the cursor.
+ *
+ * It is small enough that nobody should notice it happening, which is the
+ * point: a board that answers the cursor reads as an object on a table rather
+ * than a picture of one. Anything larger than this starts to make cards harder
+ * to click, and the board is not a toy.
+ */
+function useTilt(): { x: number; y: number } {
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const fromCentreX = e.clientX / window.innerWidth - 0.5;
+      const fromCentreY = e.clientY / window.innerHeight - 0.5;
+      setTilt({ x: -fromCentreY * 2.2, y: fromCentreX * 2.2 });
+    };
+    window.addEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, []);
+
+  return tilt;
 }
 
 export function seatName(pid: PlayerId): string {
   return pid === "P1" ? "Player one" : "Player two";
 }
 
-// ── The furniture ────────────────────────────────────────────────────────────
-
-/** Where the playing area starts and stops, between the two rails. */
-const FIELD_LEFT = STAGE.frame + STAGE.leftRail;
-const FIELD_RIGHT = STAGE.width - STAGE.frame - STAGE.rightRail;
-const FIELD_WIDTH = FIELD_RIGHT - FIELD_LEFT;
-
-type Band = { top: number; height: number };
-
-function bandStyle(band: Band): CSSProperties {
-  return {
-    position: "absolute",
-    left: FIELD_LEFT,
-    top: band.top,
-    width: FIELD_WIDTH,
-    height: band.height,
-  };
+/** What the board says about whose turn it is, in as few words as possible. */
+function turnLine(state: BattleState, yourTurn: boolean, local: boolean): string {
+  if (state.winner) return "Finished";
+  if (local) return `${seatName(state.activePlayer)} to play`;
+  return yourTurn ? "Your turn" : "They are thinking";
 }
 
-/**
- * A hand, along the outer edge. Yours reads; theirs only counts, so it is face
- * down and smaller — the space is better spent on the cards you can play.
- */
-function HandRail({ theme, band, facing, label, count, note, children }: {
-  theme: ArenaTheme;
-  band: Band;
-  facing: "up" | "down";
-  label: string;
-  count: number;
-  note?: string;
-  children: ReactNode;
-}) {
-  const outer = facing === "down" ? "top" : "bottom";
-  return (
-    <div style={{ ...bandStyle(band) }}>
-      {/* The rail the cards sit against, running the width of the frame */}
-      <div
-        style={{
-          position: "absolute",
-          left: -STAGE.leftRail + 22,
-          right: -STAGE.rightRail + 22,
-          [outer]: STAGE.frame + 4,
-          height: 22,
-          borderRadius: 12,
-          background: theme.wing,
-          border: `1px solid ${theme.wingEdge}`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 18px",
-        } as CSSProperties}
-      >
-        <span style={{ ...text("label"), fontSize: 8, color: theme.ink }}>{label}</span>
-        <span style={{ ...text("label"), fontSize: 8, color: theme.inkSoft }}>
-          {note ?? `${count} in hand`}
-        </span>
-      </div>
-
-      {/* The cards themselves, sitting on the rail */}
-      <div
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          [facing === "down" ? "top" : "bottom"]: facing === "down" ? STAGE.frame + 2 : 20,
-          display: "flex",
-          justifyContent: "center",
-          alignItems: facing === "down" ? "flex-start" : "flex-end",
-          zIndex: 12,
-        } as CSSProperties}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
-
-/** Their hand: backs only, laid so the count is obvious at a glance. */
-function EnemyHand({ count }: { count: number }) {
-  const width = ARENA_CARDS.enemyHand;
-  const height = cardHeight(width);
-  return (
-    <div style={{ display: "flex" }}>
-      {Array.from({ length: Math.min(count, 10) }, (_, i) => (
-        <div key={i} style={{ marginLeft: i === 0 ? 0 : ARENA_GAPS.enemyHand }}>
-          <CardBack width={width} height={height} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** Your hand: the cards you read, lifted clear of the rail when picked up. */
-function Hand({ theme, cards, energy, held, live, onHold }: {
-  theme: ArenaTheme;
-  cards: BattleCard[];
-  energy: number;
-  held: string | null;
-  live: boolean;
-  onHold: (id: string) => void;
-}) {
-  const width = ARENA_CARDS.hand;
-
-  if (cards.length === 0) {
-    return (
-      <span style={{ ...text("small"), fontSize: 12, color: theme.inkSoft, marginTop: 30 }}>
-        Nothing in hand.
-      </span>
-    );
-  }
-
-  return (
-    <div style={{ display: "flex", alignItems: "flex-end" }}>
-      {cards.map((card, i) => {
-        const affordable = card.cost <= energy;
-        const playable = live && affordable;
-        const up = held === card.instanceId;
-        return (
-          <div
-            key={card.instanceId}
-            onClick={playable ? () => onHold(card.instanceId) : undefined}
-            style={{
-              position: "relative",
-              marginLeft: i === 0 ? 0 : ARENA_GAPS.hand,
-              zIndex: up ? 30 : 10 + i,
-              cursor: playable ? "pointer" : "default",
-              opacity: affordable ? 1 : 0.5,
-              transform: up ? "translateY(-26px)" : "none",
-              transition: "transform 160ms cubic-bezier(0.2,0,0.2,1)",
-              filter: up ? `drop-shadow(0 10px 18px rgba(0,0,0,0.5))` : "none",
-            }}
-            onMouseEnter={e => {
-              if (!up) e.currentTarget.style.transform = "translateY(-14px)";
-            }}
-            onMouseLeave={e => {
-              if (!up) e.currentTarget.style.transform = "none";
-            }}
-          >
-            <PrintCard
-              card={cardFace(card.defId)}
-              print="base"
-              width={width}
-              interactive={false}
-              stats={false}
-            />
-            <Vitals card={card} />
-            <Cost theme={theme} value={card.cost} affordable={affordable} />
-            {up && <Held theme={theme} />}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/**
- * A wing band: two panels, a leader standing between them on its banner, the
- * ability dial beside it and the energy out on the corner.
- */
-function WingBand({ theme, band, side, facing, heading, player, active, attackable, onLeader }: {
-  theme: ArenaTheme;
-  band: Band;
-  /** Which banner this side flies. */
-  side: "you" | "them";
-  facing: "up" | "down";
-  heading: string;
-  player: BattleState["players"][PlayerId];
-  active: boolean;
-  attackable: boolean;
-  onLeader?: () => void;
-}) {
-  const wingWidth = (FIELD_WIDTH - BANNER.width) / 2 - 8;
-
-  return (
-    <div style={{ ...bandStyle(band) }}>
-      {/* The two panels */}
-      <Wing theme={theme} width={wingWidth} facing={facing} side="left" active={active}>
-        <span style={{ ...text("label"), fontSize: 9, color: active ? theme.ink : theme.inkSoft }}>
-          {heading}
-        </span>
-        <span style={{ ...text("data"), fontSize: 11, color: theme.inkSoft }}>
-          {player.hand.length} in hand · {player.deck.length} in deck
-        </span>
-      </Wing>
-
-      <Wing theme={theme} width={wingWidth} facing={facing} side="right" active={active}>
-        <span style={{ ...text("label"), fontSize: 8, color: theme.inkSoft }}>Energy points</span>
-        <EnergyRail theme={theme} have={player.energy} of={player.maxEnergy} />
-      </Wing>
-
-      {/* The banner, and the leader standing on it */}
-      <div
-        style={{
-          position: "absolute",
-          left: (FIELD_WIDTH - BANNER.width) / 2,
-          [facing === "down" ? "top" : "bottom"]: 0,
-          width: BANNER.width,
-          height: BANNER.height,
-          background: theme.banner[side],
-          borderRadius: facing === "down" ? "0 0 26px 26px" : "26px 26px 0 0",
-          borderTop: facing === "up" ? `2px solid ${theme.bannerEdge[side]}` : "none",
-          borderBottom: facing === "down" ? `2px solid ${theme.bannerEdge[side]}` : "none",
-          boxShadow: "inset 0 0 40px rgba(0,0,0,0.35)",
-        } as CSSProperties}
-      />
-
-      <LeaderArch
-        theme={theme}
-        side={side}
-        facing={facing}
-        card={player.leader}
-        attackable={attackable}
-        onClick={onLeader}
-      />
-
-      <AbilityDial theme={theme} facing={facing} player={player} />
-    </div>
-  );
-}
-
-function Wing({ theme, width, facing, side, active, children }: {
-  theme: ArenaTheme;
-  width: number;
-  facing: "up" | "down";
-  side: "left" | "right";
-  active: boolean;
-  children: ReactNode;
-}) {
-  const outer = facing === "down" ? "top" : "bottom";
+/** The left hand end of a hand rail, which is where the name goes. */
+function RailName({ theme, y, name }: { theme: ArenaTheme; y: number; name: string }) {
   return (
     <div
       style={{
         position: "absolute",
-        [side]: 0,
-        [outer]: 6,
-        width,
-        height: BAND.enemyWing.height - 52,
-        background: theme.wing,
-        border: `1px solid ${active ? theme.accent : theme.wingEdge}`,
-        borderRadius: side === "left"
-          ? (facing === "down" ? "18px 46px 46px 18px" : "18px 46px 46px 18px")
-          : (facing === "down" ? "46px 18px 18px 46px" : "46px 18px 18px 46px"),
+        left: FIELD.left - HAND_RAIL.bleed + ENERGY.gap * 3,
+        top: y,
+        height: HAND_RAIL.height,
         display: "flex",
-        flexDirection: "column",
-        alignItems: side === "left" ? "flex-start" : "flex-end",
-        justifyContent: "center",
-        gap: 8,
-        padding: `0 ${side === "left" ? 28 : 22}px`,
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -2px 6px rgba(0,0,0,0.16)",
-      } as CSSProperties}
+        alignItems: "center",
+        ...text("label"),
+        fontSize: 9,
+        color: theme.ink,
+        zIndex: 16,
+        pointerEvents: "none",
+      }}
+    >
+      {name}
+    </div>
+  );
+}
+
+/** The right hand end of a hand rail, which is where energy is kept. */
+function RailSlot({ theme, y, children }: { theme: ArenaTheme; y: number; children: ReactNode }) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        right: STAGE.width - FIELD.right + HAND_RAIL.bleed - ENERGY.gap * 2,
+        top: y,
+        height: HAND_RAIL.height,
+        display: "flex",
+        alignItems: "center",
+        color: theme.ink,
+        zIndex: 16,
+      }}
     >
       {children}
     </div>
   );
 }
 
-/** The leader, standing in an arch that hangs over the surface. */
-function LeaderArch({ theme, side, facing, card, attackable, onClick }: {
-  theme: ArenaTheme;
-  side: "you" | "them";
-  facing: "up" | "down";
-  card: BattleCard;
-  attackable: boolean;
-  onClick?: () => void;
-}) {
-  const arch = facing === "down"
-    ? { borderRadius: "0 0 60px 60px" }
-    : { borderRadius: "60px 60px 0 0" };
-
-  const band = BAND.enemyWing.height;
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        position: "absolute",
-        left: FIELD_WIDTH / 2 - LEADER.archWidth / 2 - 40,
-        [facing === "down" ? "top" : "bottom"]: LEADER.inset,
-        width: LEADER.archWidth,
-        height: band - LEADER.inset + LEADER.overlap,
-        ...arch,
-        background: theme.frame.face,
-        border: `2px solid ${theme.frame.edge}`,
-        boxShadow: `0 6px 18px rgba(0,0,0,0.34), inset 0 0 0 3px ${theme.bannerEdge[side]}`,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        cursor: attackable && onClick ? "crosshair" : "default",
-        zIndex: 6,
-      } as CSSProperties}
-    >
-      <div style={{ position: "relative", marginTop: facing === "down" ? -LEADER.overlap : 0, marginBottom: facing === "up" ? -LEADER.overlap : 0 }}>
-        <PrintCard
-          card={cardFace(card.defId)}
-          print="base"
-          width={ARENA_CARDS.leader}
-          interactive={false}
-          stats={false}
-        />
-        <Vitals card={card} />
-        {attackable && onClick && <Target />}
-      </div>
-    </div>
-  );
-}
-
 /**
- * The dial beside a leader. It shows how close that leader is to being able to
- * do something, which on this ruleset is nothing yet — so it reads as a dial
- * with nothing in it rather than as a button that does not work.
+ * The strip down the left: which game this is, whose turn it is, which table
+ * you are playing on, and the way out. None of it is the game, which is why it
+ * is all in one place away from the middle.
  */
-function AbilityDial({ theme, facing, player }: {
-  theme: ArenaTheme;
-  facing: "up" | "down";
-  player: BattleState["players"][PlayerId];
-}) {
-  const filled = Math.max(0, Math.min(1, player.domainMeter / 100));
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: FIELD_WIDTH / 2 + LEADER.archWidth / 2 - 26,
-        [facing === "down" ? "top" : "bottom"]: 18,
-        width: LEADER.dial,
-        height: LEADER.dial,
-        borderRadius: "50%",
-        background: `conic-gradient(${theme.gem} ${filled * 360}deg, ${theme.gemDim} 0deg)`,
-        border: `3px solid ${theme.frame.edge}`,
-        boxShadow: `0 6px 16px rgba(0,0,0,0.34), inset 0 0 0 6px ${theme.frame.face}`,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 5,
-      } as CSSProperties}
-    >
-      <span
-        style={{
-          width: LEADER.dial - 34,
-          height: LEADER.dial - 34,
-          borderRadius: "50%",
-          background: theme.wing,
-          border: `1px solid ${theme.wingEdge}`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          ...text("label"),
-          fontSize: 8,
-          color: theme.inkSoft,
-        }}
-      >
-        {filled > 0 ? `${Math.round(filled * 100)}%` : "Ability"}
-      </span>
-    </div>
-  );
-}
-
-/** Energy, as gems in a rail. Ten is the cap and ten still reads at a glance. */
-function EnergyRail({ theme, have, of }: { theme: ArenaTheme; have: number; of: number }) {
-  const shown = Math.max(Math.min(of, ENERGY_PIPS), 1);
-  return (
-    <span
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 4,
-        padding: "5px 10px",
-        borderRadius: 999,
-        background: "rgba(0,0,0,0.16)",
-        border: `1px solid ${theme.wingEdge}`,
-      }}
-    >
-      {Array.from({ length: shown }, (_, i) => (
-        <span
-          key={i}
-          style={{
-            width: 11,
-            height: 11,
-            transform: "rotate(45deg)",
-            borderRadius: 2,
-            background: i < have ? theme.gem : theme.gemDim,
-            boxShadow: i < have ? `0 0 6px ${theme.gem}` : "none",
-          }}
-        />
-      ))}
-      <span style={{ ...text("data"), fontSize: 11, color: theme.ink, marginLeft: 4 }}>
-        {have}/{of}
-      </span>
-    </span>
-  );
-}
-
-/** The playing surface: one piece of parchment with a seam across the middle. */
-function Felt({ theme }: { theme: ArenaTheme }) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: FIELD_LEFT - FELT.inset,
-        right: STAGE.width - FIELD_RIGHT - FELT.inset,
-        top: FELT.top,
-        height: FELT.height,
-        background: theme.felt,
-        border: `2px solid ${theme.feltEdge}`,
-        borderRadius: 30,
-        boxShadow: "inset 0 0 60px rgba(0,0,0,0.22)",
-      }}
-    >
-      <span
-        style={{
-          position: "absolute",
-          left: 40,
-          right: 40,
-          top: "50%",
-          height: 1,
-          background: theme.seam,
-        }}
-      />
-    </div>
-  );
-}
-
-/**
- * One side's cards in play. They are laid from the middle outwards, so a board
- * with two cards on it reads as a pair in front of the leader rather than as
- * two cards pushed against one end of the table.
- */
-function BoardRow({ theme, band, align, player, attackable, selected, onCard, onSlot }: {
-  theme: ArenaTheme;
-  band: Band;
-  align: "top" | "bottom";
-  player: BattleState["players"][PlayerId];
-  attackable: boolean;
-  selected: string | null;
-  onCard: (card: BattleCard) => void;
-  onSlot?: (slot: number) => void;
-}) {
-  const width = ARENA_CARDS.slot;
-  const height = cardHeight(width);
-  const slots = player.board.length;
-
-  return (
-    <div
-      style={{
-        ...bandStyle(band),
-        display: "flex",
-        alignItems: align === "top" ? "flex-start" : "flex-end",
-        justifyContent: "center",
-        gap: ARENA_GAPS.slot,
-        padding: `${(band.height - height) / 2}px 0`,
-        minHeight: height,
-        zIndex: 3,
-      }}
-    >
-      {Array.from({ length: slots }, (_, slot) => {
-        const card = player.board[slot];
-        if (!card || card.currentHp <= 0) {
-          // An empty slot is only drawn while something is looking for one.
-          // The rest of the time the cards close up and sit in the middle,
-          // which is how a board with two things on it should read.
-          if (!onSlot) return null;
-          return (
-            <EmptySlot
-              key={slot}
-              theme={theme}
-              width={width}
-              height={height}
-              live
-              onClick={() => onSlot(slot)}
-            />
-          );
-        }
-        return (
-          <BoardCard
-            key={card.instanceId}
-            theme={theme}
-            card={card}
-            width={width}
-            height={height}
-            align={align}
-            selected={selected === card.instanceId}
-            attackable={attackable}
-            onClick={() => onCard(card)}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-function BoardCard({ theme, card, width, height, align, selected, attackable, onClick }: {
-  theme: ArenaTheme;
-  card: BattleCard;
-  width: number;
-  height: number;
-  align: "top" | "bottom";
-  selected: boolean;
-  attackable: boolean;
-  onClick: () => void;
-}) {
-  const spent = card.exhausted || card.stunTurns > 0;
-  const lift = align === "top" ? 8 : -8;
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        width,
-        height,
-        position: "relative",
-        cursor: attackable ? "crosshair" : "pointer",
-        transform: selected ? `translateY(${lift}px)` : "none",
-        transition: "transform 150ms cubic-bezier(0.2,0,0.2,1)",
-        opacity: spent ? 0.62 : 1,
-        filter: "drop-shadow(0 8px 12px rgba(0,0,0,0.34))",
-      }}
-    >
-      <PrintCard
-        card={cardFace(card.defId)}
-        print="base"
-        width={width}
-        interactive={false}
-        stats={false}
-      />
-      <Vitals card={card} />
-      {selected && <Held theme={theme} />}
-      {attackable && <Target />}
-    </div>
-  );
-}
-
-function EmptySlot({ theme, width, height, live, onClick }: {
-  theme: ArenaTheme;
-  width: number;
-  height: number;
-  live: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        width,
-        height,
-        borderRadius: RADIUS.lg,
-        border: `2px ${live ? "solid" : "dashed"} ${live ? theme.accent : theme.feltEdge}`,
-        background: live ? theme.slotLive : theme.slot,
-        cursor: live ? "pointer" : "default",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        ...text("label"),
-        fontSize: 8,
-        color: live ? theme.accentInk : "transparent",
-        transition: "background 140ms ease",
-      }}
-    >
-      {live ? "Place" : ""}
-    </div>
-  );
-}
-
-/** What a card is worth right now, rather than what its print says. */
-function Vitals({ card }: { card: BattleCard }) {
-  return (
-    <span
-      style={{
-        position: "absolute",
-        left: 6,
-        right: 6,
-        bottom: 6,
-        display: "flex",
-        justifyContent: "space-between",
-        ...text("data"),
-        fontSize: 12,
-      }}
-    >
-      <Pill value={card.atk} colour="#E2544A" />
-      <Pill value={card.currentHp} colour={card.currentHp < card.maxHp ? "#E2544A" : "#4FBF7B"} />
-    </span>
-  );
-}
-
-function Pill({ value, colour }: { value: number; colour: string }) {
-  return (
-    <span
-      style={{
-        minWidth: 20,
-        padding: "1px 5px",
-        borderRadius: 3,
-        textAlign: "center",
-        background: "rgba(5,9,15,0.86)",
-        border: `1px solid ${colour}`,
-        color: colour,
-        fontWeight: 600,
-      }}
-    >
-      {value}
-    </span>
-  );
-}
-
-function Cost({ theme, value, affordable }: {
-  theme: ArenaTheme;
-  value: number;
-  affordable: boolean;
-}) {
-  return (
-    <span
-      style={{
-        position: "absolute",
-        top: 6,
-        right: 6,
-        minWidth: 20,
-        padding: "1px 5px",
-        borderRadius: 3,
-        textAlign: "center",
-        ...text("data"),
-        fontSize: 12,
-        fontWeight: 600,
-        background: "rgba(5,9,15,0.86)",
-        border: `1px solid ${affordable ? theme.gem : "rgba(255,255,255,0.2)"}`,
-        color: affordable ? theme.gem : "rgba(255,255,255,0.45)",
-      }}
-    >
-      {value}
-    </span>
-  );
-}
-
-/** The rule beside a card you have picked up. */
-function Held({ theme }: { theme: ArenaTheme }) {
-  return (
-    <span
-      style={{
-        position: "absolute",
-        left: -7,
-        top: "16%",
-        bottom: "16%",
-        width: 3,
-        borderRadius: 2,
-        background: theme.accent,
-        pointerEvents: "none",
-      }}
-    />
-  );
-}
-
-/** A card something is currently able to swing at. */
-function Target() {
-  return (
-    <span
-      style={{
-        position: "absolute",
-        inset: -3,
-        borderRadius: RADIUS.lg,
-        border: "2px solid #E2544A",
-        pointerEvents: "none",
-        opacity: 0.7,
-      }}
-    />
-  );
-}
-
-// ── The rails ────────────────────────────────────────────────────────────────
-
-function LeftRail({ theme, title, badge, turn, onTheme, onLeave }: {
+function LeftRail({ theme, title, badge, turn, line, note, onTheme, onLeave }: {
   theme: ArenaTheme;
   title: string;
   badge: string;
   turn: number;
-  onTheme: (id: ArenaTheme["id"]) => void;
+  line: string;
+  note: string | null;
+  onTheme: (id: ArenaThemeId) => void;
   onLeave: () => void;
 }) {
   return (
     <div
       style={{
         position: "absolute",
-        left: STAGE.frame,
-        top: STAGE.frame,
-        bottom: STAGE.frame,
-        width: STAGE.leftRail,
+        left: 8,
+        top: 300,
+        width: RAIL.left - 16,
+        height: 520,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         gap: 10,
-        padding: "18px 0",
+        padding: "20px 0",
+        zIndex: 16,
       }}
     >
       <span
         style={{
           ...text("title"),
-          fontSize: 20,
+          fontSize: 19,
           lineHeight: 1.05,
           color: theme.ink,
           textAlign: "center",
@@ -960,24 +411,41 @@ function LeftRail({ theme, title, badge, turn, onTheme, onLeave }: {
       >
         {title}
       </span>
+
       <span
         style={{
           ...text("label"),
-          fontSize: 8,
+          fontSize: 7,
           color: theme.ink,
           border: `1px solid ${theme.wingEdge}`,
           borderRadius: 999,
-          padding: "3px 8px",
+          padding: "4px 8px",
+          maxWidth: RAIL.left - 26,
           textAlign: "center",
-          maxWidth: STAGE.leftRail - 12,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
+          lineHeight: 1.35,
         }}
       >
         {badge}
       </span>
+
+      <span style={{ ...text("label"), fontSize: 8, color: theme.ink, textAlign: "center", lineHeight: 1.4 }}>
+        {line}
+      </span>
       <span style={{ ...text("data"), fontSize: 11, color: theme.inkSoft }}>Turn {turn}</span>
+
+      {note && (
+        <span
+          style={{
+            ...text("small"),
+            fontSize: 10,
+            color: theme.inkSoft,
+            textAlign: "center",
+            lineHeight: 1.3,
+          }}
+        >
+          {note}
+        </span>
+      )}
 
       <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
         <span style={{ ...text("label"), fontSize: 7, color: theme.inkSoft }}>Table</span>
@@ -988,15 +456,15 @@ function LeftRail({ theme, title, badge, turn, onTheme, onLeave }: {
               title={`${option.name} — ${option.blurb}`}
               onClick={() => onTheme(option.id)}
               style={{
-                width: 16,
-                height: 16,
+                width: 15,
+                height: 15,
                 borderRadius: "50%",
                 cursor: "pointer",
-                background: option.felt,
+                padding: 0,
+                background: `linear-gradient(150deg, ${option.felt.light}, ${option.felt.dark})`,
                 border: option.id === theme.id
                   ? `2px solid ${theme.ink}`
                   : `1px solid ${theme.wingEdge}`,
-                padding: 0,
               }}
             />
           ))}
@@ -1008,165 +476,17 @@ function LeftRail({ theme, title, badge, turn, onTheme, onLeave }: {
             ...text("label"),
             fontSize: 8,
             color: theme.ink,
-            background: theme.wing,
+            background: `linear-gradient(180deg, ${theme.wing.light}, ${theme.wing.mid})`,
             border: `1px solid ${theme.wingEdge}`,
             borderRadius: 8,
             padding: "7px 10px",
             cursor: "pointer",
-            width: STAGE.leftRail - 26,
+            width: RAIL.left - 34,
           }}
         >
           Leave
         </button>
       </div>
-    </div>
-  );
-}
-
-function RightRail({ theme, topDeck, bottomDeck, yourTurn, attacking, onEndTurn, onCancel }: {
-  theme: ArenaTheme;
-  topDeck: number;
-  bottomDeck: number;
-  yourTurn: boolean;
-  attacking: boolean;
-  onEndTurn: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        right: STAGE.frame,
-        top: STAGE.frame,
-        bottom: STAGE.frame,
-        width: STAGE.rightRail,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 26,
-      }}
-    >
-      <DeckStack theme={theme} count={topDeck} colour={theme.banner.them} />
-
-      <button
-        onClick={attacking ? onCancel : onEndTurn}
-        disabled={!yourTurn}
-        style={{
-          width: RIGHT.buttonWidth,
-          height: RIGHT.buttonHeight,
-          borderRadius: 14,
-          border: `2px solid ${theme.frame.edge}`,
-          background: yourTurn ? theme.accent : theme.wing,
-          color: yourTurn ? theme.accentInk : theme.inkSoft,
-          ...text("label"),
-          fontSize: 11,
-          cursor: yourTurn ? "pointer" : "default",
-          boxShadow: yourTurn ? "0 6px 16px rgba(0,0,0,0.34)" : "none",
-          // It leans in over the surface, which is where the eye already is
-          marginRight: 42,
-        }}
-      >
-        {attacking ? "Cancel" : "End turn"}
-      </button>
-
-      <DeckStack theme={theme} count={bottomDeck} colour={theme.banner.you} />
-    </div>
-  );
-}
-
-/** A deck, leaning out of the right rail with what is left in it. */
-function DeckStack({ theme, count, colour }: {
-  theme: ArenaTheme;
-  count: number;
-  colour: string;
-}) {
-  return (
-    <div style={{ position: "relative", width: RIGHT.deckWidth, height: RIGHT.deckHeight, marginRight: 16 }}>
-      {[6, 3, 0].map(offset => (
-        <span
-          key={offset}
-          style={{
-            position: "absolute",
-            inset: 0,
-            transform: `translate(${offset}px, ${-offset}px)`,
-            borderRadius: 8,
-            background: colour,
-            border: `1px solid ${theme.frame.edge}`,
-            boxShadow: "inset 0 0 12px rgba(0,0,0,0.4)",
-          }}
-        />
-      ))}
-      <span
-        style={{
-          position: "absolute",
-          inset: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          ...text("data"),
-          fontSize: 15,
-          color: "#F4EEE4",
-          textShadow: "0 1px 3px rgba(0,0,0,0.7)",
-          zIndex: 2,
-        }}
-      >
-        {count}
-      </span>
-    </div>
-  );
-}
-
-/** Whose turn it is, said once, on the seam where both players are looking. */
-function TurnFlag({ theme, state, yourTurn, local, note }: {
-  theme: ArenaTheme;
-  state: BattleState;
-  yourTurn: boolean;
-  local: boolean;
-  note: string | null;
-}) {
-  const line = state.winner
-    ? "Finished"
-    : local
-      ? `${seatName(state.activePlayer)} to play`
-      : yourTurn
-        ? "Your turn"
-        : "They are thinking";
-
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: "50%",
-        top: FELT.top + FELT.height / 2,
-        transform: "translate(-50%, -50%)",
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "6px 18px",
-        borderRadius: 999,
-        background: theme.frame.face,
-        border: `2px solid ${theme.frame.edge}`,
-        boxShadow: "0 6px 16px rgba(0,0,0,0.3)",
-        zIndex: 8,
-        maxWidth: FIELD_WIDTH - 200,
-      }}
-    >
-      <span style={{ ...text("label"), fontSize: 9, color: theme.ink }}>{line}</span>
-      {note && (
-        <span
-          style={{
-            ...text("small"),
-            fontSize: 11,
-            color: theme.inkSoft,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {note}
-        </span>
-      )}
     </div>
   );
 }
