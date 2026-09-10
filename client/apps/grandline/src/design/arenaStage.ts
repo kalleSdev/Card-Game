@@ -228,6 +228,31 @@ export const BANNER = {
   height: 104,
 } as const;
 
+/**
+ * How the rim is built up, as distances outward from the well's edge.
+ *
+ * Read from the play surface outwards: a chamfer falling into the well, wood,
+ * a band of brass inlay, then wood again out to the slab's edge. Five surfaces
+ * at four different heights, which is what a rim has to have before it reads
+ * as constructed rather than as a border.
+ */
+export const RIM = {
+  /** The chamfer, from the well's edge outwards. */
+  bevel: 30,
+  /**
+   * The brass inlay: where it starts and where it stops.
+   *
+   * A finger's width. Brass is the accent on this board and nothing else, so
+   * it is the narrowest band on the rim; any wider and it becomes a gold
+   * racetrack drawing the eye off the battlefield it is supposed to frame.
+   */
+  inlayIn: 40,
+  inlayOut: 49,
+  /** The channel cut into the wood further out, for shadow to sit in. */
+  channelIn: 68,
+  channelOut: 80,
+} as const;
+
 /** The corners of the rim, where anything resting on the board stands. */
 export const SHELF = {
   /** How far in from the slab's edge a prop may stand. */

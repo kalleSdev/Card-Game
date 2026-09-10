@@ -131,6 +131,39 @@ export function wellPath(): string {
   );
 }
 
+/**
+ * The well's outline, pushed outwards by `out`.
+ *
+ * The rim is built out of these: a chamfer falling into the well, a band of
+ * brass inlay a little further out, and the wood between them. Offsetting the
+ * well rather than insetting the slab is what keeps every band parallel to the
+ * play area as the board tapers — a band drawn parallel to the outside edge
+ * instead would drift away from the well and the board would look assembled
+ * out of two different objects.
+ */
+export function wellOffsetPath(out: number): string {
+  return roundedPolygon(
+    [
+      { x: WELL.farX0 - out, y: WELL.farY - out },
+      { x: WELL.farX1 + out, y: WELL.farY - out },
+      { x: WELL.nearX1 + out, y: WELL.nearY + out },
+      { x: WELL.nearX0 - out, y: WELL.nearY + out },
+    ],
+    WELL.round + out,
+  );
+}
+
+/**
+ * A ring between two offsets of the well.
+ *
+ * Two subpaths in one path, wound so the inner one cuts a hole in the outer.
+ * That is what makes a band a band rather than two shapes that have to be kept
+ * in step by hand.
+ */
+export function wellBandPath(inner: number, outer: number): string {
+  return `${wellOffsetPath(outer)} ${wellOffsetPath(inner)}`;
+}
+
 /** The playing surface, which sits below the rim and so is a little smaller. */
 export function surfacePath(): string {
   const drop = WELL.depth;

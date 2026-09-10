@@ -1,6 +1,7 @@
 import { HAZE, LIGHT, STAGE, WELL } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import { surfacePath, wellPath } from "./board";
+import Materials, { MATERIAL_MIX, materialFill } from "./materials";
 
 /**
  * The playing surface, set down inside the well.
@@ -14,8 +15,10 @@ import { surfacePath, wellPath } from "./board";
  * ends of the board, and it is the cheapest depth cue there is: it costs one
  * gradient and it does more work than any amount of shading on the rim.
  *
- * The material that belongs on this surface is not painted yet. What is here is
- * the surface lit and shaded correctly, waiting for it.
+ * The parchment is the quietest material on the board on purpose. Cards sit on
+ * this and nothing else does, so the surface has to hold grain without holding
+ * attention. Its tile is larger than the surface itself, which means the one
+ * thing a player stares at all game has no repeat in it anywhere.
  */
 
 const W = STAGE.width;
@@ -36,6 +39,8 @@ export default function Surface({ theme, spread = 0 }: {
       style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}
     >
       <defs>
+        <Materials only={["parchment"]} />
+
         {/* Lit from the lamp's side of the board, not from the middle of it. */}
         <radialGradient
           id="sf-body"
@@ -79,6 +84,15 @@ export default function Surface({ theme, spread = 0 }: {
       </defs>
 
       <path d={surface} fill="url(#sf-body)" />
+
+      {/* The grain, mixed into the tint rather than painted over it. */}
+      <g
+        clipPath="url(#sf-clip)"
+        style={{ mixBlendMode: MATERIAL_MIX.parchment.blend }}
+        opacity={MATERIAL_MIX.parchment.opacity}
+      >
+        <rect x={-spread} y={0} width={W + spread * 2} height={H} fill={materialFill("parchment")} />
+      </g>
 
       <g clipPath="url(#sf-clip)">
         {/* What the rim above it throws onto it. */}
