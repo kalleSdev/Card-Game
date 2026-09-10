@@ -177,6 +177,109 @@ export const BANNER = {
   height: 122,
 } as const;
 
+/**
+ * The stack, from the table up.
+ *
+ * Every layer of the arena is named here once and nowhere else. Before this
+ * existed each component picked its own z-index and the order was whatever the
+ * numbers happened to say: a card in play was painted under the leader window
+ * because one had a 6 and the other had nothing. A board is a physical stack of
+ * things, so the stack is declared in one place and components take their place
+ * in it rather than arguing about it.
+ *
+ * The gaps of ten leave room to slip a layer in without renumbering the rest.
+ */
+export const LAYER = {
+  /** The room the board is standing in. */
+  scene: 0,
+  /** Air between the room and the board: haze, light, distance. */
+  atmosphere: 10,
+  /** The board as an object: its rim, its plinths, its wells. */
+  structure: 20,
+  /** The surface that is played on. */
+  surface: 30,
+  /** Things resting on the board that are not part of the game. */
+  props: 40,
+  /** Leaders, cards, decks, hands: everything the rules know about. */
+  play: 50,
+  /** What the board says about what you can do right now. */
+  highlight: 60,
+  /** Dust, sparks, and whatever a blow throws up. */
+  particles: 70,
+  /** Writing, and the one button. */
+  hud: 80,
+} as const;
+
+export type LayerName = keyof typeof LAYER;
+
+/**
+ * How far each layer stands from the surface, in the board's own units.
+ *
+ * The surface is zero, the room is a long way behind it, and the cards and
+ * their dust stand in front. These are what turn the tilt into depth: with
+ * everything at zero the board leans as one flat sheet, and with the layers
+ * spread out along Z they slide against each other the way a real stack does.
+ */
+export const DEPTH: Record<LayerName, number> = {
+  scene: -420,
+  atmosphere: -260,
+  structure: -40,
+  surface: 0,
+  props: 26,
+  play: 60,
+  highlight: 72,
+  particles: 120,
+  hud: 150,
+};
+
+/** Which layers can be clicked. Everything else lets the cursor through. */
+export const LAYER_TAKES_CLICKS: Record<LayerName, boolean> = {
+  scene: false,
+  atmosphere: false,
+  structure: false,
+  surface: false,
+  props: false,
+  play: true,
+  highlight: false,
+  particles: false,
+  hud: true,
+};
+
+/**
+ * How far the eye is from the board.
+ *
+ * One value, shared by the whole arena, because perspective only reads as
+ * perspective if every layer agrees where the viewer is standing.
+ */
+export const PERSPECTIVE = 2400;
+
+/**
+ * The lean towards the cursor.
+ *
+ * Small on purpose. It is enough that the board answers you and not enough
+ * that anybody has to aim, which is the only budget a board that is also a
+ * control surface can afford.
+ */
+export const TILT = {
+  degrees: 1.1,
+  /** How far the room slides the other way, which is what sells the distance. */
+  sceneDrift: 9,
+  settle: 220,
+} as const;
+
+/**
+ * Where a layer sits, as a transform.
+ *
+ * Standing a layer off the surface makes it bigger or smaller, because that is
+ * what distance does. The scale here undoes exactly that much, so a layer keeps
+ * the footprint its measurements gave it and only its parallax changes. Without
+ * this every layer would have to be measured twice: once for the geometry and
+ * once for wherever the perspective happened to leave it.
+ */
+export function depthTransform(z: number): string {
+  return `translateZ(${z}px) scale(${(PERSPECTIVE - z) / PERSPECTIVE})`;
+}
+
 /** How long the board takes to acknowledge a click, in milliseconds. */
 export const MOTION = {
   card: 170,

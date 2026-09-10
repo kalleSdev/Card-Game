@@ -2,10 +2,12 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { PlayerId } from "@cg/contracts";
 import type { BattleCard, BattleIntent, BattleState } from "@cg/battle";
 import {
-  BAND, ENERGY, FELT, FIELD, HAND_RAIL, RAIL, STAGE, useStageFit,
+  BAND, ENERGY, FELT, FIELD, FRAME, HAND_RAIL, PERSPECTIVE, RAIL, STAGE, TILT, useStageFit,
 } from "../../design/arenaStage";
 import { ARENA_THEME_LIST, useArenaTheme, type ArenaTheme, type ArenaThemeId } from "../../design/arenaThemes";
 import { text } from "../../design/tokens";
+import Layer from "./arena/Layer";
+import Scene from "./arena/Scene";
 import Chrome from "./arena/Chrome";
 import LeaderNiche from "./arena/LeaderNiche";
 import EnergyRail from "./arena/EnergyRail";
@@ -16,30 +18,23 @@ import { EnemyHand, Hand } from "./arena/Hands";
 /**
  * The arena: the board Draft and Deck are both played on.
  *
- * One painted object, drawn at a fixed size and scaled to the screen, so the
- * two halves are the same size as each other on every monitor and neither
- * player is given the bigger end of the table. Both sides carry the same
- * furniture in the same places — a hand along the outer edge, a leader standing
- * in a window in the middle of its banner, half the surface — and the only
- * thing that tells them apart is the colour behind the leader.
+ * The board is a physical object standing in a room. The room fills the window;
+ * the object has fixed proportions and is scaled to fit inside it. Everything
+ * drawn on the object is measured in the object's own units, so the two halves
+ * are identical on every monitor and neither player is given the bigger end of
+ * the table.
  *
- * This file holds no rules and paints nothing. It places the pieces on the
- * stage and turns clicks into intents, which is what lets the same board draw a
- * game running in this browser and a game the server is running for two people.
+ * It is built as a stack of layers rather than a pile of components. The stack
+ * is declared once in arenaStage.ts — room, atmosphere, structure, surface,
+ * props, play, highlights, particles, writing — and each layer stands at its
+ * own height above the surface. That is what makes the board lean rather than
+ * tip: the layers slide against each other, because they are genuinely at
+ * different distances from the eye.
  *
- * Where each piece lives, and why:
- *
- *   Chrome        The board itself. Painted once, behind everything, and never
- *                 clicked, so nothing else has to think about how it looks.
- *   hands         Along the outer edges, nearest the player they belong to.
- *                 Yours is read; theirs is only counted, so it is face down.
- *   leader niche  In the middle of its banner, where both players look. The
- *                 leader's numbers are set into the board under it rather than
- *                 printed on the picture, because a leader is a thing being
- *                 worn down rather than a card you read.
- *   board rows    The contested middle, split by the seam.
- *   right rail    The two decks and the one button that ends a turn.
- *   left rail     Everything that is not the game.
+ * This file holds no rules and paints nothing. It puts the layers in order,
+ * hands each one what it needs, and turns clicks into intents, which is what
+ * lets the same board draw a game running in this browser and a game the server
+ * is running for two people.
  */
 
 export function Arena({
@@ -124,18 +119,18 @@ export function Arena({
         inset: 0,
         zIndex: 200,
         overflow: "hidden",
-        // The board is an object on a table, so there is a table under it:
-        // boards lit from above, grain running across, and the light falling
-        // off towards the corners.
-        background: `
-          radial-gradient(60% 45% at 50% 42%, rgba(255,255,255,0.05), transparent 70%),
-          repeating-linear-gradient(92deg, rgba(255,255,255,0.014) 0 2px, transparent 2px 46px),
-          radial-gradient(130% 100% at 50% 42%, ${theme.table} 0%, #05070A 82%)`,
+        // The eye is here, once, for the whole board. Every layer's depth is
+        // measured against this, which is the only way the perspective can
+        // agree with itself.
+        perspective: PERSPECTIVE,
+        perspectiveOrigin: "50% 50%",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
       }}
     >
+      <Scene theme={theme} tilt={tilt} />
+
       <div
         style={{
           width: STAGE.width,
@@ -144,175 +139,163 @@ export function Arena({
           // flex child it would otherwise shrink to the window and every
           // measurement on the board would be off by whatever that took.
           flex: "none",
-          transform: `perspective(2400px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale(${scale})`,
-          transformOrigin: "center",
-          transition: "transform 220ms cubic-bezier(0.2,0,0.2,1)",
           position: "relative",
-          // A hand hangs off the bottom edge of the board, the way it does on a
-          // table. The stage crops it rather than letting it run off the screen.
-          overflow: "hidden",
-          borderRadius: 34,
-          filter: `drop-shadow(0 30px 60px ${theme.shadow})`,
+          // The layers inside keep their own distance from the eye. Nothing
+          // here may crop or filter, because either one would flatten them all
+          // back into a single sheet.
+          transformStyle: "preserve-3d",
+          transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale(${scale})`,
+          transformOrigin: "center",
+          transition: `transform ${TILT.settle}ms cubic-bezier(0.2,0,0.2,1)`,
         }}
       >
-        <Chrome theme={theme} />
-
-        {/* Their hand, hanging from the top rail. Cropped, because a back has
-            nothing on it worth the room a whole card would take. */}
-        <div
-          style={{
-            position: "absolute",
-            left: FIELD.left,
-            top: BAND.enemyHand.top,
-            width: FIELD.width,
-            height: BAND.enemyHand.height,
-            overflow: "hidden",
-            display: "flex",
-            justifyContent: "center",
-            zIndex: 6,
-          }}
-        >
-          <EnemyHand count={state.players[top].hand.length} />
-        </div>
-
-        <LeaderNiche
-          theme={theme}
-          side={top === you ? "you" : "them"}
-          facing="down"
-          card={state.players[top].leader}
-          attackable={Boolean(attacking) && top !== acting}
-          active={!state.winner && actor === top}
-          onClick={top === acting ? undefined : onTheirLeader}
-        />
-
-        <BoardRow
-          theme={theme}
-          band={{ top: FELT.top, height: half }}
-          align="top"
-          player={state.players[top]}
-          attackable={Boolean(attacking) && top !== acting}
-          selected={top === acting ? attacking ?? null : null}
-          onCard={top === acting ? onMine : onTheirs}
-          onSlot={held && top === acting && yourTurn ? onSlot : undefined}
-        />
-
-        <BoardRow
-          theme={theme}
-          band={{ top: FELT.top + half, height: half }}
-          align="bottom"
-          player={state.players[bottom]}
-          attackable={Boolean(attacking) && bottom !== acting}
-          selected={bottom === acting ? attacking ?? null : null}
-          onCard={bottom === acting ? onMine : onTheirs}
-          onSlot={held && bottom === acting && yourTurn ? onSlot : undefined}
-        />
-
-        <LeaderNiche
-          theme={theme}
-          side={bottom === you ? "you" : "them"}
-          facing="up"
-          card={state.players[bottom].leader}
-          attackable={Boolean(attacking) && bottom !== acting}
-          active={!state.winner && actor === bottom}
-          onClick={bottom === acting ? undefined : onTheirLeader}
-        />
-
-        {/* Your hand, sitting over the bottom rail and cropped by the board's
-            edge. Pointing at a card brings it up far enough to read. */}
-        <div
-          style={{
-            position: "absolute",
-            left: FIELD.left,
-            top: BAND.yourHand.top,
-            width: FIELD.width,
-            display: "flex",
-            justifyContent: "center",
-            zIndex: 14,
-          }}
-        >
-          <Hand
-            theme={theme}
-            cards={mine.hand}
-            energy={mine.energy}
-            held={held}
-            live={yourTurn}
-            onHold={id => setHeld(held === id ? null : id)}
+        {/* The board as an object, and what it throws onto the room behind it */}
+        <Layer name="structure">
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              borderRadius: FRAME.radius,
+              boxShadow: `0 30px 60px ${theme.shadow}`,
+            }}
           />
-        </div>
+          <Chrome theme={theme} />
+        </Layer>
 
-        {/* Who is sitting at each end. The rail is the only place a name
-            belongs: everywhere else on this board is the game itself. */}
-        <RailName theme={theme} y={HAND_RAIL.topY} name={headingFor(top)} />
-        <RailName theme={theme} y={HAND_RAIL.bottomY} name={headingFor(bottom)} />
+        {/* Everything the rules know about. Cropped at the board's edge, which
+            is what lets a hand hang off it the way it does on a table. */}
+        <Layer name="play" crop>
+          {/* Their hand, hanging from the top rail. Cropped again, because a
+              back has nothing on it worth the room a whole card would take. */}
+          <div
+            style={{
+              position: "absolute",
+              left: FIELD.left,
+              top: BAND.enemyHand.top,
+              width: FIELD.width,
+              height: BAND.enemyHand.height,
+              overflow: "hidden",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
+            <EnemyHand count={state.players[top].hand.length} />
+          </div>
 
-        {/* Energy, on the rail each player's hand sits against */}
-        <RailSlot theme={theme} y={HAND_RAIL.topY}>
-          <EnergyRail
+          <LeaderNiche
             theme={theme}
-            have={state.players[top].energy}
-            max={state.players[top].maxEnergy}
-            label="Energy"
+            side={top === you ? "you" : "them"}
+            facing="down"
+            card={state.players[top].leader}
+            attackable={Boolean(attacking) && top !== acting}
+            active={!state.winner && actor === top}
+            onClick={top === acting ? undefined : onTheirLeader}
           />
-        </RailSlot>
 
-        <RailSlot theme={theme} y={HAND_RAIL.bottomY}>
-          <EnergyRail
+          <BoardRow
             theme={theme}
-            have={state.players[bottom].energy}
-            max={state.players[bottom].maxEnergy}
-            label="Energy"
+            band={{ top: FELT.top, height: half }}
+            align="top"
+            player={state.players[top]}
+            attackable={Boolean(attacking) && top !== acting}
+            selected={top === acting ? attacking ?? null : null}
+            onCard={top === acting ? onMine : onTheirs}
+            onSlot={held && top === acting && yourTurn ? onSlot : undefined}
           />
-        </RailSlot>
 
-        <RightRail
-          theme={theme}
-          topDeck={state.players[top].deck.length}
-          bottomDeck={state.players[bottom].deck.length}
-          yourTurn={yourTurn}
-          attacking={Boolean(attacking)}
-          onEndTurn={() => play({ type: "END_TURN", pid: acting })}
-          onCancel={() => play({ type: "CANCEL_ATTACK", pid: acting })}
-        />
+          <BoardRow
+            theme={theme}
+            band={{ top: FELT.top + half, height: half }}
+            align="bottom"
+            player={state.players[bottom]}
+            attackable={Boolean(attacking) && bottom !== acting}
+            selected={bottom === acting ? attacking ?? null : null}
+            onCard={bottom === acting ? onMine : onTheirs}
+            onSlot={held && bottom === acting && yourTurn ? onSlot : undefined}
+          />
 
-        <LeftRail
-          theme={theme}
-          title={title}
-          badge={badge}
-          turn={state.turn}
-          line={turnLine(state, yourTurn, local)}
-          note={note}
-          onTheme={setTheme}
-          onLeave={onLeave}
-        />
+          <LeaderNiche
+            theme={theme}
+            side={bottom === you ? "you" : "them"}
+            facing="up"
+            card={state.players[bottom].leader}
+            attackable={Boolean(attacking) && bottom !== acting}
+            active={!state.winner && actor === bottom}
+            onClick={bottom === acting ? undefined : onTheirLeader}
+          />
+
+          {/* Your hand, sitting over the bottom rail. Pointing at a card brings
+              it up far enough to read. */}
+          <div
+            style={{
+              position: "absolute",
+              left: FIELD.left,
+              top: BAND.yourHand.top,
+              width: FIELD.width,
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
+            <Hand
+              theme={theme}
+              cards={mine.hand}
+              energy={mine.energy}
+              held={held}
+              live={yourTurn}
+              onHold={id => setHeld(held === id ? null : id)}
+            />
+          </div>
+        </Layer>
+
+        {/* Writing, the decks, and the one button */}
+        <Layer name="hud">
+          <RailName theme={theme} y={HAND_RAIL.topY} name={headingFor(top)} />
+          <RailName theme={theme} y={HAND_RAIL.bottomY} name={headingFor(bottom)} />
+
+          <RailSlot theme={theme} y={HAND_RAIL.topY}>
+            <EnergyRail
+              theme={theme}
+              have={state.players[top].energy}
+              max={state.players[top].maxEnergy}
+              label="Energy"
+            />
+          </RailSlot>
+
+          <RailSlot theme={theme} y={HAND_RAIL.bottomY}>
+            <EnergyRail
+              theme={theme}
+              have={state.players[bottom].energy}
+              max={state.players[bottom].maxEnergy}
+              label="Energy"
+            />
+          </RailSlot>
+
+          <RightRail
+            theme={theme}
+            topDeck={state.players[top].deck.length}
+            bottomDeck={state.players[bottom].deck.length}
+            yourTurn={yourTurn}
+            attacking={Boolean(attacking)}
+            onEndTurn={() => play({ type: "END_TURN", pid: acting })}
+            onCancel={() => play({ type: "CANCEL_ATTACK", pid: acting })}
+          />
+
+          <LeftRail
+            theme={theme}
+            title={title}
+            badge={badge}
+            turn={state.turn}
+            line={turnLine(state, yourTurn, local)}
+            note={note}
+            onTheme={setTheme}
+            onLeave={onLeave}
+          />
+        </Layer>
       </div>
 
       {children}
     </div>
   );
-}
-
-/**
- * A degree or so of tilt towards the cursor.
- *
- * It is small enough that nobody should notice it happening, which is the
- * point: a board that answers the cursor reads as an object on a table rather
- * than a picture of one. Anything larger than this starts to make cards harder
- * to click, and the board is not a toy.
- */
-function useTilt(): { x: number; y: number } {
-  const [tilt, setTilt] = useState({ x: 0, y: 0 });
-
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      const fromCentreX = e.clientX / window.innerWidth - 0.5;
-      const fromCentreY = e.clientY / window.innerHeight - 0.5;
-      setTilt({ x: -fromCentreY * 2.2, y: fromCentreX * 2.2 });
-    };
-    window.addEventListener("mousemove", onMove);
-    return () => window.removeEventListener("mousemove", onMove);
-  }, []);
-
-  return tilt;
 }
 
 export function seatName(pid: PlayerId): string {
@@ -324,6 +307,34 @@ function turnLine(state: BattleState, yourTurn: boolean, local: boolean): string
   if (state.winner) return "Finished";
   if (local) return `${seatName(state.activePlayer)} to play`;
   return yourTurn ? "Your turn" : "They are thinking";
+}
+
+/**
+ * A degree or so of lean towards the cursor.
+ *
+ * It is small enough that nobody should notice it happening, which is the
+ * point: a board that answers the cursor reads as an object on a table rather
+ * than a picture of one. Anything larger starts to make cards harder to click,
+ * and the board is a control surface before it is a toy.
+ *
+ * Somebody who has asked their system not to animate things gets a board that
+ * sits still.
+ */
+function useTilt(): { x: number; y: number } {
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const onMove = (e: MouseEvent) => {
+      const fromCentreX = e.clientX / window.innerWidth - 0.5;
+      const fromCentreY = e.clientY / window.innerHeight - 0.5;
+      setTilt({ x: -fromCentreY * TILT.degrees * 2, y: fromCentreX * TILT.degrees * 2 });
+    };
+    window.addEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, []);
+
+  return tilt;
 }
 
 /** The left hand end of a hand rail, which is where the name goes. */
@@ -340,7 +351,6 @@ function RailName({ theme, y, name }: { theme: ArenaTheme; y: number; name: stri
         ...text("label"),
         fontSize: 9,
         color: theme.ink,
-        zIndex: 16,
         pointerEvents: "none",
       }}
     >
@@ -361,7 +371,6 @@ function RailSlot({ theme, y, children }: { theme: ArenaTheme; y: number; childr
         display: "flex",
         alignItems: "center",
         color: theme.ink,
-        zIndex: 16,
       }}
     >
       {children}
@@ -397,7 +406,6 @@ function LeftRail({ theme, title, badge, turn, line, note, onTheme, onLeave }: {
         alignItems: "center",
         gap: 10,
         padding: "20px 0",
-        zIndex: 16,
       }}
     >
       <span

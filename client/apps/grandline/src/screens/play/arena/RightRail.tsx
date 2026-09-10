@@ -33,7 +33,6 @@ export default function RightRail({
         top: 0,
         width: RAIL.right,
         height: STAGE.height,
-        zIndex: 15,
         pointerEvents: "none",
       }}
     >

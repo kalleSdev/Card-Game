@@ -141,7 +141,6 @@ export default function LeaderNiche({ theme, side, facing, card, attackable, act
         height: LEADER_WINDOW.height,
         // In front of the banner it is set into, and its stat plates hang over
         // the playing surface
-        zIndex: 6,
       }}
     >
       {/*
