@@ -331,37 +331,61 @@ export function EnergyReadout({ theme, have }: {
         border: `1px solid ${theme.gold.mid}`,
         boxShadow: `inset 0 2px 3px ${theme.shadow}, 0 1px 0 ${theme.frame.light}44`,
         display: "flex",
-        alignItems: "baseline",
+        alignItems: "center",
         justifyContent: "center",
       }}
     >
-      {/* No word on the plate. One would have to be drawn at seven units to fit
-          the channel, which is four pixels on a small screen and therefore not
-          a label at all — and a number in a channel full of energy stones does
-          not need telling what it counts. */}
+      {/*
+        No word on the plate. One would have to be drawn at seven units to fit
+        the channel, which is four pixels on a small screen and therefore not a
+        label at all — and a number in a channel full of energy stones does not
+        need telling what it counts. What the plate holds instead is a number as
+        large as it will take.
+
+        Two boxes rather than one: the pair sit on a shared baseline, which is
+        the only way two sizes of digit read as one number, and the group is
+        then centred in the plate as a block. Aligning the two against the plate
+        itself would either pin them to its top edge, which is what a
+        baseline-aligned flex line does, or put the slash on a different line
+        from the digits.
+      */}
       <span
         style={{
-          ...text("data"),
-          fontSize: 19,
-          lineHeight: 1,
-          // Empty is still a number a player reads, so it goes pale rather
-          // than dim: the board's own light paint, not its shadow.
-          color: spent ? theme.frame.light : theme.gem.light,
-          transition: `color ${MOTION.glow}ms ease-out`,
+          display: "flex",
+          alignItems: "baseline",
+          // Digits carry no descender, so their ink sits high in the box the
+          // font reserves for them. A unit down centres what you can see
+          // rather than what the font asked for.
+          transform: "translateY(1px)",
         }}
       >
-        {value}
-      </span>
-      <span
-        style={{
-          ...text("data"),
-          fontSize: 12,
-          lineHeight: 1,
-          color: theme.frame.light,
-          opacity: 0.55,
-        }}
-      >
-        {`/${ENERGY.sockets}`}
+        <span
+          style={{
+            ...text("data"),
+            fontSize: 24,
+            lineHeight: 1,
+            // Empty is still a number a player reads, so it goes pale rather
+            // than dim: the board's own light paint, not its shadow.
+            color: spent ? theme.frame.light : theme.gem.light,
+            transition: `color ${MOTION.glow}ms ease-out`,
+          }}
+        >
+          {value}
+        </span>
+        <span
+          style={{
+            ...text("data"),
+            fontSize: 14,
+            lineHeight: 1,
+            // A hair of air, so the cap reads as a denominator and not as a
+            // third digit. Any more and ten out of ten stops fitting the plate.
+            marginLeft: 3,
+            color: theme.frame.light,
+            opacity: 0.55,
+          }}
+        >
+          {`/${ENERGY.sockets}`}
+        </span>
       </span>
     </div>
   );
