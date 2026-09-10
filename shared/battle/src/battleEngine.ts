@@ -307,6 +307,14 @@ export const CARD_PERKS: Record<string, { icon: string; name: string; desc: stri
 // Player state within a battle
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The most energy a player can ever have in a turn.
+ *
+ * One a turn is earned until this, and it is the number the board cuts sockets
+ * for, so it lives here rather than in two places that have to agree.
+ */
+export const ENERGY_CAP = 10;
+
 export interface BattlePlayer {
   pid: PlayerId;
   leader: BattleCard;          // always on board; when leader.currentHp ≤ 0 → game over
@@ -314,7 +322,7 @@ export interface BattlePlayer {
   hand: BattleCard[];
   deck: BattleCard[];           // draw pile
   energy: number;
-  maxEnergy: number;            // grows by 1 per turn, capped at 10
+  maxEnergy: number;            // grows by 1 per turn, capped at ENERGY_CAP
   domainMeter: number;          // 0–100; fills as you play cards and take damage
   domainActive: boolean;        // true during domain effect's active turns
   domainCooldown: number;       // turns until domain can be activated again (4 turns after use)
@@ -1257,7 +1265,7 @@ function processTurnStart(state: BattleState): { state: BattleState; drew: strin
   let p = { ...state.players[pid] };
 
   // Energy
-  const newMax = Math.min(p.maxEnergy + 1, 10);
+  const newMax = Math.min(p.maxEnergy + 1, ENERGY_CAP);
   p = { ...p, maxEnergy: newMax, energy: newMax };
 
   // Cost reduction decay

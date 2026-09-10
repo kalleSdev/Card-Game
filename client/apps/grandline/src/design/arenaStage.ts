@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
+import { ENERGY_CAP } from "@cg/battle";
 
 /**
  * The arena, measured once.
@@ -232,8 +233,9 @@ export function cardOuter(side: Side): number {
  * each other about the middle line as well as about the seam, and they sit on
  * the rim where nothing is ever laid on top of them.
  *
- * The dial is out past the attack plate on the left, which is the quiet side of
- * the rim: the right hand side of every rim already carries the energy row.
+ * The ability dial and the energy channel are not part of this: they are the
+ * rest of the same station, and they live in `station()` because they are cut
+ * into the rim rather than measured off the window.
  */
 export const LEADER = {
   window: { width: 188, height: 212 },
@@ -243,8 +245,6 @@ export const LEADER = {
   inset: 16,
   /** One of the two plates beside the window, and the gap it keeps from it. */
   stat: { width: 76, height: 34, gap: 12 },
-  /** The dial: how big it is, and how far its centre is from the window's. */
-  ability: { size: 112, offset: 258 },
 } as const;
 
 export interface LeaderSeat {
@@ -321,23 +321,116 @@ export const HAND = {
   lift: 16,
   get nearTop() { return BOARD.nearY - this.lift; },
   get farTop() { return BOARD.farY - 28; },
-  get farHeight() { return 100; },
+  /**
+   * How much of a card back shows: down to where the far station begins.
+   *
+   * The two run into each other otherwise. A hand of five or more reaches
+   * across the whole width of the board, so it would cover the top of the
+   * socket the ability dial is seated in, and a hole with cards lying over its
+   * rim stops reading as a hole. The hand stops at the socket's outer edge
+   * instead of at a number, so it cannot creep back over it if either moves.
+   */
+  get farHeight() {
+    const socket = station("far").ability;
+    return socket.cy - socket.radius - this.farTop;
+  },
 } as const;
 
 /**
- * Energy, carved into the rim in front of each player.
+ * Energy, seated in a channel carved into the rim in front of each player.
  *
- * One more socket fills each round, left to right, and a spent one goes dark in
- * place. Ten are cut from the start so the row never changes length.
+ * One more stone fills each round, left to right, and a spent one goes dark in
+ * place. Every socket is cut from the first turn, so the row never changes
+ * length — and there are exactly as many as the rules allow, which is why the
+ * count comes from the engine rather than from a number written down twice.
  */
 export const ENERGY = {
-  sockets: 10,
-  size: 26,
-  gap: 8,
+  sockets: ENERGY_CAP,
+  size: 24,
+  gap: 7,
   get width() { return this.sockets * this.size + (this.sockets - 1) * this.gap; },
-  /** Where the row starts, measured from the middle of the board. */
-  offsetX: 200,
 } as const;
+
+/**
+ * The player's station: the fittings the board is cut to hold.
+ *
+ * A leader, a dial, a row of stones and a number are four different things, and
+ * until now three of them were placed by their own constants and only met on
+ * the rim by luck. They are one construction: a plinth in the middle of the
+ * rim, a socket cut to the left of it for the dial, and a channel cut to the
+ * right of it holding the energy readout and the stones.
+ *
+ * The two bays either side of the plinth are the same width, because the slab
+ * is symmetrical about the board's middle and both are measured from the slab's
+ * edge inwards. So the dial keeps exactly the clearance from the plinth that
+ * the channel does, and neither is a number anybody chose.
+ *
+ * Nothing here takes FAR_SCALE. These are holes in the board, not objects
+ * standing on it: their perspective is the slab's own taper, and a hole drawn
+ * 2.5% small would simply not line up with the hole it is supposed to be.
+ */
+export const STATION = {
+  /** Clear rim left outside the outermost fitting, at the narrower end. */
+  margin: 18,
+  /** The energy channel: how deep across the rim, and how it is cut. */
+  channel: { height: 64, round: 14, pad: 12, gap: 14 },
+  /**
+   * The plate the number is on, set into the channel's floor.
+   *
+   * The same fitting as the two plates beside a leader — same height, same
+   * corner — because it is the same thing: a number set into the board.
+   */
+  readout: { width: 80, height: 34, round: 7 },
+  /** The dial that sits in the socket, and the recess left around it. */
+  dial: 112,
+  ring: 12,
+} as const;
+
+export interface Station {
+  /** The depth this station lines up on: its own leader's middle. */
+  line: number;
+  /** The channel cut into the rim, which everything about energy sits in. */
+  channel: { x: number; y: number; width: number; height: number };
+  /** The plate inside it that carries the number. */
+  readout: { x: number; y: number; width: number; height: number };
+  /** The row of stone sockets inside it. */
+  gems: { x: number; y: number; width: number; height: number };
+  /** The socket cut for the dial, and the dial that sits in it. */
+  ability: { cx: number; cy: number; radius: number; dial: number };
+}
+
+/** A box given for the far side, reflected whole for the near one. */
+function seatBox(side: Side, x: number, top: number, width: number, height: number) {
+  return { x, y: side === "far" ? top : mirrorY(top + height), width, height };
+}
+
+export function station(side: Side): Station {
+  // Measured at the far line, which is the narrower end of the slab, so a
+  // channel that fits there fits at the other end too — and both ends get the
+  // same box rather than one each.
+  const farLine = leaderSeat("far").line;
+  const { channel, readout } = STATION;
+  const plinthLeft = CENTRE.x - PLINTH.width / 2;
+  const plinthRight = CENTRE.x + PLINTH.width / 2;
+
+  const width = channel.pad * 2 + readout.width + channel.gap + ENERGY.width;
+  const right = slabEdges(farLine).x1 - STATION.margin;
+  const left = right - width;
+  /** The clear rim between the plinth and the channel, whatever that came to. */
+  const bay = left - plinthRight;
+
+  const line = side === "far" ? farLine : mirrorY(farLine);
+  const radius = STATION.dial / 2 + STATION.ring;
+
+  return {
+    line,
+    channel: seatBox(side, left, farLine - channel.height / 2, width, channel.height),
+    readout: seatBox(side, left + channel.pad, farLine - readout.height / 2, readout.width, readout.height),
+    gems: seatBox(side, right - channel.pad - ENERGY.width, farLine - ENERGY.size / 2, ENERGY.width, ENERGY.size),
+    // The dial's socket takes the same clearance from the plinth on its side.
+    ability: { cx: plinthLeft - bay - radius, cy: line, radius, dial: STATION.dial },
+  };
+}
 
 /** The deck sockets and the button, cut into the right hand rim. */
 export const RIGHT = {

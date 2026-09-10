@@ -1,9 +1,10 @@
-import { ENERGY, MOTION } from "../../../design/arenaStage";
+import { ENERGY, MOTION, STATION } from "../../../design/arenaStage";
 import { MOTION as APP_MOTION, text } from "../../../design/tokens";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 
 /**
- * Energy, as a row of diamonds along a hand rail.
+ * Energy: a row of stones seated in the channel the board is cut with, and the
+ * plate beside them that says the number.
  *
  * All ten sockets are cut into the rail from the first turn, so the row is the
  * same length in the opening turn as it is in the last one and a player learns
@@ -16,6 +17,10 @@ import type { ArenaTheme } from "../../../design/arenaThemes";
  * here is a cut stone, with a lit crown, a mid girdle and a bottom in shadow.
  * Those are real shapes, and a CSS rotation could only give them one flat
  * colour between them.
+ *
+ * Neither piece places itself. The board's own geometry says where the channel
+ * is and where inside it these two sit, so a station's parts cannot drift apart
+ * from the hole they are supposed to be in.
  */
 
 /** Two decimals is more than enough at this size, and keeps the paths short. */
@@ -63,10 +68,6 @@ const FACET_R = GEM_R * 0.68;
  * caller still lines this up against ENERGY.width.
  */
 const PAD = ENERGY.gap * 2;
-
-/** The word and the row are further apart than two sockets are, so it reads as
- *  a label on the row rather than the first thing in it. */
-const LABEL_GAP = ENERGY.gap * 2;
 
 /**
  * How much larger the newest stone draws while it is still the newest. Small on
@@ -181,35 +182,36 @@ export default function EnergyRail({
   theme,
   have,
   max,
-  label,
 }: {
   theme: ArenaTheme;
   /** How much is left to spend this turn. */
   have: number;
   /** How many the player has earned so far, which grows by one a round. */
   max: number;
-  label?: string;
 }): JSX.Element {
   // The rail is ten sockets long and cannot grow, so anything past ten is
   // dropped here rather than drawn off the end of the board.
-  const earned = Math.max(0, Math.min(ENERGY.sockets, Math.round(max)));
-  const lit = Math.max(0, Math.min(earned, Math.round(have)));
+  //
+  // A player can hold more than they have earned — the opening hand comes with
+  // a spare — so the row counts out whichever is larger. Otherwise the stones
+  // would say one and the number beside them in the same channel would say two,
+  // and the channel would be arguing with itself.
+  const spendable = Math.round(have);
+  const earned = Math.max(0, Math.min(ENERGY.sockets, Math.max(Math.round(max), spendable)));
+  const lit = Math.max(0, Math.min(earned, spendable));
 
   const width = ENERGY.width + PAD * 2;
   const height = ENERGY.size + PAD * 2;
 
   return (
-    <div style={{ display: "inline-flex", alignItems: "center", gap: LABEL_GAP }}>
+    <>
       <style>{CSS}</style>
 
-      {label ? (
-        <span style={{ ...text("label"), color: theme.inkSoft, whiteSpace: "nowrap" }}>{label}</span>
-      ) : null}
-
       {/*
-        The row's box is exactly the row. The drawing is bigger, and hangs out of
-        the box by PAD on every side, so a glow can spill without the box it is
-        measured by growing to make space for it.
+        The row's box is exactly the row, and the board has a hole exactly that
+        size waiting for it. The drawing is bigger, and hangs out of the box by
+        PAD on every side, so a glow can spill without the box it is measured by
+        growing to make space for it.
       */}
       <div style={{ position: "relative", width: ENERGY.width, height: ENERGY.size }}>
         <svg
@@ -295,6 +297,72 @@ export default function EnergyRail({
           })}
         </svg>
       </div>
+    </>
+  );
+}
+
+/**
+ * The number, on a plate set into the same channel as the stones.
+ *
+ * The stones say how much energy there is at a glance and how much of it has
+ * gone; they are bad at the one question a player asks while working out
+ * whether a card is affordable, which is exactly how many. So the channel
+ * carries both, and the plate is the same fitting as the two under a leader:
+ * dark, brass rimmed, and sunk with the shadow falling from its top inside
+ * edge, because it is below the floor it is set into.
+ *
+ * The denominator is the rules' own cap, taken from the engine. Nothing here
+ * decides how much energy a player may have.
+ */
+export function EnergyReadout({ theme, have }: {
+  theme: ArenaTheme;
+  have: number;
+}): JSX.Element {
+  const value = Math.max(0, Math.min(ENERGY.sockets, Math.round(have)));
+  const spent = value === 0;
+
+  return (
+    <div
+      style={{
+        width: STATION.readout.width,
+        height: STATION.readout.height,
+        borderRadius: STATION.readout.round,
+        background: theme.bezel,
+        border: `1px solid ${theme.gold.mid}`,
+        boxShadow: `inset 0 2px 3px ${theme.shadow}, 0 1px 0 ${theme.frame.light}44`,
+        display: "flex",
+        alignItems: "baseline",
+        justifyContent: "center",
+      }}
+    >
+      {/* No word on the plate. One would have to be drawn at seven units to fit
+          the channel, which is four pixels on a small screen and therefore not
+          a label at all — and a number in a channel full of energy stones does
+          not need telling what it counts. */}
+      <span
+        style={{
+          ...text("data"),
+          fontSize: 19,
+          lineHeight: 1,
+          // Empty is still a number a player reads, so it goes pale rather
+          // than dim: the board's own light paint, not its shadow.
+          color: spent ? theme.frame.light : theme.gem.light,
+          transition: `color ${MOTION.glow}ms ease-out`,
+        }}
+      >
+        {value}
+      </span>
+      <span
+        style={{
+          ...text("data"),
+          fontSize: 12,
+          lineHeight: 1,
+          color: theme.frame.light,
+          opacity: 0.55,
+        }}
+      >
+        {`/${ENERGY.sockets}`}
+      </span>
     </div>
   );
 }

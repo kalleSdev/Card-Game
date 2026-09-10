@@ -1,13 +1,13 @@
 import type { CSSProperties } from "react";
 import type { BattleCard } from "@cg/battle";
-import { LEADER, MOTION, leaderSeat, type Side } from "../../../design/arenaStage";
+import { LEADER, MOTION, STATION, leaderSeat, station, type Side } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import { COLOR, RADIUS, TEXT, text } from "../../../design/tokens";
 import { artUrl, cardShortName } from "../../../data/pool";
 
 /**
  * The niche a leader stands in: an arched window cut into the board, brass
- * around it, a number either side of it and a dial out past them.
+ * around it and a number either side of it.
  *
  * A leader is not a card. It is never picked up, never laid down and never put
  * back in a deck, so it is not drawn as one: its picture is set into an opening
@@ -56,7 +56,6 @@ const DIAL_RING = TRIM * 2;
 /** The seat's own geometry, which both ends of the board are cut from. */
 const WINDOW = LEADER.window;
 const STAT = LEADER.stat;
-const DIAL = LEADER.ability;
 
 /**
  * The niche's outline, offset in or out, as one piece of geometry.
@@ -248,8 +247,6 @@ export default function LeaderNiche({ theme, side, end, card, attackable, active
           zero: a box that vanishes is a board that moves */}
       <StatPlate theme={theme} value={card.atk} top={seat.statTop} at="left" />
       <StatPlate theme={theme} value={card.currentHp} hurt={hurt} top={seat.statTop} at="right" />
-
-      <AbilityDial theme={theme} />
     </div>
   );
 }
@@ -307,22 +304,24 @@ function StatPlate({ theme, value, top, at, hurt = false }: {
 // ── The dial ─────────────────────────────────────────────────────────────────
 
 /**
- * The dial beside the leader: a brass ring with a well in it.
+ * The dial: a brass ring with a well in it, dropped into the socket the board
+ * is cut with on the quiet side of the rim.
  *
- * It stands out past the attack plate on the left, which is the quiet side of
- * the rim: the right of every rim already carries a row of energy. Its offset is
- * from the window's centre, so it is in the same spot at both ends of the board
- * however the rest of the rim is filled.
+ * It is placed from the station rather than from the leader, because it is a
+ * fitting in the board and not a part of the window. That is also why it takes
+ * no FAR_SCALE: it has to land in a hole that was drawn full size.
  */
-function AbilityDial({ theme }: { theme: ArenaTheme }): JSX.Element {
+export function AbilityDial({ theme, end }: { theme: ArenaTheme; end: Side }): JSX.Element {
+  const socket = station(end).ability;
+
   return (
     <div
       style={{
         position: "absolute",
-        left: WINDOW.width / 2 - DIAL.offset - DIAL.size / 2,
-        top: (WINDOW.height - DIAL.size) / 2,
-        width: DIAL.size,
-        height: DIAL.size,
+        left: socket.cx - socket.dial / 2,
+        top: socket.cy - socket.dial / 2,
+        width: socket.dial,
+        height: socket.dial,
         borderRadius: "50%",
         backgroundImage: `linear-gradient(180deg, ${theme.gold.light} 0%, ${theme.gold.mid} 40%, ${theme.gold.dark} 100%)`,
         // The lit top edge is a hairline of the brass ramp's own light, so the
@@ -335,8 +334,8 @@ function AbilityDial({ theme }: { theme: ArenaTheme }): JSX.Element {
     >
       <div
         style={{
-          width: DIAL.size - DIAL_RING * 2,
-          height: DIAL.size - DIAL_RING * 2,
+          width: STATION.dial - DIAL_RING * 2,
+          height: STATION.dial - DIAL_RING * 2,
           borderRadius: "50%",
           border: `1px solid ${theme.gold.dark}`,
           // The empty glass is laid over an opaque dark, so the brass behind it

@@ -1,9 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { PlayerId } from "@cg/contracts";
-import type { BattleCard, BattleIntent, BattleState } from "@cg/battle";
+import type { BattleCard, BattleIntent, BattlePlayer, BattleState } from "@cg/battle";
 import {
-  BOARD, CENTRE, ENERGY, FAR_SCALE, HAND, HAZE, PERSPECTIVE, STAGE, TILT, WELL,
-  cardBand, leaderSeat, slabEdges, useStageFit, wellEdges,
+  BOARD, CENTRE, FAR_SCALE, HAND, HAZE, PERSPECTIVE, STAGE, TILT, WELL,
+  cardBand, leaderSeat, slabEdges, station, useStageFit, wellEdges, type Side,
 } from "../../design/arenaStage";
 import { ARENA_THEME_LIST, useArenaTheme, type ArenaTheme, type ArenaThemeId } from "../../design/arenaThemes";
 import { text } from "../../design/tokens";
@@ -11,8 +11,8 @@ import Layer from "./arena/Layer";
 import Scene from "./arena/Scene";
 import Structure from "./arena/Structure";
 import Surface from "./arena/Surface";
-import LeaderNiche from "./arena/LeaderNiche";
-import EnergyRail from "./arena/EnergyRail";
+import LeaderNiche, { AbilityDial } from "./arena/LeaderNiche";
+import EnergyRail, { EnergyReadout } from "./arena/EnergyRail";
 import BoardRow from "./arena/BoardRow";
 import RightRail from "./arena/RightRail";
 import { EnemyHand, Hand } from "./arena/Hands";
@@ -233,6 +233,12 @@ export function Arena({
             onClick={bottom === acting ? undefined : onTheirLeader}
           />
 
+          {/* The two dials, in the sockets the board is cut with. Outside the
+              Far wrapper on purpose: a fitting in a hole has to be the size of
+              the hole, whichever end of the board it is at. */}
+          <AbilityDial theme={theme} end="far" />
+          <AbilityDial theme={theme} end="near" />
+
           {/* Your hand, sitting over the bottom rail. Pointing at a card brings
               it up far enough to read. */}
           <div
@@ -277,23 +283,8 @@ export function Arena({
           <RimName theme={theme} y={FAR_RIM_Y} name={headingFor(top)} far />
           <RimName theme={theme} y={NEAR_RIM_Y} name={headingFor(bottom)} />
 
-          <RimSlot y={FAR_RIM_Y} far>
-            <EnergyRail
-              theme={theme}
-              have={state.players[top].energy}
-              max={state.players[top].maxEnergy}
-              label="Energy"
-            />
-          </RimSlot>
-
-          <RimSlot y={NEAR_RIM_Y}>
-            <EnergyRail
-              theme={theme}
-              have={state.players[bottom].energy}
-              max={state.players[bottom].maxEnergy}
-              label="Energy"
-            />
-          </RimSlot>
+          <Channel end="far" player={state.players[top]} theme={theme} />
+          <Channel end="near" player={state.players[bottom]} theme={theme} />
 
           <RightRail
             theme={theme}
@@ -426,27 +417,30 @@ function RimName({ theme, y, name, far = false }: {
   );
 }
 
-/** The stretch of rim to the right of a plinth, which is where energy sits. */
-function RimSlot({ y, far = false, children }: {
-  y: number;
-  far?: boolean;
-  children: ReactNode;
+/**
+ * What goes in one station's energy channel: the number, then the stones.
+ *
+ * Both are placed by the station's own geometry rather than laid out against
+ * each other, so each lands in the part of the hole the board cut for it. No
+ * FAR_SCALE either — the channel at the far end is the same hole as the one at
+ * the near end, so what sits in it is the same size.
+ */
+function Channel({ theme, end, player }: {
+  theme: ArenaTheme;
+  end: Side;
+  player: BattlePlayer;
 }) {
-  const scale = far ? FAR_SCALE : 1;
+  const seat = station(end);
+
   return (
-    <div
-      style={{
-        position: "absolute",
-        left: STAGE.width / 2 + ENERGY.offsetX * scale,
-        top: y,
-        transform: `translateY(-50%) scale(${scale})`,
-        transformOrigin: "left center",
-        display: "flex",
-        alignItems: "center",
-      }}
-    >
-      {children}
-    </div>
+    <>
+      <div style={{ position: "absolute", left: seat.readout.x, top: seat.readout.y }}>
+        <EnergyReadout theme={theme} have={player.energy} />
+      </div>
+      <div style={{ position: "absolute", left: seat.gems.x, top: seat.gems.y }}>
+        <EnergyRail theme={theme} have={player.energy} max={player.maxEnergy} />
+      </div>
+    </>
   );
 }
 

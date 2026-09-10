@@ -1,5 +1,5 @@
 import {
-  BOARD, LIGHT, PLINTH, RIM, STAGE, WELL, slabEdges,
+  BOARD, LIGHT, PLINTH, RIM, STAGE, STATION, WELL, slabEdges, station, type Side,
 } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import {
@@ -15,6 +15,13 @@ import Materials, { MATERIAL_MIX, materialFill, type MaterialName } from "./mate
  * bands, a stone block at each end holding a leader, and sockets cut into the
  * right hand rim for the decks and the button. Nothing here knows about the
  * game; it is the thing the game is played on.
+ *
+ * Each end of the rim is also a player's station, and the board is cut for it:
+ * a plinth for the leader, a round socket to its left for the ability dial, and
+ * a channel to its right holding the energy readout and its ten stones. Those
+ * are holes in the wood drawn here, not panels drawn by the things that sit in
+ * them, which is the whole difference between a control the board was built for
+ * and a control laid on top of it.
  *
  * Read the rim from the play surface outwards and it is five surfaces at four
  * heights: a chamfer falling into the well, wood, a band of brass inlay, a
@@ -232,6 +239,10 @@ export default function Structure({ theme, spread = 0 }: {
       </g>
       <path d={well} fill="none" stroke={theme.frameEdge} strokeWidth={2} />
 
+      {/* The scribed line goes on before anything is cut through it, because a
+          line that ran across a hole would say the hole was painted on. */}
+      <RimGroove theme={theme} spread={spread} />
+
       {/* ── Sockets cut into the right hand rim ──────────────────────────── */}
       {decks.map((socket, i) => (
         <Socket key={`deck${i}`} theme={theme} {...socket} r={12} />
@@ -254,7 +265,10 @@ export default function Structure({ theme, spread = 0 }: {
       <path d={farPlinth} fill="none" stroke={theme.wing.light} strokeWidth={1.5} opacity={LIT * 0.6} transform="translate(0 2)" />
       <path d={nearPlinth} fill="none" stroke={theme.wing.light} strokeWidth={1.5} opacity={LIT * 0.6} transform="translate(0 -2)" />
 
-      <RimGroove theme={theme} spread={spread} />
+      {/* ── The stations: what the board is cut to hold ─────────────────── */}
+      {(["far", "near"] as Side[]).map(side => (
+        <StationRecesses key={side} theme={theme} side={side} />
+      ))}
     </svg>
   );
 }
@@ -278,6 +292,133 @@ function Material({ name, clip, x, width }: {
       <rect x={x} y={0} width={width} height={H} fill={materialFill(name)} />
     </g>
   );
+}
+
+/**
+ * The two holes cut into one end of the rim for that player's controls.
+ *
+ * Both are the same construction as the deck wells: the board's face turns down
+ * into a shadowed wall, the floor is the dark every hole on this board is
+ * floored with, and a brass hairline runs round the opening. The channel is
+ * long and shallow and the socket is round, and that is the only difference
+ * between them.
+ */
+function StationRecesses({ theme, side }: { theme: ArenaTheme; side: Side }) {
+  const seat = station(side);
+  const { channel, ability } = seat;
+
+  return (
+    <g>
+      <Recess
+        theme={theme}
+        x={channel.x}
+        y={channel.y}
+        w={channel.width}
+        h={channel.height}
+        r={STATION.channel.round}
+      />
+      <Recess
+        theme={theme}
+        x={ability.cx - ability.radius}
+        y={ability.cy - ability.radius}
+        w={ability.radius * 2}
+        h={ability.radius * 2}
+        r={ability.radius}
+        round
+      />
+    </g>
+  );
+}
+
+/**
+ * A hole in the rim.
+ *
+ * Five steps, outwards in: the board's face darkening as it turns down towards
+ * the opening, a lit edge on the far side of that turn where the lamp catches
+ * the wood, the floor, the corner between floor and wall which never sees the
+ * lamp at all, and a brass hairline round the lip. A hole is the one place on
+ * this board where the lighting runs backwards — the near wall is the one you
+ * cannot see into, so the light lands on the far one.
+ *
+ * `round` swaps the rounded box for a circle at the same radius, which is the
+ * only difference between the energy channel and the ability socket.
+ */
+function Recess({ theme, x, y, w, h, r, round = false }: {
+  theme: ArenaTheme;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  r: number;
+  round?: boolean;
+}) {
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  /** How far the board's face is drawn back before it turns down. */
+  const OUT = 5;
+
+  const shape = (grow: number, props: Record<string, unknown>) =>
+    round
+      ? <circle cx={cx} cy={cy} r={r + grow} {...props} />
+      : (
+        <rect
+          x={x - grow}
+          y={y - grow}
+          width={w + grow * 2}
+          height={h + grow * 2}
+          rx={r + grow}
+          {...props}
+        />
+      );
+
+  return (
+    <g>
+      {/* The wood around the lip sits a step lower, so it keeps less light. */}
+      {shape(OUT, { fill: theme.shadow, opacity: 0.22 })}
+      {shape(OUT, { fill: "none", stroke: theme.frameEdge, strokeWidth: 1 })}
+      {/* Where that step turns back up into the board's face. */}
+      {shape(OUT, {
+        fill: "none",
+        stroke: theme.frame.light,
+        strokeWidth: 1.5,
+        opacity: LIT * 0.45,
+        transform: "translate(0 1.5)",
+      })}
+
+      {shape(0, { fill: "url(#st-hole)" })}
+      {/* The corner where the wall meets the floor. */}
+      {shape(0, {
+        fill: "none",
+        stroke: theme.shadow,
+        strokeWidth: 9,
+        filter: "url(#st-soft)",
+        opacity: DARK,
+      })}
+      {/* The far wall, which is the one the lamp reaches. Drawn as the top of
+          the opening only, rather than as an offset outline, so no light ends
+          up on the near wall you are looking at the back of. */}
+      <path
+        d={round ? topArc(cx, cy, r - 2) : `M ${x + r} ${y + 2.5} L ${x + w - r} ${y + 2.5}`}
+        fill="none"
+        stroke={theme.frame.light}
+        strokeWidth={EDGE}
+        strokeLinecap="round"
+        opacity={LIT * 0.55}
+      />
+      {shape(0, { fill: "none", stroke: theme.gold.dark, strokeWidth: 1.5, opacity: 0.75 })}
+    </g>
+  );
+}
+
+/**
+ * The lit part of a round opening's wall: the arc across the top of it, from
+ * eight o'clock round to four, which is as much of the far wall as the lamp
+ * reaches before the sides turn away from it.
+ */
+function topArc(cx: number, cy: number, r: number): string {
+  const dx = r * 0.94;
+  const dy = r * 0.342;
+  return `M ${cx - dx} ${cy - dy} A ${r} ${r} 0 0 1 ${cx + dx} ${cy - dy}`;
 }
 
 /** A recess cut into the rim, for a deck or for the button. */
