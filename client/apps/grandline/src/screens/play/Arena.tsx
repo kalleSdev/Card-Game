@@ -1,4 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
+import {
+  useEffect, useLayoutEffect, useRef, useState,
+  type ReactNode, type RefObject,
+} from "react";
 import type { PlayerId } from "@cg/contracts";
 import type { BattleCard, BattleIntent, BattlePlayer, BattleState } from "@cg/battle";
 import {
@@ -60,7 +63,7 @@ export function Arena({
 }) {
   const [theme, setTheme] = useArenaTheme();
   const { ref: fit, frame } = useStageFit();
-  const tilt = useTilt();
+  const { stage, room } = useTilt(frame.scale);
   const [held, setHeld] = useState<string | null>(null);
   useEffect(() => { setHeld(null); }, [state.activePlayer]);
 
@@ -133,9 +136,10 @@ export function Arena({
         justifyContent: "center",
       }}
     >
-      <Scene theme={theme} tilt={tilt} />
+      <Scene theme={theme} nodeRef={room} />
 
       <div
+        ref={stage}
         style={{
           // As wide as the screen, never narrower than the composition. The
           // board fills the extra; the game inside it does not.
@@ -150,9 +154,13 @@ export function Arena({
           // here may crop or filter, because either one would flatten them all
           // back into a single sheet.
           transformStyle: "preserve-3d",
-          transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale(${frame.scale})`,
           transformOrigin: "center",
-          transition: `transform ${TILT.settle}ms cubic-bezier(0.2,0,0.2,1)`,
+          // `transform` is deliberately absent. It carries both the lean and
+          // the fit, it changes with the cursor, and it is written straight to
+          // this node by useTilt's frame loop. Listing it here even once would
+          // hand the property to React, which would then reset it on every
+          // unrelated render — a card picked up, a turn ended — and the board
+          // would snap flat mid-movement.
         }}
       >
         {/* The board as an object: slab, rim, plinths, sockets */}
@@ -333,24 +341,108 @@ function turnLine(state: BattleState, yourTurn: boolean, local: boolean): string
  * than a picture of one. Anything larger starts to make cards harder to click,
  * and the board is a control surface before it is a toy.
  *
+ * None of it goes through React. The cursor rewrites this value as fast as the
+ * screen refreshes, and a value that changes every frame is the one kind of
+ * value that must not be state: it used to re-render the whole arena sixty
+ * times a second, and worse, it restarted a two hundred millisecond transform
+ * transition on the stage every time, so the entire three dimensional stack —
+ * the board, its filtered surfaces, every card — was being recomposited
+ * continuously and never actually arrived anywhere.
+ *
+ * So the mouse writes a target, one frame loop closes the gap towards it, and
+ * the loop writes the two transforms itself. The easing that used to be the
+ * CSS transition's job is the loop's: a fifth of the remaining distance each
+ * frame, which arrives in a handful of frames and cannot be restarted because
+ * there is nothing to restart. When the board has arrived the loop stops, so an
+ * arena nobody is touching costs nothing at all.
+ *
+ * Both nodes are written on the same frame on purpose. The room drifts against
+ * the board's lean, and if the two moved on different frames they would
+ * disagree about where the viewer is standing, which is the one thing the
+ * whole arrangement exists to say.
+ *
  * Somebody who has asked their system not to animate things gets a board that
- * sits still.
+ * sits still — but still gets the fit applied, since that is not animation.
  */
-function useTilt(): { x: number; y: number } {
-  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+function useTilt(scale: number): {
+  /** Goes on the stage: the board, and everything standing on it. */
+  stage: RefObject<HTMLDivElement>;
+  /** Goes on the room the board is standing in. */
+  room: RefObject<HTMLDivElement>;
+} {
+  const stage = useRef<HTMLDivElement>(null);
+  const room = useRef<HTMLDivElement>(null);
+  /** Where the cursor has asked the board to be, and where it actually is. */
+  const target = useRef({ x: 0, y: 0 });
+  const shown = useRef({ x: 0, y: 0 });
 
-  useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const onMove = (e: MouseEvent) => {
-      const fromCentreX = e.clientX / window.innerWidth - 0.5;
-      const fromCentreY = e.clientY / window.innerHeight - 0.5;
-      setTilt({ x: -fromCentreY * TILT.degrees * 2, y: fromCentreX * TILT.degrees * 2 });
+  // The whole loop lives inside the effect: nothing about it is created during
+  // a render, so there is nothing for React to memoise, invalidate or reset.
+  // The two refs above are the only things that outlive it, and they are what
+  // lets the board keep its lean when the window is resized under it.
+  useLayoutEffect(() => {
+    const drift = TILT.sceneDrift / TILT.degrees;
+    let frame = 0;
+    let running = false;
+
+    const paint = () => {
+      const { x, y } = shown.current;
+      if (stage.current) {
+        stage.current.style.transform =
+          `rotateX(${x}deg) rotateY(${y}deg) scale(${scale})`;
+      }
+      if (room.current) {
+        room.current.style.transform = `translate(${-y * drift}px, ${-x * drift}px)`;
+      }
     };
-    window.addEventListener("mousemove", onMove);
-    return () => window.removeEventListener("mousemove", onMove);
-  }, []);
 
-  return tilt;
+    const step = () => {
+      const to = target.current;
+      const at = shown.current;
+      const dx = to.x - at.x;
+      const dy = to.y - at.y;
+      const arrived = Math.abs(dx) < TILT.rest && Math.abs(dy) < TILT.rest;
+
+      shown.current = arrived
+        ? { x: to.x, y: to.y }
+        : { x: at.x + dx * TILT.ease, y: at.y + dy * TILT.ease };
+      paint();
+
+      if (arrived) {
+        running = false;
+        return;
+      }
+      frame = requestAnimationFrame(step);
+    };
+
+    // Before the browser's first paint rather than after it, so the board is
+    // never shown for a frame at the wrong size.
+    paint();
+
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const onMove = (event: MouseEvent) => {
+      const fromCentreX = event.clientX / window.innerWidth - 0.5;
+      const fromCentreY = event.clientY / window.innerHeight - 0.5;
+      target.current = {
+        x: -fromCentreY * TILT.degrees * 2,
+        y: fromCentreX * TILT.degrees * 2,
+      };
+      if (running) return;
+      running = true;
+      frame = requestAnimationFrame(step);
+    };
+
+    // Passive: the board leans in response to the cursor and never asks the
+    // cursor to do anything else, so the browser need not wait to find out.
+    if (!still) window.addEventListener("mousemove", onMove, { passive: true });
+
+    return () => {
+      if (!still) window.removeEventListener("mousemove", onMove);
+      cancelAnimationFrame(frame);
+    };
+  }, [scale]);
+
+  return { stage, room };
 }
 
 /**

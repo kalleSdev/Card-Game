@@ -1,3 +1,4 @@
+import type { RefObject } from "react";
 import { LAYER, TILT } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 
@@ -13,20 +14,26 @@ import type { ArenaTheme } from "../../../design/arenaThemes";
  * board is a picture of a board; one that leans the other way is something the
  * board is standing in front of, and the difference costs one transform.
  *
+ * That transform is not written here. It belongs to the same frame loop that
+ * leans the board, because the two have to move on the same frame or the room
+ * and the object in it disagree about where the viewer is. All this does is
+ * hand the loop the node to write on — and it never lists `transform` in its
+ * own style, so React has no opinion about the property and will not overwrite
+ * what the loop puts there.
+ *
  * What is here now is the ground the board sits on, moved out of the frame it
  * used to be painted in. The lighting, the distance and the walls belong to the
  * layer above this one and are not built yet.
  */
 
-export default function Scene({ theme, tilt }: {
+export default function Scene({ theme, nodeRef }: {
   theme: ArenaTheme;
-  /** The board's current lean, in degrees, which this moves against. */
-  tilt: { x: number; y: number };
+  /** Handed to the frame loop, which drifts this against the board's lean. */
+  nodeRef: RefObject<HTMLDivElement>;
 }) {
-  const drift = TILT.sceneDrift / TILT.degrees;
-
   return (
     <div
+      ref={nodeRef}
       data-layer="scene"
       aria-hidden
       style={{
@@ -35,8 +42,6 @@ export default function Scene({ theme, tilt }: {
         inset: -TILT.sceneDrift * 2,
         zIndex: LAYER.scene,
         pointerEvents: "none",
-        transform: `translate(${-tilt.y * drift}px, ${-tilt.x * drift}px)`,
-        transition: `transform ${TILT.settle}ms cubic-bezier(0.2,0,0.2,1)`,
         background: `
           radial-gradient(60% 45% at 50% 38%, rgba(255,255,255,0.05), transparent 70%),
           repeating-linear-gradient(92deg, rgba(255,255,255,0.014) 0 2px, transparent 2px 46px),

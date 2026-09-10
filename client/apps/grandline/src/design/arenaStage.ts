@@ -727,12 +727,29 @@ export const PERSPECTIVE = 2400;
  * Small on purpose. It is enough that the board answers you and not enough that
  * anybody has to aim, which is the only budget a board that is also a control
  * surface can afford.
+ *
+ * The board used to reach its new lean through a CSS transition. That is the
+ * wrong tool for a value the cursor rewrites sixty times a second: every event
+ * restarted the transition, so the board was permanently part way through a
+ * move it never finished, and the whole three dimensional stack had to be
+ * recomposited the entire time. The easing lives in the frame loop now — the
+ * board closes some of the distance to the cursor each frame and stops when
+ * there is nothing left to close.
  */
 export const TILT = {
   degrees: 0.35,
   /** How far the room slides the other way, which is what sells the distance. */
   sceneDrift: 12,
-  settle: 220,
+  /**
+   * How much of the way to the cursor the board travels each frame.
+   *
+   * A fifth. Enough that the board is where you asked within a few frames, so
+   * it reads as answering you rather than following you, and not so much that
+   * a jumped cursor snaps the board across.
+   */
+  ease: 0.22,
+  /** Closer than this in degrees and the board has arrived. */
+  rest: 0.002,
 } as const;
 
 /**
