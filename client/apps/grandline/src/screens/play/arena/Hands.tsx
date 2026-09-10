@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { BattleCard } from "@cg/battle";
-import { BAND, CARD, ENERGY, LEADER_STATS, MOTION } from "../../../design/arenaStage";
+import { CARD, ENERGY, HAND, LEADER_STATS, MOTION } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import { COLOR, MOTION as APP_MOTION, RADIUS, SPACE, text } from "../../../design/tokens";
 import PrintCard from "../../../components/PrintCard";
@@ -79,7 +79,7 @@ function fan(index: number, count: number): { rise: number; tilt: number } {
  * Your hand.
  *
  * The row is as tall as the band it belongs to, and the cards hang out of the
- * bottom of it on purpose: only BAND.yourHand.height of each card clears the
+ * bottom of it on purpose: only the top of each card clears the
  * rail, and the rest is tucked behind it. The rail is painted over the hand
  * rather than clipping it, which is what lets a card rise clear of the row when
  * you point at it.
@@ -101,7 +101,7 @@ export function Hand({ theme, cards, energy, held, live, onHold }: {
   const [pointed, setPointed] = useState<string | null>(null);
 
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", height: BAND.yourHand.height }}>
+    <div style={{ display: "flex", alignItems: "flex-start", height: CARD.playHeight }}>
       {cards.map((card, i) => {
         const affordable = card.cost <= energy;
         const up = held === card.instanceId;
@@ -208,7 +208,7 @@ export function EnemyHand({ count }: { count: number }): JSX.Element {
                 // Halfway down the strip of the card that actually shows, since
                 // the board crops these to their band. Centring it on the card
                 // would put it under the rail.
-                top: BAND.enemyHand.height / 2,
+                top: HAND.farHeight / 2,
                 transform: "translate(-50%, -50%)",
                 padding: `${SPACE.xs}px ${SPACE.sm}px`,
                 borderRadius: RADIUS.pill,
@@ -334,3 +334,4 @@ function StatBox({ theme, value, colour }: {
     </span>
   );
 }
+

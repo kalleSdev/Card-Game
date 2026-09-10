@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import type { BattleCard } from "@cg/battle";
 import {
-  ABILITY, BAND, LEADER_STATS, LEADER_WINDOW, MOTION, STAGE,
+  ABILITY, LEADER_STATS, LEADER_WINDOW, MOTION, PLINTH, STAGE,
 } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import { COLOR, RADIUS, TEXT, text } from "../../../design/tokens";
@@ -135,8 +135,8 @@ export default function LeaderNiche({ theme, side, facing, card, attackable, act
         // as a bottom, so the two sides are measured the same way and neither
         // depends on how tall the thing it is rendered into turns out to be.
         top: facing === "down"
-          ? BAND.enemyWing.top
-          : BAND.yourWing.top + BAND.yourWing.height - LEADER_WINDOW.height,
+          ? PLINTH.far.top + 16
+          : PLINTH.near.bottom - LEADER_WINDOW.height - LEADER_STATS.boxHeight - LEADER_STATS.drop - 14,
         width: LEADER_WINDOW.width,
         height: LEADER_WINDOW.height,
         // In front of the banner it is set into, and its stat plates hang over

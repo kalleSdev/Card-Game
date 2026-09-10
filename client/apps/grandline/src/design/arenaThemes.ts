@@ -66,6 +66,17 @@ export interface ArenaTheme {
   shadow: string;
   /** The dark the whole board sits on. */
   table: string;
+  /**
+   * The colour of the air over the far half of the board.
+   *
+   * This is what stops three themes built from the same greyscale materials
+   * reading as the same board in different paint: cold air greys the far end,
+   * warm air yellows it, and the eye reads those as different places rather
+   * than as different colour schemes.
+   */
+  hazeTint: string;
+  /** The colour of the lamp hung over the board. */
+  lamp: string;
 }
 
 export type ArenaThemeId = "harbour" | "deepwater" | "carnival";
@@ -101,6 +112,8 @@ export const ARENA_THEMES: Record<ArenaThemeId, ArenaTheme> = {
     gemEmpty: "rgba(30,32,38,0.5)",
     shadow: "rgba(28,18,8,0.6)",
     table: "#17140F",
+    hazeTint: "#EBD6AE",
+    lamp: "#FFE6B8",
   },
 
   // The same table, left out in the cold. Slate, steel and deep water.
@@ -133,6 +146,8 @@ export const ARENA_THEMES: Record<ArenaThemeId, ArenaTheme> = {
     gemEmpty: "rgba(12,26,32,0.55)",
     shadow: "rgba(4,14,20,0.66)",
     table: "#0B1116",
+    hazeTint: "#B9D8DE",
+    lamp: "#CFEEFF",
   },
 
   // Loud on purpose. Sunset felt, candy plate, everything turned up.
@@ -165,6 +180,8 @@ export const ARENA_THEMES: Record<ArenaThemeId, ArenaTheme> = {
     gemEmpty: "rgba(30,10,34,0.55)",
     shadow: "rgba(38,4,44,0.62)",
     table: "#16091A",
+    hazeTint: "#FFC7EE",
+    lamp: "#FFE6A8",
   },
 };
 

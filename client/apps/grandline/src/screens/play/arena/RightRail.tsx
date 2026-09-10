@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { FELT, MOTION, RAIL, RIGHT, STAGE } from "../../../design/arenaStage";
+import { MOTION, RIGHT, STAGE, WELL } from "../../../design/arenaStage";
+import { buttonSocket, deckSocket } from "./board";
 import { text } from "../../../design/tokens";
 import type { ArenaTheme, Ramp } from "../../../design/arenaThemes";
 
@@ -29,9 +30,9 @@ export default function RightRail({
     <div
       style={{
         position: "absolute",
-        left: STAGE.width - RAIL.right,
+        left: 0,
         top: 0,
-        width: RAIL.right,
+        width: STAGE.width,
         height: STAGE.height,
         pointerEvents: "none",
       }}
@@ -40,7 +41,7 @@ export default function RightRail({
         theme={theme}
         count={topDeck}
         colour={theme.banner.them}
-        centre={FELT.middle - RIGHT.deckOffset}
+        socket={deckSocket("far")}
       />
 
       <EndTurn
@@ -55,7 +56,7 @@ export default function RightRail({
         theme={theme}
         count={bottomDeck}
         colour={theme.banner.you}
-        centre={FELT.middle + RIGHT.deckOffset}
+        socket={deckSocket("near")}
       />
     </div>
   );
@@ -67,12 +68,12 @@ const NEARLY_OUT = 5;
 /** How far each card in the stack is offset from the one below it. */
 const LEAN = 4;
 
-function DeckStack({ theme, count, colour, centre }: {
+function DeckStack({ theme, count, colour, socket }: {
   theme: ArenaTheme;
   count: number;
   colour: Ramp;
-  /** Where the middle of the stack sits, measured down the stage. */
-  centre: number;
+  /** The recess in the rim this deck is sitting in. */
+  socket: { x: number; y: number; w: number; h: number };
 }) {
   const low = count <= NEARLY_OUT;
   // Four backs is enough thickness to read as a stack; more would just be more
@@ -83,13 +84,15 @@ function DeckStack({ theme, count, colour, centre }: {
     <div
       style={{
         position: "absolute",
-        // The stack leans out past the edge of the board, the way a deck sits
-        // half on the table beside you rather than squarely on it.
-        left: RAIL.right - RIGHT.deckWidth + LEAN * 3,
-        top: centre - RIGHT.deckHeight / 2,
+        // Sitting in its socket rather than beside it: the recess is a little
+        // larger than the stack, and the stack sits in the middle of it.
+        left: socket.x + (socket.w - RIGHT.deckWidth) / 2 - LEAN,
+        top: socket.y + (socket.h - RIGHT.deckHeight) / 2 + LEAN,
         width: RIGHT.deckWidth,
         height: RIGHT.deckHeight,
-        filter: `drop-shadow(0 6px 10px ${theme.shadow})`,
+        // A stack in a hole is dark underneath and only just proud of the rim.
+        filter: `drop-shadow(0 3px 5px rgba(0,0,0,0.7))`,
+        transform: "rotate(-1.2deg)",
       }}
     >
       {layers.map(layer => (
@@ -154,8 +157,8 @@ function EndTurn({ theme, yourTurn, attacking, onEndTurn, onCancel }: {
         position: "absolute",
         // It reaches back over the surface, out of its own rail, because the
         // eye is already on the middle of the board when the turn is over.
-        left: RAIL.right - RIGHT.buttonWidth - 10,
-        top: FELT.middle - RIGHT.buttonHeight / 2,
+        left: buttonSocket().x + (buttonSocket().w - RIGHT.buttonWidth) / 2,
+        top: WELL.seamY - RIGHT.buttonHeight / 2,
         width: RIGHT.buttonWidth,
         height: RIGHT.buttonHeight,
         pointerEvents: "auto",

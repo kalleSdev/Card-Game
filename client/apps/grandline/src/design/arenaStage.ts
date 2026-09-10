@@ -6,26 +6,17 @@ import { useEffect, useRef, useState, type RefObject } from "react";
  * The board is drawn at one fixed size and then scaled to whatever screen it
  * lands on, the way a physical board keeps its proportions whichever table you
  * put it on. Every number below is in that fixed size, so a value here means
- * the same thing on a laptop and on a television, and the two halves of the
- * board cannot drift apart because they are measured from the same middle.
+ * the same thing on a laptop and on a television.
  *
- * The measurements are taken off the board painting itself, scaled so that the
- * painted frame is the stage: in the reference the frame is 1438 x 973 inside a
- * 1920 x 1080 screen, which is why there is a margin down both sides here too.
- * The stage is taller than the painting by the height of one card, because a
- * painting does not have to hold a hand of real cards and this does.
+ * The board is built as an object rather than as a set of bands: a thick slab
+ * with a well cut into it, a rim around the well, a plinth at each end holding
+ * a leader, sockets in the right hand rim for the decks, and shelves at the
+ * corners for whatever is resting on it. Everything else is measured off those
+ * parts, so moving a part moves what sits on it.
  *
- * Vertical budget, top to bottom:
- *
- *      6   the rail their hand hangs from
- *    106   their hand, face down, cropped by the rail
- *    180   their wing band: two panels, the leader niche, the ability dial
- *     28   their leader's two stat boxes, hanging over the surface
- *    400   the surface, split by a seam into two halves of 200
- *    180   your wing band, mirrored
- *     28   your leader's two stat boxes
- *     88   your hand, cropped by the rail it sits behind
- *     44   the rail your hand sits on
+ * The board is seen from slightly above and in front, so it narrows towards the
+ * far end and its near edge shows its thickness. That is not decoration: it is
+ * what tells a player which end is theirs before they have read anything.
  */
 
 export const STAGE = {
@@ -33,55 +24,84 @@ export const STAGE = {
   height: 1120,
 } as const;
 
-/** The painted frame around everything. */
-export const FRAME = {
-  /** How thick the painted plate reads at the edge. */
-  thickness: 15,
-  radius: 34,
-  /** The dark surround the panels are set into, inside the plate. */
-  bezel: 12,
-  bezelRadius: 24,
+/**
+ * The slab.
+ *
+ * Given at both depths, because everything on this board tapers. Ask
+ * `slabEdges(y)` for the width at a depth rather than working it out again.
+ */
+export const BOARD = {
+  /** The slab's far edge, and where its near edge begins. */
+  farY: 96,
+  nearY: 976,
+  /** How much of the slab's thickness shows along the near edge. */
+  lip: 28,
+  farX0: 150,
+  farX1: 1290,
+  nearX0: 60,
+  nearX1: 1380,
+  round: 46,
 } as const;
 
-/** The two strips that are not the game. */
-export const RAIL = {
-  left: 92,
-  right: 102,
+/** The opening cut into the slab, which the playing surface sits down inside. */
+export const WELL = {
+  farY: 250,
+  nearY: 770,
+  farX0: 300,
+  farX1: 1140,
+  nearX0: 200,
+  nearX1: 1240,
+  /** How far the surface sits below the rim it is set into. */
+  depth: 20,
+  round: 28,
+  /** Where the two halves meet. */
+  get seamY() { return (this.farY + this.nearY) / 2; },
+  get height() { return this.nearY - this.farY; },
 } as const;
 
-/** Everything between the rails, which is where the game happens. */
-export const FIELD = {
-  left: RAIL.left,
-  right: STAGE.width - RAIL.right,
-  get width() { return this.right - this.left; },
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+function clamp(t: number): number {
+  return Math.max(0, Math.min(1, t));
+}
+
+/** How far along the board a depth is: 0 at the far edge, 1 at the near one. */
+export function depthOf(y: number): number {
+  return clamp((y - BOARD.farY) / (BOARD.nearY - BOARD.farY));
+}
+
+/** The slab's two edges at a given depth. */
+export function slabEdges(y: number): { x0: number; x1: number } {
+  const t = depthOf(y);
+  return { x0: lerp(BOARD.farX0, BOARD.nearX0, t), x1: lerp(BOARD.farX1, BOARD.nearX1, t) };
+}
+
+/** The well's two edges at a given depth. */
+export function wellEdges(y: number): { x0: number; x1: number } {
+  const t = clamp((y - WELL.farY) / (WELL.nearY - WELL.farY));
+  return { x0: lerp(WELL.farX0, WELL.nearX0, t), x1: lerp(WELL.farX1, WELL.nearX1, t) };
+}
+
+/**
+ * The two blocks that carry the leaders.
+ *
+ * A plinth is raised out of the rim and breaks into the well, so a leader has a
+ * piece of the board built around it rather than a panel laid on top of it. The
+ * far one is smaller because it is further away.
+ */
+export const PLINTH = {
+  far: { top: BOARD.farY, bottom: 300, width: 320 },
+  near: { top: 745, bottom: BOARD.nearY, width: 366 },
+  get centreX() { return STAGE.width / 2; },
 } as const;
 
-/** The rails the two hands sit against, top and bottom. */
-export const HAND_RAIL = {
-  height: 44,
-  topY: 6,
-  bottomY: STAGE.height - 56,
-  /** How far the rail runs past the field, towards the frame. */
-  bleed: 68,
-} as const;
+/** How much smaller everything on the far side of the board draws. */
+export const FAR_SCALE = 0.88;
 
-/** Every band, as a top edge and a height, measured from the stage. */
-export const BAND = {
-  enemyHand: { top: 44, height: 106 },
-  enemyWing: { top: 140, height: 180 },
-  felt: { top: 340, height: 400 },
-  yourWing: { top: 760, height: 180 },
-  yourHand: { top: 976, height: 88 },
-} as const;
-
-/** The surface, and the seam that halves it. */
-export const FELT = {
-  top: BAND.felt.top,
-  height: BAND.felt.height,
-  get middle() { return this.top + this.height / 2; },
-  /** How far the surface reaches past the field, under the frame. */
-  bleed: 16,
-} as const;
+/** How much of the far half is taken by the air between here and there. */
+export const HAZE = 0.16;
 
 export const CARD_RATIO = 217 / 168;
 
@@ -92,15 +112,13 @@ export function cardHeight(width: number): number {
 /**
  * One size for every playing card.
  *
- * A card is the same object in your hand, on the surface, and in the other
- * player's hand, so it is drawn at one size everywhere. Nothing on this board
- * picks a card size of its own: a row that had to shrink to fit would be a row
- * that was measured wrong.
+ * A card is the same object in your hand and on the surface, so it is drawn at
+ * one size in both. The far side draws its cards at FAR_SCALE of this, which is
+ * distance rather than a different card.
  */
 export const CARD = {
   play: 132,
   get playHeight() { return cardHeight(this.play); },
-  /** Between two cards laid side by side on the surface. */
   gap: 16,
   /** How much a card in a hand hides behind the one before it. */
   handOverlap: 26,
@@ -109,72 +127,98 @@ export const CARD = {
   lift: 74,
 } as const;
 
+/** Where the two hands hang off the board's ends. */
+export const HAND = {
+  /**
+   * Theirs is held over the far edge of the board, so it overlaps the slab
+   * rather than floating above it. The leader is drawn after it and therefore
+   * over it, which is what puts the cards behind the plinth where a hand held
+   * at the far end of a table would be.
+   */
+  farTop: 26,
+  farHeight: 104,
+  /** Yours is held over the near edge, hanging off the board towards you. */
+  nearTop: 966,
+} as const;
+
 /**
  * The window a leader stands in.
  *
- * It is a fixed opening in the board rather than a place a card is put down:
- * the card is cropped to the window's shape and set into it, so the leader
- * reads as part of the board and every leader is framed identically.
+ * A fixed opening in the plinth rather than a place a card is put down: the
+ * picture is cropped to the window's shape and set into it, so the leader reads
+ * as part of the board and every leader is framed identically.
  */
 export const LEADER_WINDOW = {
-  width: 150,
-  height: 180,
-  /** The arch: a half circle on top of straight sides. */
+  width: 148,
+  height: 176,
   get archRadius() { return this.width / 2; },
-  /** The painted trim around the opening. */
-  trim: 9,
+  /** The carved trim around the opening. */
+  trim: 10,
 } as const;
 
 /**
  * The two boxes under a leader, which is where its numbers live.
  *
- * A leader is not a card you read, it is a thing that is being worn down, so
- * its attack and health are set into the board beneath it and updated there
- * rather than printed on the picture.
+ * A leader is a thing being worn down rather than a card you read, so its
+ * attack and health are set into the plinth beneath it and updated there.
  */
 export const LEADER_STATS = {
   boxWidth: 64,
   boxHeight: 30,
   gap: 10,
-  /** How far under the window the boxes hang. */
-  drop: 4,
+  drop: 6,
 } as const;
 
 /** The dial beside a leader. */
 export const ABILITY = {
-  size: 112,
+  size: 104,
   /** How far its centre sits from the centre of the leader window. */
-  offset: 132,
+  offset: 130,
 } as const;
 
 /**
- * Energy, as diamonds along the hand rail.
+ * Energy, carved into the rim in front of each player.
  *
- * One more appears each round, filling left to right, and a spent one goes
- * dark in place. Ten is the cap, and ten sockets are drawn from the start so
- * the row never changes length.
+ * One more socket fills each round, left to right, and a spent one goes dark in
+ * place. Ten are cut from the start so the row never changes length.
  */
 export const ENERGY = {
   sockets: 10,
   size: 24,
   gap: 7,
   get width() { return this.sockets * this.size + (this.sockets - 1) * this.gap; },
+  /** Where the row starts, measured from the middle of the board. */
+  offsetX: 200,
 } as const;
 
-/** The deck stacks and the button, down the right. */
+/** The deck sockets and the button, cut into the right hand rim. */
 export const RIGHT = {
   deckWidth: 78,
   deckHeight: 106,
-  /** Where the two decks sit, as a distance from the seam. */
-  deckOffset: 116,
-  buttonWidth: 152,
-  buttonHeight: 56,
+  /** How far each socket sits from the seam. */
+  deckOffset: 138,
+  buttonWidth: 148,
+  buttonHeight: 54,
 } as const;
 
 /** The banner behind a leader, which is how the sides are told apart. */
 export const BANNER = {
-  width: 520,
-  height: 122,
+  farWidth: 470,
+  nearWidth: 540,
+  height: 104,
+} as const;
+
+/** The corners of the rim, where anything resting on the board stands. */
+export const SHELF = {
+  /** How far in from the slab's edge a prop may stand. */
+  inset: 36,
+} as const;
+
+/** How long the board takes to acknowledge a click, in milliseconds. */
+export const MOTION = {
+  card: 170,
+  lift: 200,
+  glow: 320,
 } as const;
 
 /**
@@ -182,10 +226,9 @@ export const BANNER = {
  *
  * Every layer of the arena is named here once and nowhere else. Before this
  * existed each component picked its own z-index and the order was whatever the
- * numbers happened to say: a card in play was painted under the leader window
- * because one had a 6 and the other had nothing. A board is a physical stack of
- * things, so the stack is declared in one place and components take their place
- * in it rather than arguing about it.
+ * numbers happened to say. A board is a physical stack of things, so the stack
+ * is declared in one place and components take their place in it rather than
+ * arguing about it.
  *
  * The gaps of ten leave room to slip a layer in without renumbering the rest.
  */
@@ -194,9 +237,9 @@ export const LAYER = {
   scene: 0,
   /** Air between the room and the board: haze, light, distance. */
   atmosphere: 10,
-  /** The board as an object: its rim, its plinths, its wells. */
+  /** The board as an object: its slab, its rim, its plinths, its sockets. */
   structure: 20,
-  /** The surface that is played on. */
+  /** The surface that is played on, set down inside the well. */
   surface: 30,
   /** Things resting on the board that are not part of the game. */
   props: 40,
@@ -216,9 +259,9 @@ export type LayerName = keyof typeof LAYER;
  * How far each layer stands from the surface, in the board's own units.
  *
  * The surface is zero, the room is a long way behind it, and the cards and
- * their dust stand in front. These are what turn the tilt into depth: with
- * everything at zero the board leans as one flat sheet, and with the layers
- * spread out along Z they slide against each other the way a real stack does.
+ * their dust stand in front. These are what turn the lean into depth: with
+ * everything at zero the board tips as one flat sheet, and with the layers
+ * spread along Z they slide against each other the way a real stack does.
  */
 export const DEPTH: Record<LayerName, number> = {
   scene: -420,
@@ -256,15 +299,30 @@ export const PERSPECTIVE = 2400;
 /**
  * The lean towards the cursor.
  *
- * Small on purpose. It is enough that the board answers you and not enough
- * that anybody has to aim, which is the only budget a board that is also a
- * control surface can afford.
+ * Small on purpose. It is enough that the board answers you and not enough that
+ * anybody has to aim, which is the only budget a board that is also a control
+ * surface can afford.
  */
 export const TILT = {
-  degrees: 1.1,
+  degrees: 1.6,
   /** How far the room slides the other way, which is what sells the distance. */
-  sceneDrift: 9,
+  sceneDrift: 14,
   settle: 220,
+} as const;
+
+/**
+ * Where the light is.
+ *
+ * One lamp, hung high and a little to the left, over the far half of the board.
+ * Every lit edge, every shadow and every falloff is worked out from this and
+ * nothing else, because a board lit from two directions reads as a drawing
+ * rather than as an object.
+ */
+export const LIGHT = {
+  x: 596,
+  y: 40,
+  /** How far the light reaches before the board is left to the dark. */
+  reach: 1180,
 } as const;
 
 /**
@@ -272,24 +330,15 @@ export const TILT = {
  *
  * Standing a layer off the surface makes it bigger or smaller, because that is
  * what distance does. The scale here undoes exactly that much, so a layer keeps
- * the footprint its measurements gave it and only its parallax changes. Without
- * this every layer would have to be measured twice: once for the geometry and
- * once for wherever the perspective happened to leave it.
+ * the footprint its measurements gave it and only its parallax changes.
  */
 export function depthTransform(z: number): string {
   return `translateZ(${z}px) scale(${(PERSPECTIVE - z) / PERSPECTIVE})`;
 }
 
-/** How long the board takes to acknowledge a click, in milliseconds. */
-export const MOTION = {
-  card: 170,
-  lift: 200,
-  glow: 320,
-} as const;
-
 /**
  * The scale that fits the stage on this screen, with a hair of margin so the
- * frame never touches the edge of the window.
+ * board never touches the edge of the window.
  */
 export function stageScale(width: number, height: number): number {
   return Math.min(width / STAGE.width, height / STAGE.height) * 0.985;
@@ -300,9 +349,7 @@ export function stageScale(width: number, height: number): number {
  *
  * It watches the element rather than the window, because the two are not the
  * same thing: a window event is late by a frame and misses anything that
- * resizes the page without resizing the window. Watching the box the board is
- * being drawn into catches every case and catches it before the next paint,
- * which is the difference between a board that resizes and a board that jumps.
+ * resizes the page without resizing the window.
  */
 export function useStageFit(): { ref: RefObject<HTMLDivElement>; scale: number } {
   const ref = useRef<HTMLDivElement>(null);

@@ -1,6 +1,6 @@
 import type { BattleCard, BattlePlayer } from "@cg/battle";
 import {
-  CARD, FIELD, LEADER_STATS, LEADER_WINDOW, MOTION, STAGE,
+  CARD, LEADER_STATS, LEADER_WINDOW, MOTION, STAGE, wellEdges,
 } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import { COLOR, RADIUS, text } from "../../../design/tokens";
@@ -37,7 +37,17 @@ import { cardFace } from "../../../data/pool";
  * that is what the leader niche below them and the seam between the halves are
  * centred on, so the row is pulled over by the difference.
  */
-const CENTRE_PULL = STAGE.width / 2 - (FIELD.left + FIELD.width / 2);
+/**
+ * A row sits in the middle of the well at its own depth.
+ *
+ * The well tapers, so "the middle" is not a fixed number: it is asked for at
+ * the depth the row is actually drawn at. A row placed on the stage's middle
+ * instead would drift off the surface as the board narrows.
+ */
+function wellCentre(y: number): number {
+  const edges = wellEdges(y);
+  return (edges.x0 + edges.x1) / 2;
+}
 
 /**
  * The bright rule on a picked-up card, the rim of an empty recess and the ring
@@ -97,8 +107,9 @@ export default function BoardRow({
     <div
       style={{
         position: "absolute",
-        left: FIELD.left + CENTRE_PULL,
-        width: FIELD.width,
+        left: 0,
+        width: STAGE.width,
+        paddingLeft: (wellCentre(band.top + band.height / 2) - STAGE.width / 2) * 2,
         top: band.top,
         height: band.height,
         display: "flex",

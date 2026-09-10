@@ -2,13 +2,15 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { PlayerId } from "@cg/contracts";
 import type { BattleCard, BattleIntent, BattleState } from "@cg/battle";
 import {
-  BAND, ENERGY, FELT, FIELD, FRAME, HAND_RAIL, PERSPECTIVE, RAIL, STAGE, TILT, useStageFit,
+  BOARD, ENERGY, FAR_SCALE, HAND, HAZE, PERSPECTIVE, PLINTH, STAGE, TILT, WELL,
+  slabEdges, useStageFit, wellEdges,
 } from "../../design/arenaStage";
 import { ARENA_THEME_LIST, useArenaTheme, type ArenaTheme, type ArenaThemeId } from "../../design/arenaThemes";
 import { text } from "../../design/tokens";
 import Layer from "./arena/Layer";
 import Scene from "./arena/Scene";
-import Chrome from "./arena/Chrome";
+import Structure from "./arena/Structure";
+import Surface from "./arena/Surface";
 import LeaderNiche from "./arena/LeaderNiche";
 import EnergyRail from "./arena/EnergyRail";
 import BoardRow from "./arena/BoardRow";
@@ -106,7 +108,7 @@ export function Arena({
     return () => window.removeEventListener("keydown", onKey);
   }, [onLeave, onIntent, held, state.pendingAttackerId, state.activePlayer]);
 
-  const half = FELT.height / 2;
+  const half = WELL.height / 2;
 
   const headingFor = (pid: PlayerId) =>
     local ? seatName(pid) : pid === you ? "Your hand" : opponentName ?? "Opponent";
@@ -149,17 +151,14 @@ export function Arena({
           transition: `transform ${TILT.settle}ms cubic-bezier(0.2,0,0.2,1)`,
         }}
       >
-        {/* The board as an object, and what it throws onto the room behind it */}
+        {/* The board as an object: slab, rim, plinths, sockets */}
         <Layer name="structure">
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              borderRadius: FRAME.radius,
-              boxShadow: `0 30px 60px ${theme.shadow}`,
-            }}
-          />
-          <Chrome theme={theme} />
+          <Structure theme={theme} />
+        </Layer>
+
+        {/* The surface, set down inside the well */}
+        <Layer name="surface">
+          <Surface theme={theme} />
         </Layer>
 
         {/* Everything the rules know about. Cropped at the board's edge, which
@@ -170,10 +169,10 @@ export function Arena({
           <div
             style={{
               position: "absolute",
-              left: FIELD.left,
-              top: BAND.enemyHand.top,
-              width: FIELD.width,
-              height: BAND.enemyHand.height,
+              left: 0,
+              top: HAND.farTop,
+              width: STAGE.width,
+              height: HAND.farHeight,
               overflow: "hidden",
               display: "flex",
               justifyContent: "center",
@@ -182,19 +181,22 @@ export function Arena({
             <EnemyHand count={state.players[top].hand.length} />
           </div>
 
-          <LeaderNiche
-            theme={theme}
-            side={top === you ? "you" : "them"}
-            facing="down"
-            card={state.players[top].leader}
-            attackable={Boolean(attacking) && top !== acting}
-            active={!state.winner && actor === top}
-            onClick={top === acting ? undefined : onTheirLeader}
-          />
+          <Far originX={PLINTH.centreX} originY={PLINTH.far.bottom}>
+            <LeaderNiche
+              theme={theme}
+              side={top === you ? "you" : "them"}
+              facing="down"
+              card={state.players[top].leader}
+              attackable={Boolean(attacking) && top !== acting}
+              active={!state.winner && actor === top}
+              onClick={top === acting ? undefined : onTheirLeader}
+            />
+          </Far>
 
+          <Far originX={STAGE.width / 2} originY={WELL.farY + half / 2}>
           <BoardRow
             theme={theme}
-            band={{ top: FELT.top, height: half }}
+            band={{ top: WELL.farY, height: half }}
             align="top"
             player={state.players[top]}
             attackable={Boolean(attacking) && top !== acting}
@@ -202,10 +204,11 @@ export function Arena({
             onCard={top === acting ? onMine : onTheirs}
             onSlot={held && top === acting && yourTurn ? onSlot : undefined}
           />
+          </Far>
 
           <BoardRow
             theme={theme}
-            band={{ top: FELT.top + half, height: half }}
+            band={{ top: WELL.seamY, height: half }}
             align="bottom"
             player={state.players[bottom]}
             attackable={Boolean(attacking) && bottom !== acting}
@@ -229,9 +232,9 @@ export function Arena({
           <div
             style={{
               position: "absolute",
-              left: FIELD.left,
-              top: BAND.yourHand.top,
-              width: FIELD.width,
+              left: 0,
+              top: HAND.nearTop,
+              width: STAGE.width,
               display: "flex",
               justifyContent: "center",
             }}
@@ -247,28 +250,44 @@ export function Arena({
           </div>
         </Layer>
 
+        {/* The air between the two ends of the board. It goes over the far
+            cards rather than under them, because that is where the air is. */}
+        <Layer name="highlight">
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              top: WELL.farY,
+              width: STAGE.width,
+              height: half,
+              background: `linear-gradient(to bottom, ${theme.hazeTint}, transparent)`,
+              opacity: HAZE,
+            }}
+          />
+        </Layer>
+
         {/* Writing, the decks, and the one button */}
         <Layer name="hud">
-          <RailName theme={theme} y={HAND_RAIL.topY} name={headingFor(top)} />
-          <RailName theme={theme} y={HAND_RAIL.bottomY} name={headingFor(bottom)} />
+          <RimName theme={theme} y={FAR_RIM_Y} name={headingFor(top)} far />
+          <RimName theme={theme} y={NEAR_RIM_Y} name={headingFor(bottom)} />
 
-          <RailSlot theme={theme} y={HAND_RAIL.topY}>
+          <RimSlot y={FAR_RIM_Y} far>
             <EnergyRail
               theme={theme}
               have={state.players[top].energy}
               max={state.players[top].maxEnergy}
               label="Energy"
             />
-          </RailSlot>
+          </RimSlot>
 
-          <RailSlot theme={theme} y={HAND_RAIL.bottomY}>
+          <RimSlot y={NEAR_RIM_Y}>
             <EnergyRail
               theme={theme}
               have={state.players[bottom].energy}
               max={state.players[bottom].maxEnergy}
               label="Energy"
             />
-          </RailSlot>
+          </RimSlot>
 
           <RightRail
             theme={theme}
@@ -337,20 +356,56 @@ function useTilt(): { x: number; y: number } {
   return tilt;
 }
 
-/** The left hand end of a hand rail, which is where the name goes. */
-function RailName({ theme, y, name }: { theme: ArenaTheme; y: number; name: string }) {
+/** The middle of each rim, which is the height everything on it lines up with. */
+const FAR_RIM_Y = (BOARD.farY + WELL.farY) / 2 + 22;
+const NEAR_RIM_Y = (WELL.nearY + BOARD.nearY) / 2 + 8;
+
+/**
+ * Anything the far side of the board carries, drawn at its distance.
+ *
+ * It scales about a point on the board rather than about the middle of the
+ * stage, so whatever is inside it shrinks towards where it stands instead of
+ * sliding off towards the centre.
+ */
+function Far({ originX, originY, children }: {
+  originX: number;
+  originY: number;
+  children: ReactNode;
+}) {
   return (
     <div
       style={{
         position: "absolute",
-        left: FIELD.left - HAND_RAIL.bleed + ENERGY.gap * 3,
-        top: y,
-        height: HAND_RAIL.height,
+        inset: 0,
+        transform: `scale(${FAR_SCALE})`,
+        transformOrigin: `${originX}px ${originY}px`,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** A player's name, cut into the rim on the left of their own plinth. */
+function RimName({ theme, y, name, far = false }: {
+  theme: ArenaTheme;
+  y: number;
+  name: string;
+  far?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: slabEdges(y).x0 + 56,
+        top: y - 10,
+        height: 20,
         display: "flex",
         alignItems: "center",
         ...text("label"),
-        fontSize: 9,
+        fontSize: far ? 8 : 9,
         color: theme.ink,
+        opacity: far ? 0.85 : 1,
         pointerEvents: "none",
       }}
     >
@@ -359,18 +414,23 @@ function RailName({ theme, y, name }: { theme: ArenaTheme; y: number; name: stri
   );
 }
 
-/** The right hand end of a hand rail, which is where energy is kept. */
-function RailSlot({ theme, y, children }: { theme: ArenaTheme; y: number; children: ReactNode }) {
+/** The stretch of rim to the right of a plinth, which is where energy sits. */
+function RimSlot({ y, far = false, children }: {
+  y: number;
+  far?: boolean;
+  children: ReactNode;
+}) {
+  const scale = far ? FAR_SCALE : 1;
   return (
     <div
       style={{
         position: "absolute",
-        right: STAGE.width - FIELD.right + HAND_RAIL.bleed - ENERGY.gap * 2,
+        left: STAGE.width / 2 + ENERGY.offsetX * scale,
         top: y,
-        height: HAND_RAIL.height,
+        transform: `translateY(-50%) scale(${scale})`,
+        transformOrigin: "left center",
         display: "flex",
         alignItems: "center",
-        color: theme.ink,
       }}
     >
       {children}
@@ -397,10 +457,13 @@ function LeftRail({ theme, title, badge, turn, line, note, onTheme, onLeave }: {
     <div
       style={{
         position: "absolute",
-        left: 8,
-        top: 300,
-        width: RAIL.left - 16,
-        height: 520,
+        // On the left rim, between the board's edge and the well. The rim
+        // tapers, so both numbers are asked for at the seam where it is
+        // narrowest and the rail therefore fits at every depth.
+        left: slabEdges(WELL.seamY).x0 + 10,
+        top: WELL.farY + 10,
+        width: wellEdges(WELL.seamY).x0 - slabEdges(WELL.seamY).x0 - 30,
+        height: WELL.height - 20,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -428,7 +491,7 @@ function LeftRail({ theme, title, badge, turn, line, note, onTheme, onLeave }: {
           border: `1px solid ${theme.wingEdge}`,
           borderRadius: 999,
           padding: "4px 8px",
-          maxWidth: RAIL.left - 26,
+          maxWidth: 78,
           textAlign: "center",
           lineHeight: 1.35,
         }}
@@ -489,7 +552,7 @@ function LeftRail({ theme, title, badge, turn, line, note, onTheme, onLeave }: {
             borderRadius: 8,
             padding: "7px 10px",
             cursor: "pointer",
-            width: RAIL.left - 34,
+            width: 70,
           }}
         >
           Leave
