@@ -42,10 +42,14 @@ export default function Scene({ theme, nodeRef }: {
         inset: -TILT.sceneDrift * 2,
         zIndex: LAYER.scene,
         pointerEvents: "none",
+        // A dark room with one warm pool in it, and nothing else. The faint
+        // floorboards that used to be scratched across this in a repeating
+        // gradient are gone: a repeating gradient over the whole viewport is
+        // the most expensive thing on this layer and it was buying detail
+        // nobody could see through the board that covers it.
         background: `
-          radial-gradient(60% 45% at 50% 38%, rgba(255,255,255,0.05), transparent 70%),
-          repeating-linear-gradient(92deg, rgba(255,255,255,0.014) 0 2px, transparent 2px 46px),
-          radial-gradient(130% 100% at 50% 40%, ${theme.table} 0%, #05070A 82%)`,
+          radial-gradient(42% 34% at 41% 30%, ${theme.lamp}1F, transparent 74%),
+          radial-gradient(96% 74% at 50% 40%, ${theme.table} 0%, #06080C 62%, #020305 100%)`,
       }}
     />
   );

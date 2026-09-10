@@ -58,7 +58,7 @@ export default function Surface({ theme, spread = 0 }: {
             board's own near rim stands between the two. */}
         <linearGradient id="sf-fall" gradientUnits="userSpaceOnUse" x1={0} y1={WELL.seamY} x2={0} y2={WELL.nearY}>
           <stop offset="0" stopColor="#000000" stopOpacity="0" />
-          <stop offset="1" stopColor="#000000" stopOpacity="0.26" />
+          <stop offset="1" stopColor="#000000" stopOpacity="0.34" />
         </linearGradient>
 
         {/* The air over the far half. */}
@@ -100,9 +100,18 @@ export default function Surface({ theme, spread = 0 }: {
           d={wellPath()}
           fill="none"
           stroke={theme.shadow}
-          strokeWidth={WELL.depth * 2.6}
+          strokeWidth={WELL.depth * 3.4}
           filter="url(#sf-soft)"
-          opacity="0.7"
+          opacity="0.92"
+        />
+        {/* And again along the near edge only, unblurred and tight, because
+            the rim there stands between the surface and the lamp and is the
+            one wall of the recess that throws a hard shadow. */}
+        <path
+          d={`M ${WELL.nearX0} ${WELL.nearY - WELL.depth / 2} L ${WELL.nearX1} ${WELL.nearY - WELL.depth / 2}`}
+          stroke={theme.shadow}
+          strokeWidth={WELL.depth * 1.5}
+          opacity="0.5"
         />
 
         <rect x={-spread} y={WELL.farY} width={W + spread * 2} height={WELL.height / 2} fill="url(#sf-haze)" />

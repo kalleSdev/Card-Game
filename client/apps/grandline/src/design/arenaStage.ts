@@ -160,8 +160,13 @@ export function wellEdges(y: number): { x0: number; x1: number } {
  */
 export const FAR_SCALE = 0.975;
 
-/** How much of the far half is taken by the air between here and there. */
-export const HAZE = 0.1;
+/**
+ * How much of the far half is taken by the air between here and there.
+ *
+ * The cheapest depth cue the board has, and the near half gets nothing at all,
+ * so the whole of the near/far separation is this one number.
+ */
+export const HAZE = 0.14;
 
 export const CARD_RATIO = 217 / 168;
 

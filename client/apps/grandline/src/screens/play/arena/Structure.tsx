@@ -50,9 +50,15 @@ const H = STAGE.height;
 /** How wide a carved edge reads at this size. */
 const EDGE = 3;
 
-/** The strength of a lit edge, and of the one in shadow. */
-const LIT = 0.75;
-const DARK = 0.6;
+/**
+ * The strength of a lit edge, and of the one in shadow.
+ *
+ * A carved edge is the only thing on a flat screen that says a surface has
+ * turned, so every one of them is worth its contrast: the board has a dozen
+ * steps in it and none of them exist unless their edges catch something.
+ */
+const LIT = 0.92;
+const DARK = 0.72;
 
 export default function Structure({ theme, spread = 0 }: {
   theme: ArenaTheme;
@@ -93,18 +99,33 @@ export default function Structure({ theme, spread = 0 }: {
         {/* The lamp. Everything on the board is shaded against this one shape,
             which is what keeps the whole object lit from the same place. */}
         <radialGradient id="st-lamp" gradientUnits="userSpaceOnUse" cx={LIGHT.x} cy={LIGHT.y} r={LIGHT.reach}>
-          <stop offset="0" stopColor={theme.lamp} stopOpacity="0.5" />
-          <stop offset="0.4" stopColor={theme.lamp} stopOpacity="0.16" />
+          <stop offset="0" stopColor={theme.lamp} stopOpacity="0.72" />
+          <stop offset="0.34" stopColor={theme.lamp} stopOpacity="0.3" />
+          <stop offset="0.7" stopColor={theme.lamp} stopOpacity="0.08" />
           <stop offset="1" stopColor={theme.lamp} stopOpacity="0" />
         </radialGradient>
 
         {/* What the lamp does not reach. Not a vignette over the screen: it is
             centred on the lamp, so the far corner from it is the dark one. */}
-        <radialGradient id="st-falloff" gradientUnits="userSpaceOnUse" cx={LIGHT.x} cy={LIGHT.y} r={LIGHT.reach * 1.15}>
+        <radialGradient id="st-falloff" gradientUnits="userSpaceOnUse" cx={LIGHT.x} cy={LIGHT.y} r={LIGHT.reach * 1.12}>
           <stop offset="0" stopColor="#000000" stopOpacity="0" />
-          <stop offset="0.42" stopColor="#000000" stopOpacity="0.14" />
-          <stop offset="0.75" stopColor="#000000" stopOpacity="0.38" />
-          <stop offset="1" stopColor="#000000" stopOpacity="0.62" />
+          <stop offset="0.38" stopColor="#000000" stopOpacity="0.16" />
+          <stop offset="0.72" stopColor="#000000" stopOpacity="0.46" />
+          <stop offset="1" stopColor="#000000" stopOpacity="0.78" />
+        </radialGradient>
+
+        {/*
+          The board's outer body going into shadow towards its own edge.
+          Painted as one very wide stroke along the slab's outline rather than
+          as another radial, because it has to follow the board's shape: the
+          point of it is that the battlefield ends up the brightest thing on
+          screen and the wood falls away from it in every direction, which is
+          what the eye reads as a thick object rather than a lit panel.
+        */}
+        <radialGradient id="st-edge-dark" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0.4" stopColor="#000000" stopOpacity="0" />
+          <stop offset="0.78" stopColor="#000000" stopOpacity="0.2" />
+          <stop offset="1" stopColor="#000000" stopOpacity="0.58" />
         </radialGradient>
 
         <linearGradient id="st-slab" gradientUnits="userSpaceOnUse" x1={0} y1={BOARD.farY} x2={0} y2={BOARD.nearY + BOARD.lip}>
@@ -113,10 +134,15 @@ export default function Structure({ theme, spread = 0 }: {
           <stop offset="1" stopColor={theme.frame.dark} />
         </linearGradient>
 
-        {/* The near edge, seen end on. Always darker than the face above it. */}
+        {/* The near edge, seen end on: the one face of the board turned
+            fully away from the lamp, so it goes to the board's own near black
+            rather than merely to a darker wood. This is the underside, and an
+            underside that is only a little darker than the top reads as paint
+            on a flat sheet. */}
         <linearGradient id="st-lip" gradientUnits="userSpaceOnUse" x1={0} y1={BOARD.nearY} x2={0} y2={BOARD.nearY + BOARD.lip}>
-          <stop offset="0" stopColor={theme.frame.dark} />
-          <stop offset="1" stopColor={theme.frameEdge} />
+          <stop offset="0" stopColor={theme.frameEdge} />
+          <stop offset="0.55" stopColor={theme.frame.dark} />
+          <stop offset="1" stopColor={theme.bezel} />
         </linearGradient>
 
         {/* The chamfer into the well. Pale on its far wall, which faces the
@@ -156,7 +182,7 @@ export default function Structure({ theme, spread = 0 }: {
         </filter>
 
         <filter id="st-cast" x="-30%" y="-40%" width="160%" height="190%">
-          <feDropShadow dx="0" dy={10} stdDeviation={14} floodColor={theme.shadow} floodOpacity={DARK} />
+          <feDropShadow dx="4" dy={18} stdDeviation={18} floodColor={theme.shadow} floodOpacity={0.85} />
         </filter>
 
         <clipPath id="st-slab-clip"><path d={slab} /></clipPath>
@@ -178,6 +204,9 @@ export default function Structure({ theme, spread = 0 }: {
           <Material name="wood" clip="st-apron-clip" x={-spread} width={W + spread * 2} />
           <g clipPath="url(#st-apron-clip)">
             <path d={apron} fill="url(#st-falloff)" />
+            {/* The apron is a step below the slab, so it keeps less of the
+                lamp than the slab does whatever the falloff says. */}
+            <path d={apron} fill={theme.shadow} opacity="0.3" />
           </g>
           <path d={apron} fill="none" stroke={theme.frameEdge} strokeWidth={2} />
         </>
@@ -196,6 +225,17 @@ export default function Structure({ theme, spread = 0 }: {
             the one that goes dark rather than the middle of the board. */}
         <rect x={-spread} y="0" width={W + spread * 2} height={H} fill="url(#st-lamp)" style={{ mixBlendMode: "soft-light" }} />
         <rect x={-spread} y="0" width={W + spread * 2} height={H} fill="url(#st-falloff)" />
+
+        {/* The wood going into shadow towards the board's own outer edge, so
+            the battlefield ends up the brightest thing on screen and the wood
+            falls away from it in every direction. A gradient rather than a
+            wide stroke along the outline: a stroke has one opacity across its
+            whole width, so it puts a hard line wherever it stops and reads as
+            a painted border. Bounding box units make this an ellipse the shape
+            of the board, which is close enough to the board's own shape. */}
+        <rect x={-spread} y="0" width={W + spread * 2} height={H} fill="url(#st-edge-dark)" />
+
+        <Wear theme={theme} spread={spread} />
 
         {/* The edge where the slab's face turns over into its near edge. */}
         <path d={slab} fill="none" stroke={theme.frameInlay} strokeWidth={EDGE} opacity={LIT * 0.55} transform="translate(0 2)" />
@@ -279,6 +319,61 @@ export default function Structure({ theme, spread = 0 }: {
       {/* ── The information area, down the left rim ──────────────────────── */}
       <RailRecesses theme={theme} />
     </svg>
+  );
+}
+
+/**
+ * A fixed number between nought and one, for a given pair of whole numbers.
+ *
+ * Not a random number generator: a function. A generator would have to carry a
+ * seed it kept changing, which is a thing a component may not do during a
+ * render, and it would hand back a different board every time React looked at
+ * it. Scratches that moved when a card was played would be the single worst
+ * thing on this board, so they are a pure function of which scratch it is.
+ */
+function noise(a: number, b: number): number {
+  const n = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
+  return n - Math.floor(n);
+}
+
+/** Two decimals, which keeps the path short and is finer than a screen pixel. */
+function round(v: number): number {
+  return Math.round(v * 100) / 100;
+}
+
+/**
+ * What a board this old looks like up close.
+ *
+ * Three kinds of nothing much: two broad tonal patches, because a plank is
+ * never one tone across its whole width; eleven hairline scratches, because a
+ * surface with cards slid across it for years is not smooth; and a scuff worn
+ * pale along the near rim, where hands actually rest. Everything is between
+ * four and nine per cent opacity — the point is that you cannot see any of it,
+ * only that the wood has stopped being perfect.
+ *
+ * All of it is clipped to the slab by the group it sits in, and none of it is
+ * anywhere near the well, so nothing here is ever under a card.
+ */
+function Wear({ theme, spread }: { theme: ArenaTheme; spread: number }) {
+  const scratches = Array.from({ length: 11 }, (_unused, i) => {
+    // Out on the body, either side of the play area, never across it.
+    const side = noise(i, 0) < 0.5 ? -1 : 1;
+    const x = W / 2 + side * (W * 0.34 + spread * noise(i, 1));
+    const y = BOARD.farY + noise(i, 2) * (BOARD.nearY - BOARD.farY);
+    const run = 40 + noise(i, 3) * 130;
+    const lean = (noise(i, 4) - 0.5) * 26;
+    return `M ${round(x)} ${round(y)} L ${round(x + run)} ${round(y + lean)}`;
+  }).join(" ");
+
+  return (
+    <g>
+      <ellipse cx={W * 0.2 - spread * 0.4} cy={BOARD.farY + 210} rx={300} ry={190} fill={theme.frameEdge} opacity="0.07" />
+      <ellipse cx={W * 0.82 + spread * 0.4} cy={BOARD.nearY - 180} rx={260} ry={210} fill={theme.frameEdge} opacity="0.05" />
+      <path d={scratches} stroke={theme.frameEdge} strokeWidth={1.5} fill="none" opacity="0.09" />
+      <path d={scratches} stroke={theme.frameInlay} strokeWidth={1} fill="none" opacity="0.06" transform="translate(0 1.5)" />
+      {/* Where hands rest, along the near rim. */}
+      <ellipse cx={W / 2} cy={BOARD.nearY - 18} rx={W * 0.3} ry={26} fill={theme.frameInlay} opacity="0.05" />
+    </g>
   );
 }
 
