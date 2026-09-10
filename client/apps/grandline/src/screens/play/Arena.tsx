@@ -14,6 +14,8 @@ import { text } from "../../design/tokens";
 import Layer from "./arena/Layer";
 import Scene from "./arena/Scene";
 import Structure from "./arena/Structure";
+import Surround from "./arena/Surround";
+import Props from "./arena/Props";
 import Surface from "./arena/Surface";
 import LeaderNiche, { AbilityDial } from "./arena/LeaderNiche";
 import EnergyRail, { EnergyReadout } from "./arena/EnergyRail";
@@ -163,6 +165,13 @@ export function Arena({
           // would snap flat mid-movement.
         }}
       >
+        {/* Behind the board: its shadow on the floor, and what the floor has
+            on it. The only layer further off than the board itself, which is
+            why it is the only one the board can stand in front of. */}
+        <Layer name="atmosphere">
+          <Surround theme={theme} spread={frame.spread} />
+        </Layer>
+
         {/* The board as an object: slab, rim, plinths, sockets */}
         <Layer name="structure">
           <Structure theme={theme} spread={frame.spread} />
@@ -171,6 +180,13 @@ export function Arena({
         {/* The surface, set down inside the well */}
         <Layer name="surface">
           <Surface theme={theme} spread={frame.spread} />
+        </Layer>
+
+        {/* Things resting on the board that the rules know nothing about. Out
+            on the outer body, clear of the channel that rings the play area,
+            so nothing here is ever between a player and a card. */}
+        <Layer name="props">
+          <Props theme={theme} spread={frame.spread} />
         </Layer>
 
         {/* Everything the rules know about. Cropped at the board's edge, which
