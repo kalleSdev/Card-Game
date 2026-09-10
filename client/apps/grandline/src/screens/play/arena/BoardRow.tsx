@@ -1,7 +1,5 @@
 import type { BattleCard, BattlePlayer } from "@cg/battle";
-import {
-  CARD, LEADER_STATS, LEADER_WINDOW, MOTION, STAGE, wellEdges,
-} from "../../../design/arenaStage";
+import { CARD, LEADER, MOTION, STAGE, wellEdges } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import { COLOR, RADIUS, text } from "../../../design/tokens";
 import PrintCard from "../../../components/PrintCard";
@@ -56,23 +54,23 @@ function wellCentre(y: number): number {
  * thinned to a third of itself because it runs along a card instead of framing
  * a picture.
  */
-const EDGE = Math.round(LEADER_WINDOW.trim / 3);
+const EDGE = Math.round(LEADER.trim / 3);
 
 /**
- * A card's two stat boxes sit on its bottom edge with the leader's gap between
- * them and the same gap again at either end, which is what settles their width.
- * The height then follows the leader box's proportions, so the numbers on a
- * card and the numbers under a leader read as the same fitting at two sizes.
+ * A card's two stat boxes sit on its bottom edge with a card's own inset between
+ * them and the same inset again at either end, which is what settles their
+ * width. The height then follows the leader plate's proportions, so the numbers
+ * on a card and the numbers beside a leader read as the same fitting at two
+ * sizes.
  */
 const STAT = {
-  width: (CARD.play - LEADER_STATS.gap * 3) / 2,
+  width: (CARD.play - CARD.inset * 3) / 2,
   height: Math.round(
-    ((CARD.play - LEADER_STATS.gap * 3) / 2) * (LEADER_STATS.boxHeight / LEADER_STATS.boxWidth),
+    ((CARD.play - CARD.inset * 3) / 2) * (LEADER.stat.height / LEADER.stat.width),
   ),
-  inset: LEADER_STATS.gap,
-  /** The leader's boxes hang this far clear of its window. These hang the same
-      distance clear of the card's bottom edge, so nothing sits flush. */
-  drop: LEADER_STATS.drop,
+  inset: CARD.inset,
+  /** Nothing on a card sits flush with its edge, including these. */
+  drop: CARD.inset,
 } as const;
 
 /** The board's own duration, on the curve the rest of the app moves on. */

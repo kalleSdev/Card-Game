@@ -1,15 +1,13 @@
 import type { CSSProperties } from "react";
 import type { BattleCard } from "@cg/battle";
-import {
-  ABILITY, LEADER_STATS, LEADER_WINDOW, MOTION, PLINTH, STAGE,
-} from "../../../design/arenaStage";
+import { LEADER, MOTION, leaderSeat, type Side } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import { COLOR, RADIUS, TEXT, text } from "../../../design/tokens";
 import { artUrl, cardShortName } from "../../../data/pool";
 
 /**
  * The niche a leader stands in: an arched window cut into the board, brass
- * around it, two numbers under it and a dial beside it.
+ * around it, a number either side of it and a dial out past them.
  *
  * A leader is not a card. It is never picked up, never laid down and never put
  * back in a deck, so it is not drawn as one: its picture is set into an opening
@@ -17,7 +15,11 @@ import { artUrl, cardShortName } from "../../../data/pool";
  * is framed identically whatever its art does, and why nothing here draws a card
  * border or a printed statline. What changes about a leader during a match is
  * what it hits for and what is left of it, and those two numbers are set into
- * the board beneath it, which is where a person looks for a number.
+ * the plinth beside it, on the edge that faces the battlefield.
+ *
+ * The seat is one piece of geometry, taken from the stage and mirrored about the
+ * board's seam, so the far leader and the near one are the same construction
+ * seen from opposite ends of the table.
  *
  * Everything is measured off the window. The moulding, the seat the picture sits
  * in, the stat plates and the dial are all offsets from one outline, so the
@@ -26,7 +28,7 @@ import { artUrl, cardShortName } from "../../../data/pool";
 
 // ── The one shape ────────────────────────────────────────────────────────────
 
-const TRIM = LEADER_WINDOW.trim;
+const TRIM = LEADER.trim;
 
 /**
  * The smallest step this niche takes: a third of the moulding. It is the
@@ -51,6 +53,11 @@ const FOOT = LINE;
  */
 const DIAL_RING = TRIM * 2;
 
+/** The seat's own geometry, which both ends of the board are cut from. */
+const WINDOW = LEADER.window;
+const STAT = LEADER.stat;
+const DIAL = LEADER.ability;
+
 /**
  * The niche's outline, offset in or out, as one piece of geometry.
  *
@@ -67,8 +74,8 @@ const DIAL_RING = TRIM * 2;
  * back to anywhere a path clip is not honoured.
  */
 function niche(inset: number): CSSProperties {
-  const width = LEADER_WINDOW.width - inset * 2;
-  const height = LEADER_WINDOW.height - inset * 2;
+  const width = WINDOW.width - inset * 2;
+  const height = WINDOW.height - inset * 2;
   // A half circle on top of straight sides, which is what makes it an arch
   // rather than a rounded rectangle
   const dome = width / 2;
@@ -108,12 +115,12 @@ const ABILITY_PROGRESS: number = 0;
 
 // ── The niche ────────────────────────────────────────────────────────────────
 
-export default function LeaderNiche({ theme, side, facing, card, attackable, active, onClick }: {
+export default function LeaderNiche({ theme, side, end, card, attackable, active, onClick }: {
   theme: ArenaTheme;
   /** Which banner this leader flies, which is only used for the trim colour. */
   side: "you" | "them";
-  /** "down" for the far player at the top of the board, "up" for the near player. */
-  facing: "up" | "down";
+  /** Which end of the board this leader stands at. */
+  end: Side;
   card: BattleCard;
   attackable: boolean;
   active: boolean;
@@ -121,26 +128,20 @@ export default function LeaderNiche({ theme, side, facing, card, attackable, act
 }): JSX.Element {
   const hit = attackable && Boolean(onClick);
   const hurt = card.currentHp < card.maxHp;
+  // The seat is the same seat at both ends of the board, mirrored about the
+  // seam. Nothing here is measured for one player: the window is centred on the
+  // board's middle line, set the same distance inside the board's outer edge,
+  // and everything else is an offset inside that one box.
+  const seat = leaderSeat(end);
 
   return (
     <div
       style={{
         position: "absolute",
-        // Pushed left by half the dial's offset, so the window and the dial
-        // together sit on the middle of the board rather than the window alone
-        left: STAGE.width / 2 - ABILITY.offset / 2 - LEADER_WINDOW.width / 2,
-        // The window is exactly as tall as a wing band, so it fills the band it
-        // belongs to: hung from the top of that band up there, stood on the
-        // bottom of it down here. Both are worked out as a top rather than one
-        // as a bottom, so the two sides are measured the same way and neither
-        // depends on how tall the thing it is rendered into turns out to be.
-        top: facing === "down"
-          ? PLINTH.far.top + 16
-          : PLINTH.near.bottom - LEADER_WINDOW.height - LEADER_STATS.boxHeight - LEADER_STATS.drop - 14,
-        width: LEADER_WINDOW.width,
-        height: LEADER_WINDOW.height,
-        // In front of the banner it is set into, and its stat plates hang over
-        // the playing surface
+        left: seat.x,
+        top: seat.y,
+        width: seat.width,
+        height: seat.height,
       }}
     >
       {/*
@@ -154,6 +155,7 @@ export default function LeaderNiche({ theme, side, facing, card, attackable, act
         style={{
           position: "absolute",
           inset: 0,
+          pointerEvents: hit ? "auto" : "none",
           cursor: hit ? "crosshair" : "default",
           filter: [
             `drop-shadow(0 ${LINE}px ${TRIM}px ${theme.shadow})`,
@@ -238,22 +240,14 @@ export default function LeaderNiche({ theme, side, facing, card, attackable, act
         </div>
       </div>
 
-      {/* The numbers, under the window for both players, because under is where
-          the eye goes for one. Attack on the left, health on the right, always
-          both of them and always drawn even at zero: a box that vanishes is a
-          board that moves */}
-      <div
-        style={{
-          position: "absolute",
-          left: (LEADER_WINDOW.width - (LEADER_STATS.boxWidth * 2 + LEADER_STATS.gap)) / 2,
-          top: LEADER_WINDOW.height + LEADER_STATS.drop,
-          display: "flex",
-          gap: LEADER_STATS.gap,
-        }}
-      >
-        <StatPlate theme={theme} value={card.atk} />
-        <StatPlate theme={theme} value={card.currentHp} hurt={hurt} />
-      </div>
+      {/* The numbers, one either side of the window rather than under it.
+          Attack on the left and health on the right, the way they read on a
+          card, held to the window's battlefield-facing edge so both players'
+          plates sit the same distance from the play area and neither pair ends
+          up behind a row of cards. Always both of them and always drawn even at
+          zero: a box that vanishes is a board that moves */}
+      <StatPlate theme={theme} value={card.atk} top={seat.statTop} at="left" />
+      <StatPlate theme={theme} value={card.currentHp} hurt={hurt} top={seat.statTop} at="right" />
 
       <AbilityDial theme={theme} />
     </div>
@@ -269,17 +263,24 @@ export default function LeaderNiche({ theme, side, facing, card, attackable, act
  * useful, and the two plates are always in the same two places, so position is
  * what says which is which.
  */
-function StatPlate({ theme, value, hurt = false }: {
+function StatPlate({ theme, value, top, at, hurt = false }: {
   theme: ArenaTheme;
   value: number;
+  /** How far down the window this plate sits. */
+  top: number;
+  /** Which side of the window it is set into. */
+  at: "left" | "right";
   /** Health below its maximum. Attack never sets this. */
   hurt?: boolean;
 }): JSX.Element {
   return (
     <div
       style={{
-        width: LEADER_STATS.boxWidth,
-        height: LEADER_STATS.boxHeight,
+        position: "absolute",
+        top,
+        left: at === "left" ? -(STAT.gap + STAT.width) : WINDOW.width + STAT.gap,
+        width: STAT.width,
+        height: STAT.height,
         borderRadius: RADIUS.sm,
         background: theme.bezel,
         border: `1px solid ${theme.gold.mid}`,
@@ -308,18 +309,20 @@ function StatPlate({ theme, value, hurt = false }: {
 /**
  * The dial beside the leader: a brass ring with a well in it.
  *
- * It is placed off the window's centre, which is what keeps it in the same spot
- * on both banners however the rest of the band is filled.
+ * It stands out past the attack plate on the left, which is the quiet side of
+ * the rim: the right of every rim already carries a row of energy. Its offset is
+ * from the window's centre, so it is in the same spot at both ends of the board
+ * however the rest of the rim is filled.
  */
 function AbilityDial({ theme }: { theme: ArenaTheme }): JSX.Element {
   return (
     <div
       style={{
         position: "absolute",
-        left: LEADER_WINDOW.width / 2 + ABILITY.offset - ABILITY.size / 2,
-        top: LEADER_WINDOW.height / 2 - ABILITY.size / 2,
-        width: ABILITY.size,
-        height: ABILITY.size,
+        left: WINDOW.width / 2 - DIAL.offset - DIAL.size / 2,
+        top: (WINDOW.height - DIAL.size) / 2,
+        width: DIAL.size,
+        height: DIAL.size,
         borderRadius: "50%",
         backgroundImage: `linear-gradient(180deg, ${theme.gold.light} 0%, ${theme.gold.mid} 40%, ${theme.gold.dark} 100%)`,
         // The lit top edge is a hairline of the brass ramp's own light, so the
@@ -332,8 +335,8 @@ function AbilityDial({ theme }: { theme: ArenaTheme }): JSX.Element {
     >
       <div
         style={{
-          width: ABILITY.size - DIAL_RING * 2,
-          height: ABILITY.size - DIAL_RING * 2,
+          width: DIAL.size - DIAL_RING * 2,
+          height: DIAL.size - DIAL_RING * 2,
           borderRadius: "50%",
           border: `1px solid ${theme.gold.dark}`,
           // The empty glass is laid over an opaque dark, so the brass behind it

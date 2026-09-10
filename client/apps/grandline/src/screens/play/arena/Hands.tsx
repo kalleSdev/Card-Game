@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { BattleCard } from "@cg/battle";
-import { CARD, ENERGY, HAND, LEADER_STATS, MOTION } from "../../../design/arenaStage";
+import { CARD, ENERGY, HAND, LEADER, MOTION } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import { COLOR, MOTION as APP_MOTION, RADIUS, SPACE, text } from "../../../design/tokens";
 import PrintCard from "../../../components/PrintCard";
@@ -44,14 +44,13 @@ const CAMBER = CARD.hover / 4;
 /**
  * A card's own two number boxes.
  *
- * The leader's boxes are LEADER_STATS.boxWidth across, which is wider than half
- * a card, so a card in hand keeps the leader's shape and gives up its size: the
- * same gap between the pair, the same inset the leader's boxes hang by, and the
- * same height for their width. One way of showing a number, at two sizes.
+ * The leader's plates are wider than half a card, so a card in hand keeps the
+ * leader's shape and gives up its size: the same inset all round and the same
+ * height for their width. One way of showing a number, at two sizes.
  */
-const STAT_INSET = LEADER_STATS.drop;
-const STAT_WIDTH = (CARD.play - STAT_INSET * 2 - LEADER_STATS.gap) / 2;
-const STAT_HEIGHT = Math.round(STAT_WIDTH * (LEADER_STATS.boxHeight / LEADER_STATS.boxWidth));
+const STAT_INSET = CARD.inset;
+const STAT_WIDTH = (CARD.play - STAT_INSET * 3) / 2;
+const STAT_HEIGHT = Math.round(STAT_WIDTH * (LEADER.stat.height / LEADER.stat.width));
 
 /** The cost plate is as tall as a stat box, so every number on a card is one size. */
 const COST_SIZE = STAT_HEIGHT;

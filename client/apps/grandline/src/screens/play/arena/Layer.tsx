@@ -1,7 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import {
-  DEPTH, LAYER, LAYER_TAKES_CLICKS, STAGE, depthTransform, type LayerName,
-} from "../../../design/arenaStage";
+import { DEPTH, LAYER, STAGE, depthTransform, type LayerName } from "../../../design/arenaStage";
 
 /**
  * One layer of the board.
@@ -12,9 +10,12 @@ import {
  * board is a property of the board, not an argument between the components that
  * happen to be drawn on it.
  *
- * Only the layers that hold something a person can click take the cursor. The
- * rest let it through, so a card is never unreachable because a sheet of
- * atmosphere was painted over it.
+ * No layer ever takes the cursor itself. A layer is a sheet the width and
+ * height of the whole board, so a layer that took clicks would swallow every
+ * click aimed at the layers under it — the writing layer sits over the cards,
+ * and a transparent sheet is as solid to a click as an opaque one. Only the
+ * things a person can actually press ask for the cursor, and they get it even
+ * inside a layer that has refused it, which is how pointer-events works.
  *
  * A layer that has to crop or blur its contents flattens them, because that is
  * what the browser does with overflow and filters. That is fine for a layer
@@ -52,7 +53,7 @@ export default function Layer({ name, crop = false, core = false, spread = 0, st
         transformOrigin: "center",
         transformStyle: crop ? "flat" : "preserve-3d",
         overflow: crop ? "hidden" : "visible",
-        pointerEvents: LAYER_TAKES_CLICKS[name] ? "auto" : "none",
+        pointerEvents: "none",
         ...style,
       }}
     >

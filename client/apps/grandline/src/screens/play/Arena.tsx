@@ -2,8 +2,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { PlayerId } from "@cg/contracts";
 import type { BattleCard, BattleIntent, BattleState } from "@cg/battle";
 import {
-  BOARD, ENERGY, FAR_SCALE, HAND, HAZE, PERSPECTIVE, PLINTH, STAGE, TILT, WELL,
-  slabEdges, useStageFit, wellEdges,
+  BOARD, CENTRE, ENERGY, FAR_SCALE, HAND, HAZE, PERSPECTIVE, STAGE, TILT, WELL,
+  cardBand, leaderSeat, slabEdges, useStageFit, wellEdges,
 } from "../../design/arenaStage";
 import { ARENA_THEME_LIST, useArenaTheme, type ArenaTheme, type ArenaThemeId } from "../../design/arenaThemes";
 import { text } from "../../design/tokens";
@@ -109,6 +109,7 @@ export function Arena({
   }, [onLeave, onIntent, held, state.pendingAttackerId, state.activePlayer]);
 
   const half = WELL.height / 2;
+  const farRow = cardBand("far");
 
   const headingFor = (pid: PlayerId) =>
     local ? seatName(pid) : pid === you ? "Your hand" : opponentName ?? "Opponent";
@@ -183,11 +184,14 @@ export function Arena({
             <EnemyHand count={state.players[top].hand.length} />
           </div>
 
-          <Far originX={PLINTH.centreX} originY={PLINTH.far.bottom}>
+          {/* Scaled about the board's far edge rather than about the plinth's
+              inner face, so the far leader stays seated the same distance inside
+              the frame as the near one and shrinks inwards from there. */}
+          <Far originX={CENTRE.x} originY={BOARD.farY}>
             <LeaderNiche
               theme={theme}
               side={top === you ? "you" : "them"}
-              facing="down"
+              end="far"
               card={state.players[top].leader}
               attackable={Boolean(attacking) && top !== acting}
               active={!state.winner && actor === top}
@@ -195,10 +199,10 @@ export function Arena({
             />
           </Far>
 
-          <Far originX={STAGE.width / 2} originY={WELL.farY + half / 2}>
+          <Far originX={CENTRE.x} originY={farRow.top + farRow.height / 2}>
           <BoardRow
             theme={theme}
-            band={{ top: WELL.farY, height: half }}
+            band={farRow}
             align="top"
             player={state.players[top]}
             attackable={Boolean(attacking) && top !== acting}
@@ -210,7 +214,7 @@ export function Arena({
 
           <BoardRow
             theme={theme}
-            band={{ top: WELL.seamY, height: half }}
+            band={cardBand("near")}
             align="bottom"
             player={state.players[bottom]}
             attackable={Boolean(attacking) && bottom !== acting}
@@ -222,7 +226,7 @@ export function Arena({
           <LeaderNiche
             theme={theme}
             side={bottom === you ? "you" : "them"}
-            facing="up"
+            end="near"
             card={state.players[bottom].leader}
             attackable={Boolean(attacking) && bottom !== acting}
             active={!state.winner && actor === bottom}
@@ -358,9 +362,15 @@ function useTilt(): { x: number; y: number } {
   return tilt;
 }
 
-/** The middle of each rim, which is the height everything on it lines up with. */
-const FAR_RIM_Y = (BOARD.farY + WELL.farY) / 2 + 22;
-const NEAR_RIM_Y = (WELL.nearY + BOARD.nearY) / 2 + 8;
+/**
+ * The line each rim lines up on.
+ *
+ * The leader's own middle, taken from the seat rather than guessed at, so the
+ * name, the energy row and the leader itself sit on one line at each end and the
+ * two lines are exact mirrors of each other about the seam.
+ */
+const FAR_RIM_Y = leaderSeat("far").line;
+const NEAR_RIM_Y = leaderSeat("near").line;
 
 /**
  * Anything the far side of the board carries, drawn at its distance.
@@ -471,6 +481,9 @@ function LeftRail({ theme, title, badge, turn, line, note, onTheme, onLeave }: {
         alignItems: "center",
         gap: 10,
         padding: "20px 0",
+        // The rail's own buttons are the only things on it worth pressing, and
+        // its layer refuses the cursor, so the rail asks for it back.
+        pointerEvents: "auto",
       }}
     >
       <span
