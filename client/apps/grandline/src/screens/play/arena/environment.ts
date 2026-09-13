@@ -1,23 +1,30 @@
 import type { ArenaThemeId } from "../../../design/arenaThemes";
 
 /**
- * The painted room behind each table.
+ * The painted table each board stands on.
  *
- * A plate is the far end of the arena: the hall the board is standing in,
- * painted once as a picture rather than built out of shapes, because a hall
- * is the one thing on this screen that is better drawn than constructed. It
- * sits behind everything, fills the window, and is opaque, so whatever it
- * shows at the edges is the room and whatever the board covers is simply not
- * seen.
+ * A table is painted once as a picture rather than built out of shapes,
+ * because a large wooden surface is the one thing on this screen that is
+ * better drawn than constructed. It is not a backdrop: it sits inside the
+ * stage, under the board, and takes the same camera the board takes, so when
+ * the board is pitched towards the viewer the table is pitched with it and the
+ * two foreshorten as one surface. A table drawn flat behind a pitched board
+ * would be a board floating in front of a picture of a table.
  *
- * Not every table has one yet. A table without a plate gets the room drawn in
- * gradients, which is what every table had until now.
+ * The picture is larger than the stage on purpose. Its painter left things at
+ * its edges — a lantern, books, a chart — and the board's own composition
+ * keeps the middle of the picture on screen and the edges off it, so what
+ * shows round the board is wood and the lamp's light across it and nothing
+ * else. The table is the environment.
+ *
+ * Not every board has a table yet. A board without one gets the room drawn in
+ * gradients, which is what every board had until now.
  */
-const PLATES: Partial<Record<ArenaThemeId, string>> = {
-  harbour: "/arena/environment/harbour/distant-hall.png",
+const TABLES: Partial<Record<ArenaThemeId, string>> = {
+  harbour: "/arena/environment/harbour/tabletop.png",
 };
 
-/** The plate behind a table, if that table has one. */
-export function plateFor(theme: ArenaThemeId): string | undefined {
-  return PLATES[theme];
+/** The table under a board, if that board has one. */
+export function tableFor(theme: ArenaThemeId): string | undefined {
+  return TABLES[theme];
 }

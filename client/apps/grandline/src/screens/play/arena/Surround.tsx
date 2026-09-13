@@ -1,7 +1,7 @@
 import { BOARD, STAGE, boardReach, slabEdges } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import { apronPath } from "./board";
-import { plateFor } from "./environment";
+import { tableFor } from "./environment";
 
 /**
  * The table the board is standing on, and what the board does to it.
@@ -36,13 +36,13 @@ import { plateFor } from "./environment";
  *
  * The floor, going away into the dark below the near edge.
  *
- * Over a painted plate, only the shadow work is drawn. The plate already has
- * the lamp in it — a window, high on the left, with its light across the floor
- * — so the bounced warmth would be a second light laid over the first, and the
- * floor falling to black would bury the table the plate was painted to give
- * the board to stand on. What the plate cannot know is where the board is, so
- * everything the board does to the room stays: its underside, the dark where
- * it meets the table, and the shadow it throws away from the window.
+ * Over a painted table, only the shadow work is drawn. The painting already
+ * has the lamp in it — high on the left, with its light across the wood — so
+ * the bounced warmth would be a second light laid over the first, and the
+ * floor falling to black would bury the very table the board is meant to be
+ * standing on. What the painting cannot know is where the board is, so
+ * everything the board does to the table stays: its underside, the dark where
+ * it meets the wood, and the shadow it throws away from the lamp.
  */
 
 const H = STAGE.height;
@@ -58,7 +58,7 @@ export default function Surround({ theme, spread = 0 }: {
   /** How much of the apron's own near face shows below the board. */
   const underside = 14;
   const reach = boardReach(spread);
-  const plated = plateFor(theme.id) !== undefined;
+  const plated = tableFor(theme.id) !== undefined;
   const near = slabEdges(BOARD.nearY);
   /** The board's near edge, out to where the board actually reaches. */
   const left = near.x0 - reach;

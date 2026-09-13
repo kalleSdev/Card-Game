@@ -55,7 +55,7 @@ export const STAGE = {
  * screen shows more board *and* more room, in the same proportion at every
  * width.
  */
-export const REACH = 0.55;
+export const REACH = 0.4;
 
 /** How far past the composition the board itself extends, for a given spread. */
 export function boardReach(spread: number): number {
@@ -764,12 +764,19 @@ export const PERSPECTIVE = 1900;
  * small part it always was.
  *
  * `horizon` is how far down the screen the eye is looking, which is where the
- * far edges converge. It sits above the middle, where the hall's own floor
- * converges, so the two floors agree about where the room goes.
+ * far edges converge. It sits above the middle, so the table runs away above
+ * the board rather than stopping at its far edge.
+ *
+ * `distance` is how far the chair is from the table: the share of the screen
+ * the composition is allowed to fill. At 1 the board ran to the top and bottom
+ * of the screen and the table was a strip down each side, which is a board
+ * held up to the eye. Backed off, the table shows all the way round and the
+ * board is a thing sitting on it.
  */
 export const CAMERA = {
   pitch: 14,
   horizon: 0.42,
+  distance: 0.82,
 } as const;
 
 /**
@@ -849,9 +856,11 @@ export function depthTransform(z: number): string {
  * would if you sat closer to a wider table. `spread` is how much further it
  * reaches on each side, in stage units.
  *
- * The scale is chosen so the gameplay composition always fits whole. On a
- * short or narrow screen that means the board stops filling every pixel, which
- * is the right way round: a cropped battlefield is worse than a margin.
+ * The scale is chosen so the gameplay composition always fits whole, and
+ * then backed off by the camera's distance so that it does not fill the
+ * screen either. On a short or narrow screen that means the board stops
+ * filling every pixel, which is the right way round: a cropped battlefield is
+ * worse than a margin.
  */
 export interface StageFrame {
   /** How much of a stage unit a screen pixel is worth. */
@@ -869,7 +878,7 @@ export function frameFor(width: number, height: number): StageFrame {
   // with it.
   const scale = Math.max(
     0.01,
-    Math.min(Math.max(width, 1) / STAGE.width, Math.max(height, 1) / STAGE.height),
+    Math.min(Math.max(width, 1) / STAGE.width, Math.max(height, 1) / STAGE.height) * CAMERA.distance,
   );
   const stageWidth = Math.max(STAGE.width, width / scale);
   return { scale, width: stageWidth, spread: (stageWidth - STAGE.width) / 2 };

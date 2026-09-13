@@ -15,6 +15,7 @@ import Layer from "./arena/Layer";
 import Scene from "./arena/Scene";
 import Structure from "./arena/Structure";
 import Surround from "./arena/Surround";
+import Tabletop from "./arena/Tabletop";
 import Atmosphere from "./arena/Atmosphere";
 import Surface from "./arena/Surface";
 import LeaderNiche, { AbilityDial } from "./arena/LeaderNiche";
@@ -173,6 +174,7 @@ export function Arena({
             layer further off than the board, which is why it is the only one
             the board can stand in front of. */}
         <Layer name="atmosphere">
+          <Tabletop theme={theme} />
           <Surround theme={theme} spread={frame.spread} />
         </Layer>
 
