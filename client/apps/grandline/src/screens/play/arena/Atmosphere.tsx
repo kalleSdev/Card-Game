@@ -8,13 +8,18 @@ import type { ArenaTheme } from "../../../design/arenaThemes";
  * corners of the screen going dark, and a very small amount of something in
  * the air catching the lamp.
  *
- * The vignette is the only part of the arena that is allowed over the cards,
- * which is why it is shaped the way it is: nothing at all across the middle
- * two thirds, and what darkening there is arrives late and lands on the
- * corners. A vignette that reaches the battlefield is a filter over a game;
- * one that stops at the corners is a room the game is being played in. It is
- * also brighter on the lamp's side than the other, because a corner near a
- * light is not as dark as a corner away from one.
+ * The darkening at the edges is the only part of the arena that is allowed
+ * over the cards, which is why it is shaped the way it is: nothing at all
+ * across the middle, and what there is arrives late and stays at the edges.
+ * A vignette that reaches the battlefield is a filter over a game; one that
+ * stays at the edges is a room the game is being played in.
+ *
+ * It is not a circle. Two linear washes — one down the sides, one along the
+ * top and bottom — each dark only in its last fifth, and the lamp's side lifted
+ * back out with a third wash coming in from the upper left. A radial vignette
+ * is a lens; edges going dark independently is a room, and the difference is
+ * the one thing a person can point at when a screen looks like a screenshot
+ * with an effect on it.
  *
  * The motes are twenty two circles. Not a texture, not a particle system and
  * not animated — a still scatter reads as air at rest, and anything that moved
@@ -74,33 +79,31 @@ export default function Atmosphere({ theme, spread = 0 }: {
       style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}
     >
       <defs>
-        {/*
-          Nothing until two thirds of the way out, so the battlefield, both
-          hands and every card is untouched, and then the corners drop away.
-          Object bounding box units on purpose: it wants to be an ellipse the
-          shape of the screen, whatever shape the screen turns out to be.
-        */}
-        <radialGradient id="at-vignette" cx="0.5" cy="0.46" r="0.62">
-          <stop offset="0.58" stopColor="#000000" stopOpacity="0" />
-          <stop offset="0.82" stopColor="#000000" stopOpacity="0.2" />
+        {/* The sides going dark, and the top and bottom. Bounding box units,
+            so each is a share of the screen whatever shape the screen is. */}
+        <linearGradient id="at-sides" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#000000" stopOpacity="0.5" />
+          <stop offset="0.14" stopColor="#000000" stopOpacity="0" />
+          <stop offset="0.86" stopColor="#000000" stopOpacity="0" />
           <stop offset="1" stopColor="#000000" stopOpacity="0.62" />
-        </radialGradient>
+        </linearGradient>
+        <linearGradient id="at-ends" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#000000" stopOpacity="0.34" />
+          <stop offset="0.12" stopColor="#000000" stopOpacity="0" />
+          <stop offset="0.84" stopColor="#000000" stopOpacity="0" />
+          <stop offset="1" stopColor="#000000" stopOpacity="0.66" />
+        </linearGradient>
 
-        {/* The lamp's side of the room, lifted back out of the vignette. */}
-        <radialGradient
-          id="at-lift"
-          gradientUnits="userSpaceOnUse"
-          cx={LIGHT.x}
-          cy={LIGHT.y}
-          r={LIGHT.reach * 0.92}
-        >
-          <stop offset="0" stopColor={theme.lamp} stopOpacity="0.1" />
-          <stop offset="0.55" stopColor={theme.lamp} stopOpacity="0.03" />
+        {/* The lamp's side of the room, lifted back out of it. */}
+        <linearGradient id="at-lift" gradientUnits="userSpaceOnUse" x1={LIGHT.x - 600} y1={0} x2={LIGHT.x + 380} y2={H * 0.7}>
+          <stop offset="0" stopColor={theme.lamp} stopOpacity="0.14" />
+          <stop offset="0.5" stopColor={theme.lamp} stopOpacity="0.04" />
           <stop offset="1" stopColor={theme.lamp} stopOpacity="0" />
-        </radialGradient>
+        </linearGradient>
       </defs>
 
-      <rect x={-spread} y={0} width={W} height={H} fill="url(#at-vignette)" />
+      <rect x={-spread} y={0} width={W} height={H} fill="url(#at-sides)" />
+      <rect x={-spread} y={0} width={W} height={H} fill="url(#at-ends)" />
       <rect x={-spread} y={0} width={W} height={H} fill="url(#at-lift)" />
 
       <g fill={theme.lamp}>
