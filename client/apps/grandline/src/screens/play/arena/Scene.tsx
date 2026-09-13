@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
 import { LAYER, TILT } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
+import { plateFor } from "./environment";
 
 /**
  * The room the board is standing in.
@@ -21,9 +22,18 @@ import type { ArenaTheme } from "../../../design/arenaThemes";
  * own style, so React has no opinion about the property and will not overwrite
  * what the loop puts there.
  *
- * What is here now is the ground the board sits on, moved out of the frame it
- * used to be painted in. The lighting, the distance and the walls belong to the
- * layer above this one and are not built yet.
+ * For a table that has one, the room is a painted plate: a hall, lit from a
+ * high window on the left, with a wooden table running across the foot of it
+ * for the board to stand on. It is drawn to cover the window and no further —
+ * the same scale in both directions, cropped by at most a few per cent at
+ * either aspect ratio, since the plate was painted to the screen's own shape.
+ * The board covers the quiet middle of it, and what is left showing is the
+ * architecture round the edges, which is what a room seen past a table looks
+ * like. The plate carries its own light and its own dark, so nothing else in
+ * this layer is drawn over it.
+ *
+ * A table without a plate gets the room in gradients, as every table did until
+ * the first plate arrived.
  */
 
 export default function Scene({ theme, nodeRef }: {
@@ -31,6 +41,8 @@ export default function Scene({ theme, nodeRef }: {
   /** Handed to the frame loop, which drifts this against the board's lean. */
   nodeRef: RefObject<HTMLDivElement>;
 }) {
+  const plate = plateFor(theme.id);
+
   return (
     <div
       ref={nodeRef}
@@ -42,21 +54,21 @@ export default function Scene({ theme, nodeRef }: {
         inset: -TILT.sceneDrift * 2,
         zIndex: LAYER.scene,
         pointerEvents: "none",
-        // A large table in a dark room, lit from high on the left. There is
-        // one darkening here and it runs along the light: warm where the lamp
-        // reaches, falling away to the room's own dark in the far corner from
-        // it. Darkening the sides and the bottom separately, as this used to,
-        // put a frame round the screen; one falloff along one axis is just
-        // where the light stops. From the top down:
+        // The plate, if there is one: the whole window, uniform scale, held to
+        // the middle. The room's own near black sits under it for the moment
+        // before it has loaded, which is the plate's darkest tone and so the
+        // least visible thing to arrive from.
         //
-        //   the lamp's warmth, coming in from the upper left;
-        //   two very broad, very faint bands across the table at a slight
-        //   angle, which is as much as a large wooden surface needs to stop
-        //   being one flat tone without a plank pattern anyone could count;
-        //   the near edge of the table, and the floor beyond it — the one
-        //   piece of the room that is a place and not a surface;
-        //   the table itself, going dark away from the lamp.
-        background: `
+        // Otherwise, a large table in a dark room, lit from high on the left,
+        // in gradients. There is one darkening and it runs along the light:
+        // warm where the lamp reaches, falling away to the room's own dark in
+        // the far corner from it. From the top down: the lamp's warmth from
+        // the upper left; two very broad, very faint bands across the table at
+        // a slight angle; the near edge of the table and the floor beyond it;
+        // the table itself, going dark away from the lamp.
+        background: plate
+          ? `#04060A url("${plate}") center / cover no-repeat`
+          : `
           linear-gradient(152deg, ${theme.lamp}2A 0%, ${theme.lamp}10 26%, transparent 50%),
           linear-gradient(97deg, transparent 0%, transparent 31%, rgba(255,255,255,0.03) 34%, transparent 38%, transparent 68%, rgba(0,0,0,0.18) 72%, transparent 77%),
           linear-gradient(180deg, transparent 0%, transparent 86%, rgba(0,0,0,0.55) 88.5%, #03040A 92%, #020308 100%),

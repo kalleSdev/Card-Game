@@ -761,8 +761,15 @@ export const PERSPECTIVE = 2400;
  */
 export const TILT = {
   degrees: 0.35,
-  /** How far the room slides the other way, which is what sells the distance. */
-  sceneDrift: 12,
+  /**
+   * How far the room slides the other way, which is what sells the distance.
+   *
+   * Less than the board's own edges move when it leans. The room is the far
+   * end of the arena, and the far end of anything moves least; a backdrop that
+   * swung further than the object in front of it would be nearer than it, not
+   * further.
+   */
+  sceneDrift: 2,
   /**
    * How much of the way to the cursor the board travels each frame.
    *

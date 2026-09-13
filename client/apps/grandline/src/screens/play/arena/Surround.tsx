@@ -1,6 +1,7 @@
 import { BOARD, STAGE, boardReach, slabEdges } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import { apronPath } from "./board";
+import { plateFor } from "./environment";
 
 /**
  * The table the board is standing on, and what the board does to it.
@@ -34,6 +35,14 @@ import { apronPath } from "./board";
  * lamp is.
  *
  * The floor, going away into the dark below the near edge.
+ *
+ * Over a painted plate, only the shadow work is drawn. The plate already has
+ * the lamp in it — a window, high on the left, with its light across the floor
+ * — so the bounced warmth would be a second light laid over the first, and the
+ * floor falling to black would bury the table the plate was painted to give
+ * the board to stand on. What the plate cannot know is where the board is, so
+ * everything the board does to the room stays: its underside, the dark where
+ * it meets the table, and the shadow it throws away from the window.
  */
 
 const H = STAGE.height;
@@ -49,6 +58,7 @@ export default function Surround({ theme, spread = 0 }: {
   /** How much of the apron's own near face shows below the board. */
   const underside = 14;
   const reach = boardReach(spread);
+  const plated = plateFor(theme.id) !== undefined;
   const near = slabEdges(BOARD.nearY);
   /** The board's near edge, out to where the board actually reaches. */
   const left = near.x0 - reach;
@@ -111,8 +121,12 @@ export default function Surround({ theme, spread = 0 }: {
       </defs>
 
       {/* ── Light: the two edges on the lamp's side ──────────────────────── */}
-      <rect x={-spread} y={0} width={left + spread} height={H} fill="url(#sr-warm-left)" />
-      <rect x={-spread} y={0} width={W} height={BOARD.farY} fill="url(#sr-warm-top)" />
+      {!plated && (
+        <>
+          <rect x={-spread} y={0} width={left + spread} height={H} fill="url(#sr-warm-left)" />
+          <rect x={-spread} y={0} width={W} height={BOARD.farY} fill="url(#sr-warm-top)" />
+        </>
+      )}
 
       {/* ── Shadow: the two edges away from it ───────────────────────────── */}
       <ellipse cx={STAGE.width / 2 + 110} cy={floor + 24} rx={(right - left) * 0.6} ry={160} fill="url(#sr-cast)" />
@@ -134,7 +148,7 @@ export default function Surround({ theme, spread = 0 }: {
       <rect x={left - 60} y={floor + underside - 4} width={right - left + 120} height={92} fill="url(#sr-contact)" />
 
       {/* ── The floor ─────────────────────────────────────────────────────── */}
-      <rect x={-spread} y={floor} width={W} height={H - floor} fill="url(#sr-floor)" />
+      {!plated && <rect x={-spread} y={floor} width={W} height={H - floor} fill="url(#sr-floor)" />}
     </svg>
   );
 }
