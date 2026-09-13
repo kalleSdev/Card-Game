@@ -58,7 +58,7 @@ const EDGE = 3;
  * steps in it and none of them exist unless their edges catch something.
  */
 const LIT = 0.92;
-const DARK = 0.72;
+const DARK = 0.8;
 
 export default function Structure({ theme, spread = 0 }: {
   theme: ArenaTheme;
@@ -107,11 +107,11 @@ export default function Structure({ theme, spread = 0 }: {
 
         {/* What the lamp does not reach. Not a vignette over the screen: it is
             centred on the lamp, so the far corner from it is the dark one. */}
-        <radialGradient id="st-falloff" gradientUnits="userSpaceOnUse" cx={LIGHT.x} cy={LIGHT.y} r={LIGHT.reach * 1.12}>
-          <stop offset="0" stopColor="#000000" stopOpacity="0" />
-          <stop offset="0.38" stopColor="#000000" stopOpacity="0.16" />
-          <stop offset="0.72" stopColor="#000000" stopOpacity="0.46" />
-          <stop offset="1" stopColor="#000000" stopOpacity="0.78" />
+        <radialGradient id="st-falloff" gradientUnits="userSpaceOnUse" cx={LIGHT.x} cy={LIGHT.y} r={LIGHT.reach * 1.16}>
+          <stop offset="0" stopColor="#0A1220" stopOpacity="0" />
+          <stop offset="0.36" stopColor="#0A1220" stopOpacity="0.18" />
+          <stop offset="0.7" stopColor="#0A1220" stopOpacity="0.5" />
+          <stop offset="1" stopColor="#060C18" stopOpacity="0.82" />
         </radialGradient>
 
         {/*
@@ -155,9 +155,10 @@ export default function Structure({ theme, spread = 0 }: {
 
         {/* Brass. Bright where the lamp catches it, and it loses its shine
             rather than its colour as it turns away. */}
-        <linearGradient id="st-brass" gradientUnits="userSpaceOnUse" x1={0} y1={WELL.farY} x2={0} y2={WELL.nearY}>
-          <stop offset="0" stopColor={theme.gold.mid} />
-          <stop offset="0.4" stopColor={theme.gold.dark} />
+        <linearGradient id="st-brass" gradientUnits="userSpaceOnUse" x1={WELL.farX0} y1={WELL.farY} x2={WELL.nearX1} y2={WELL.nearY}>
+          <stop offset="0" stopColor={theme.gold.light} />
+          <stop offset="0.16" stopColor={theme.gold.mid} />
+          <stop offset="0.5" stopColor={theme.gold.dark} />
           <stop offset="1" stopColor={theme.gold.dark} />
         </linearGradient>
 

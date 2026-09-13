@@ -34,7 +34,38 @@ import { plateFor } from "./environment";
  *
  * A table without a plate gets the room in gradients, as every table did until
  * the first plate arrived.
+ *
+ * The window breathes. One sheet of the lamp's colour, laid diagonally over
+ * the room from the window's corner at a few per cent, whose opacity drifts
+ * up and down over eighteen seconds — which is a candle in a draught, or the
+ * sun going behind and out of a thin cloud, and is the least a room can do to
+ * stop being a photograph. It is deliberately below the level anyone can point
+ * at. It is the foundation for a scene that moves, not the scene moving.
+ *
+ * It is a div, and only its opacity is animated, so the browser composites it
+ * without repainting anything. Whatever is built on this later has to obey the
+ * same rule: a sheet of its own, opacity or transform only, never a value
+ * inside one of the SVGs, because animating an SVG's insides repaints the
+ * whole board every frame.
  */
+
+/** How long one breath takes, and how far the light swings. */
+const BREATH = { seconds: 18, low: 0.55 };
+
+const CSS = `
+@keyframes ar-breath {
+  0%   { opacity: ${BREATH.low}; }
+  50%  { opacity: 1; }
+  100% { opacity: ${BREATH.low}; }
+}
+.ar-breath {
+  animation: ar-breath ${BREATH.seconds}s ease-in-out infinite;
+  will-change: opacity;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ar-breath { animation: none; opacity: 0.78; }
+}
+`;
 
 export default function Scene({ theme, nodeRef }: {
   theme: ArenaTheme;
@@ -74,6 +105,20 @@ export default function Scene({ theme, nodeRef }: {
           linear-gradient(180deg, transparent 0%, transparent 86%, rgba(0,0,0,0.55) 88.5%, #03040A 92%, #020308 100%),
           linear-gradient(148deg, ${theme.table} 0%, ${theme.table} 30%, #0A0C11 68%, #03050A 100%)`,
       }}
-    />
+    >
+      <style>{CSS}</style>
+      {/* The breath: the lamp's colour from the window's corner, fading out
+          before the middle of the room, so it lands on the hall and the table
+          and never on the battlefield. */}
+      <div
+        className="ar-breath"
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          background: `linear-gradient(150deg, ${theme.lamp}1C 0%, ${theme.lamp}0A 24%, transparent 46%)`,
+        }}
+      />
+    </div>
   );
 }

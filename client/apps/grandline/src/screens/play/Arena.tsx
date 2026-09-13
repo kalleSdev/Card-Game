@@ -5,7 +5,7 @@ import {
 import type { PlayerId } from "@cg/contracts";
 import type { BattleCard, BattleIntent, BattlePlayer, BattleState } from "@cg/battle";
 import {
-  BOARD, CENTRE, FAR_SCALE, HAND, HAZE, PERSPECTIVE, RAIL, STAGE, TILT, WELL,
+  BOARD, CAMERA, CENTRE, FAR_SCALE, HAND, HAZE, PERSPECTIVE, RAIL, STAGE, TILT, WELL,
   cardBand, leaderSeat, railSeat, slabEdges, station, useStageFit,
   type Band, type RailSeat, type Side,
 } from "../../design/arenaStage";
@@ -132,7 +132,10 @@ export function Arena({
         // measured against this, which is the only way the perspective can
         // agree with itself.
         perspective: PERSPECTIVE,
-        perspectiveOrigin: "50% 50%",
+        // The eye looks at a point above the middle of the screen, which is
+        // where the hall's own floor runs to. Everything that recedes on the
+        // board recedes towards the same place.
+        perspectiveOrigin: `50% ${CAMERA.horizon * 100}%`,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -407,7 +410,7 @@ function useTilt(scale: number): {
       const { x, y } = shown.current;
       if (stage.current) {
         stage.current.style.transform =
-          `rotateX(${x}deg) rotateY(${y}deg) scale(${scale})`;
+          `rotateX(${CAMERA.pitch + x}deg) rotateY(${y}deg) scale(${scale})`;
       }
       if (room.current) {
         room.current.style.transform = `translate(${-y * drift}px, ${-x * drift}px)`;

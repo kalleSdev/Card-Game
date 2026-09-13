@@ -136,9 +136,9 @@ export default function Surround({ theme, spread = 0 }: {
       {/* Only the outer half of each stroke shows, since the board covers the
           rest. Drawn before the underside so the underside sits on top of the
           occlusion rather than being swallowed by it. */}
-      <path d={apron} fill="none" stroke="#000000" strokeWidth={150} opacity="0.18" />
-      <path d={apron} fill="none" stroke="#000000" strokeWidth={70} opacity="0.26" />
-      <path d={apron} fill="none" stroke="#000000" strokeWidth={26} opacity="0.5" />
+      <path d={apron} fill="none" stroke="#000000" strokeWidth={150} opacity="0.24" />
+      <path d={apron} fill="none" stroke="#000000" strokeWidth={70} opacity="0.34" />
+      <path d={apron} fill="none" stroke="#000000" strokeWidth={26} opacity="0.6" />
 
       {/* ── The underside: the apron's own near face ─────────────────────── */}
       <rect x={left - 22} y={floor} width={right - left + 44} height={underside} rx={3} fill="url(#sr-underside)" />

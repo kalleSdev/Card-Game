@@ -43,7 +43,7 @@ import { ENERGY_CAP } from "@cg/battle";
  */
 export const STAGE = {
   width: 1440,
-  height: 1160,
+  height: 1240,
 } as const;
 
 /**
@@ -55,7 +55,7 @@ export const STAGE = {
  * screen shows more board *and* more room, in the same proportion at every
  * width.
  */
-export const REACH = 0.62;
+export const REACH = 0.55;
 
 /** How far past the composition the board itself extends, for a given spread. */
 export function boardReach(spread: number): number {
@@ -70,8 +70,8 @@ export function boardReach(spread: number): number {
  */
 export const BOARD = {
   /** The slab's far edge, and where its near edge begins. */
-  farY: 82,
-  nearY: 966,
+  farY: 118,
+  nearY: 1002,
   /**
    * How much of the slab's thickness shows along the near edge.
    *
@@ -740,9 +740,37 @@ export const DEPTH: Record<LayerName, number> = {
  * How far the eye is from the board.
  *
  * One value, shared by the whole arena, because perspective only reads as
- * perspective if every layer agrees where the viewer is standing.
+ * perspective if every layer agrees where the viewer is standing. Shorter than
+ * it was: the painted hall behind the board was drawn with a wider lens than
+ * the board had, and a lens is not something two things in one picture can
+ * disagree about.
  */
-export const PERSPECTIVE = 2400;
+export const PERSPECTIVE = 1900;
+
+/**
+ * Where the eye is.
+ *
+ * The board used to be seen from almost straight above, with the whole of its
+ * depth faked by the slab drawing a little narrower at the far end. The hall it
+ * now stands in was painted from a chair: high, but a chair, with its floor
+ * running away to a horizon somewhere above the middle of the picture. A board
+ * seen from straight above in a room seen from a chair is a board stuck onto
+ * a room, so the board is pitched to agree with it.
+ *
+ * `pitch` is how far the board's far edge is turned away, in degrees. It is
+ * real perspective — the whole stage turns as one object, so the far edge
+ * draws smaller, the near edge larger, and every card, plate and word on the
+ * board keeps its place on it. The slab's own taper stays underneath as the
+ * small part it always was.
+ *
+ * `horizon` is how far down the screen the eye is looking, which is where the
+ * far edges converge. It sits above the middle, where the hall's own floor
+ * converges, so the two floors agree about where the room goes.
+ */
+export const CAMERA = {
+  pitch: 14,
+  horizon: 0.42,
+} as const;
 
 /**
  * The lean towards the cursor.
@@ -791,8 +819,8 @@ export const TILT = {
  * rather than as an object.
  */
 export const LIGHT = {
-  x: 596,
-  y: BOARD.farY - 16,
+  x: 400,
+  y: BOARD.farY - 40,
   /** How far the light reaches before the board is left to the dark. */
   reach: 1180,
 } as const;
