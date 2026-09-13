@@ -1,25 +1,18 @@
-import { LIGHT, STAGE } from "../../../design/arenaStage";
+import { STAGE } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 
 /**
  * The air in front of the board.
  *
- * Two things, and they are the last two things drawn before the writing: the
- * corners of the screen going dark, and a very small amount of something in
- * the air catching the lamp.
+ * One thing, and it is the last thing drawn before the writing: a very small
+ * amount of something in the air catching the lamp.
  *
- * The darkening at the edges is the only part of the arena that is allowed
- * over the cards, which is why it is shaped the way it is: nothing at all
- * across the middle, and what there is arrives late and stays at the edges.
- * A vignette that reaches the battlefield is a filter over a game; one that
- * stays at the edges is a room the game is being played in.
- *
- * It is not a circle. Two linear washes — one down the sides, one along the
- * top and bottom — each dark only in its last fifth, and the lamp's side lifted
- * back out with a third wash coming in from the upper left. A radial vignette
- * is a lens; edges going dark independently is a room, and the difference is
- * the one thing a person can point at when a screen looks like a screenshot
- * with an effect on it.
+ * There used to be a vignette here too — first a ring, then edges darkening
+ * separately — and both were the same mistake at different strengths: paint
+ * laid over the finished picture to make it look like a room, when what makes
+ * a room is the room. The darkness comes from the table now: it is lit from
+ * one side and falls away from the lamp on the other, and nothing in front of
+ * the cards touches them at all.
  *
  * The motes are twenty two circles. Not a texture, not a particle system and
  * not animated — a still scatter reads as air at rest, and anything that moved
@@ -78,34 +71,6 @@ export default function Atmosphere({ theme, spread = 0 }: {
       aria-hidden
       style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}
     >
-      <defs>
-        {/* The sides going dark, and the top and bottom. Bounding box units,
-            so each is a share of the screen whatever shape the screen is. */}
-        <linearGradient id="at-sides" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#000000" stopOpacity="0.5" />
-          <stop offset="0.14" stopColor="#000000" stopOpacity="0" />
-          <stop offset="0.86" stopColor="#000000" stopOpacity="0" />
-          <stop offset="1" stopColor="#000000" stopOpacity="0.62" />
-        </linearGradient>
-        <linearGradient id="at-ends" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#000000" stopOpacity="0.34" />
-          <stop offset="0.12" stopColor="#000000" stopOpacity="0" />
-          <stop offset="0.84" stopColor="#000000" stopOpacity="0" />
-          <stop offset="1" stopColor="#000000" stopOpacity="0.66" />
-        </linearGradient>
-
-        {/* The lamp's side of the room, lifted back out of it. */}
-        <linearGradient id="at-lift" gradientUnits="userSpaceOnUse" x1={LIGHT.x - 600} y1={0} x2={LIGHT.x + 380} y2={H * 0.7}>
-          <stop offset="0" stopColor={theme.lamp} stopOpacity="0.14" />
-          <stop offset="0.5" stopColor={theme.lamp} stopOpacity="0.04" />
-          <stop offset="1" stopColor={theme.lamp} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-
-      <rect x={-spread} y={0} width={W} height={H} fill="url(#at-sides)" />
-      <rect x={-spread} y={0} width={W} height={H} fill="url(#at-ends)" />
-      <rect x={-spread} y={0} width={W} height={H} fill="url(#at-lift)" />
-
       <g fill={theme.lamp}>
         {MOTES.map(mote => (
           <circle key={`${mote.x}-${mote.y}`} cx={mote.x} cy={mote.y} r={mote.r} opacity={mote.o} />

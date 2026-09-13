@@ -1,6 +1,6 @@
 import {
-  BOARD, LIGHT, PLINTH, RAIL, RIM, STAGE, STATION, WELL, railSeat, slabEdges, station,
-  type Side,
+  BOARD, LIGHT, PLINTH, RAIL, RIM, STAGE, STATION, WELL, boardReach, railSeat, slabEdges,
+  station, type Side,
 } from "../../../design/arenaStage";
 import { ARENA_THEME_LIST, type ArenaTheme } from "../../../design/arenaThemes";
 import {
@@ -123,9 +123,9 @@ export default function Structure({ theme, spread = 0 }: {
           what the eye reads as a thick object rather than a lit panel.
         */}
         <radialGradient id="st-edge-dark" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0.4" stopColor="#000000" stopOpacity="0" />
-          <stop offset="0.78" stopColor="#000000" stopOpacity="0.2" />
-          <stop offset="1" stopColor="#000000" stopOpacity="0.58" />
+          <stop offset="0.3" stopColor="#000000" stopOpacity="0" />
+          <stop offset="0.62" stopColor="#000000" stopOpacity="0.2" />
+          <stop offset="0.86" stopColor="#000000" stopOpacity="0.58" />
         </radialGradient>
 
         <linearGradient id="st-slab" gradientUnits="userSpaceOnUse" x1={0} y1={BOARD.farY} x2={0} y2={BOARD.nearY + BOARD.lip}>
@@ -355,10 +355,11 @@ function round(v: number): number {
  * anywhere near the well, so nothing here is ever under a card.
  */
 function Wear({ theme, spread }: { theme: ArenaTheme; spread: number }) {
+  const reach = boardReach(spread);
   const scratches = Array.from({ length: 11 }, (_unused, i) => {
     // Out on the body, either side of the play area, never across it.
     const side = noise(i, 0) < 0.5 ? -1 : 1;
-    const x = W / 2 + side * (W * 0.34 + spread * noise(i, 1));
+    const x = W / 2 + side * (W * 0.34 + reach * noise(i, 1));
     const y = BOARD.farY + noise(i, 2) * (BOARD.nearY - BOARD.farY);
     const run = 40 + noise(i, 3) * 130;
     const lean = (noise(i, 4) - 0.5) * 26;
@@ -367,8 +368,8 @@ function Wear({ theme, spread }: { theme: ArenaTheme; spread: number }) {
 
   return (
     <g>
-      <ellipse cx={W * 0.2 - spread * 0.4} cy={BOARD.farY + 210} rx={300} ry={190} fill={theme.frameEdge} opacity="0.07" />
-      <ellipse cx={W * 0.82 + spread * 0.4} cy={BOARD.nearY - 180} rx={260} ry={210} fill={theme.frameEdge} opacity="0.05" />
+      <ellipse cx={W * 0.2 - reach * 0.4} cy={BOARD.farY + 210} rx={300} ry={190} fill={theme.frameEdge} opacity="0.07" />
+      <ellipse cx={W * 0.82 + reach * 0.4} cy={BOARD.nearY - 180} rx={260} ry={210} fill={theme.frameEdge} opacity="0.05" />
       <path d={scratches} stroke={theme.frameEdge} strokeWidth={1.5} fill="none" opacity="0.09" />
       <path d={scratches} stroke={theme.frameInlay} strokeWidth={1} fill="none" opacity="0.06" transform="translate(0 1.5)" />
       {/* Where hands rest, along the near rim. */}
@@ -614,7 +615,7 @@ function Socket({ theme, x, y, w, h, r }: {
  * the edge, which is what stops the outer wood reading as a plain expanse.
  */
 function RimGroove({ theme, spread }: { theme: ArenaTheme; spread: number }) {
-  const inset = 26 + spread;
+  const inset = 26 + boardReach(spread);
   const steps = 24;
   const points: string[] = [];
 

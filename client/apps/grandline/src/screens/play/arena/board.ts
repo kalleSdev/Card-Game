@@ -1,5 +1,5 @@
 import {
-  BOARD, PLINTH, RIGHT, STAGE, WELL, slabEdges, wellEdges,
+  BOARD, PLINTH, RIGHT, STAGE, WELL, boardReach, slabEdges, wellEdges,
 } from "../../../design/arenaStage";
 
 /**
@@ -66,12 +66,13 @@ function round(value: number): number {
  * without being stretched, and everything cut into it stays where it was.
  */
 export function slabPath(spread = 0): string {
+  const reach = boardReach(spread);
   return roundedPolygon(
     [
-      { x: BOARD.farX0 - spread, y: BOARD.farY },
-      { x: BOARD.farX1 + spread, y: BOARD.farY },
-      { x: BOARD.nearX1 + spread, y: BOARD.nearY },
-      { x: BOARD.nearX0 - spread, y: BOARD.nearY },
+      { x: BOARD.farX0 - reach, y: BOARD.farY },
+      { x: BOARD.farX1 + reach, y: BOARD.farY },
+      { x: BOARD.nearX1 + reach, y: BOARD.nearY },
+      { x: BOARD.nearX0 - reach, y: BOARD.nearY },
     ],
     BOARD.round,
   );
@@ -87,7 +88,7 @@ export function slabPath(spread = 0): string {
  * there is room for it.
  */
 export function apronPath(spread: number): string {
-  const out = spread + 26;
+  const out = boardReach(spread) + 26;
   return roundedPolygon(
     [
       { x: BOARD.farX0 - out, y: BOARD.farY - 20 },
@@ -107,12 +108,13 @@ export function apronPath(spread: number): string {
  */
 export function lipPath(spread = 0): string {
   const inset = BOARD.round / 3;
+  const reach = boardReach(spread);
   return roundedPolygon(
     [
-      { x: BOARD.nearX0 - spread, y: BOARD.nearY },
-      { x: BOARD.nearX1 + spread, y: BOARD.nearY },
-      { x: BOARD.nearX1 + spread - inset, y: BOARD.nearY + BOARD.lip },
-      { x: BOARD.nearX0 - spread + inset, y: BOARD.nearY + BOARD.lip },
+      { x: BOARD.nearX0 - reach, y: BOARD.nearY },
+      { x: BOARD.nearX1 + reach, y: BOARD.nearY },
+      { x: BOARD.nearX1 + reach - inset, y: BOARD.nearY + BOARD.lip },
+      { x: BOARD.nearX0 - reach + inset, y: BOARD.nearY + BOARD.lip },
     ],
     BOARD.round / 2,
   );

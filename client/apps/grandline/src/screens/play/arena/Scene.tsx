@@ -42,28 +42,25 @@ export default function Scene({ theme, nodeRef }: {
         inset: -TILT.sceneDrift * 2,
         zIndex: LAYER.scene,
         pointerEvents: "none",
-        // A dark table in a dark room, lit from high on the left. Every layer
-        // here is linear on purpose: a room's light comes from a direction,
-        // and the earlier warm radial pool read as a spotlight on a floor
-        // rather than as light in a room. From the top down:
+        // A large table in a dark room, lit from high on the left. There is
+        // one darkening here and it runs along the light: warm where the lamp
+        // reaches, falling away to the room's own dark in the far corner from
+        // it. Darkening the sides and the bottom separately, as this used to,
+        // put a frame round the screen; one falloff along one axis is just
+        // where the light stops. From the top down:
         //
-        //   the lamp's warmth, coming in from the upper left and gone by the
-        //   middle of the screen;
+        //   the lamp's warmth, coming in from the upper left;
         //   two very broad, very faint bands across the table at a slight
         //   angle, which is as much as a large wooden surface needs to stop
         //   being one flat tone without a plank pattern anyone could count;
-        //   the table darkening towards both sides;
-        //   the table going cold and dark towards the bottom, away from the
-        //   lamp, where the room's own colour takes over from the table's.
-        //
-        // No repeating gradient: one over the whole viewport was the most
-        // expensive thing on this layer and bought detail nobody could see
-        // through the board that covers it.
+        //   the near edge of the table, and the floor beyond it — the one
+        //   piece of the room that is a place and not a surface;
+        //   the table itself, going dark away from the lamp.
         background: `
-          linear-gradient(152deg, ${theme.lamp}24 0%, ${theme.lamp}0A 28%, transparent 52%),
-          linear-gradient(97deg, transparent 0%, transparent 33%, rgba(255,255,255,0.028) 36%, transparent 40%, transparent 70%, rgba(0,0,0,0.16) 74%, transparent 79%),
-          linear-gradient(90deg, #04060A 0%, transparent 18%, transparent 82%, #04060A 100%),
-          linear-gradient(180deg, ${theme.table} 0%, ${theme.table} 44%, #07090E 76%, #02040A 100%)`,
+          linear-gradient(152deg, ${theme.lamp}2A 0%, ${theme.lamp}10 26%, transparent 50%),
+          linear-gradient(97deg, transparent 0%, transparent 31%, rgba(255,255,255,0.03) 34%, transparent 38%, transparent 68%, rgba(0,0,0,0.18) 72%, transparent 77%),
+          linear-gradient(180deg, transparent 0%, transparent 86%, rgba(0,0,0,0.55) 88.5%, #03040A 92%, #020308 100%),
+          linear-gradient(148deg, ${theme.table} 0%, ${theme.table} 30%, #0A0C11 68%, #03050A 100%)`,
       }}
     />
   );

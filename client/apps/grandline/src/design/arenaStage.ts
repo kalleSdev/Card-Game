@@ -33,16 +33,34 @@ import { ENERGY_CAP } from "@cg/battle";
 /**
  * The composition, in the board's own units.
  *
- * Wider than it is tall by rather more than a screen, because the board fills
- * the width and the near player's hand hangs off the bottom of it. The height
- * is what decides how much of a screen the board takes: it is the smaller of
- * the two fits on every ordinary monitor, so a shorter stage is a closer
- * camera. It is kept as tight as the hand allows.
+ * The height is what decides how much of a screen the board takes: it is the
+ * smaller of the two fits on every ordinary monitor, so a taller stage is a
+ * camera further back. It used to be as tight as the hand allowed, and the
+ * board touched every edge of the screen; there is room now above the board
+ * for the far end of the room, and below it for the table the board is
+ * standing on and the whole of your hand, which is what it takes for the
+ * board to read as an object in a place rather than as the screen itself.
  */
 export const STAGE = {
   width: 1440,
-  height: 1060,
+  height: 1160,
 } as const;
+
+/**
+ * How much of a wider screen the board takes, against how much the room does.
+ *
+ * On a wide screen the stage grows past the composition by `spread` on each
+ * side. The board used to take all of it and reach the edges of the screen;
+ * now it takes this share and the table around it takes the rest, so a wider
+ * screen shows more board *and* more room, in the same proportion at every
+ * width.
+ */
+export const REACH = 0.62;
+
+/** How far past the composition the board itself extends, for a given spread. */
+export function boardReach(spread: number): number {
+  return spread * REACH;
+}
 
 /**
  * The slab.
@@ -52,8 +70,8 @@ export const STAGE = {
  */
 export const BOARD = {
   /** The slab's far edge, and where its near edge begins. */
-  farY: 52,
-  nearY: 936,
+  farY: 82,
+  nearY: 966,
   /**
    * How much of the slab's thickness shows along the near edge.
    *
@@ -767,7 +785,7 @@ export const TILT = {
  */
 export const LIGHT = {
   x: 596,
-  y: 36,
+  y: BOARD.farY - 16,
   /** How far the light reaches before the board is left to the dark. */
   reach: 1180,
 } as const;

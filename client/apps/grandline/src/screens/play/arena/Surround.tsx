@@ -1,4 +1,4 @@
-import { BOARD, STAGE, slabEdges } from "../../../design/arenaStage";
+import { BOARD, STAGE, boardReach, slabEdges } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import { apronPath } from "./board";
 
@@ -48,7 +48,11 @@ export default function Surround({ theme, spread = 0 }: {
   const floor = BOARD.nearY + BOARD.lip + 12;
   /** How much of the apron's own near face shows below the board. */
   const underside = 14;
+  const reach = boardReach(spread);
   const near = slabEdges(BOARD.nearY);
+  /** The board's near edge, out to where the board actually reaches. */
+  const left = near.x0 - reach;
+  const right = near.x1 + reach;
   const apron = apronPath(spread);
 
   return (
@@ -64,13 +68,14 @@ export default function Surround({ theme, spread = 0 }: {
           outwards from the board's edge, so it is a wash along a side and not
           a halo around an object.
         */}
-        <linearGradient id="sr-warm-left" gradientUnits="userSpaceOnUse" x1={-spread} y1={0} x2={near.x0 - spread} y2={0}>
+        <linearGradient id="sr-warm-left" gradientUnits="userSpaceOnUse" x1={left - 260} y1={0} x2={left} y2={0}>
           <stop offset="0" stopColor={theme.lamp} stopOpacity="0" />
-          <stop offset="1" stopColor={theme.lamp} stopOpacity="0.22" />
+          <stop offset="0.6" stopColor={theme.lamp} stopOpacity="0.06" />
+          <stop offset="1" stopColor={theme.lamp} stopOpacity="0.16" />
         </linearGradient>
         <linearGradient id="sr-warm-top" gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={0} y2={BOARD.farY}>
           <stop offset="0" stopColor={theme.lamp} stopOpacity="0" />
-          <stop offset="1" stopColor={theme.lamp} stopOpacity="0.18" />
+          <stop offset="1" stopColor={theme.lamp} stopOpacity="0.12" />
         </linearGradient>
 
         {/* The apron's near face: darker than the board's lip above it, going
@@ -106,12 +111,12 @@ export default function Surround({ theme, spread = 0 }: {
       </defs>
 
       {/* ── Light: the two edges on the lamp's side ──────────────────────── */}
-      <rect x={-spread} y={0} width={near.x0} height={H} fill="url(#sr-warm-left)" />
+      <rect x={-spread} y={0} width={left + spread} height={H} fill="url(#sr-warm-left)" />
       <rect x={-spread} y={0} width={W} height={BOARD.farY} fill="url(#sr-warm-top)" />
 
       {/* ── Shadow: the two edges away from it ───────────────────────────── */}
-      <ellipse cx={STAGE.width / 2 + 90} cy={floor + 8} rx={W * 0.54} ry={140} fill="url(#sr-cast)" />
-      <ellipse cx={near.x1 + spread + 30} cy={(BOARD.farY + BOARD.nearY) / 2 + 60} rx={110} ry={H * 0.42} fill="url(#sr-cast)" opacity="0.55" />
+      <ellipse cx={STAGE.width / 2 + 110} cy={floor + 24} rx={(right - left) * 0.6} ry={160} fill="url(#sr-cast)" />
+      <ellipse cx={right + 40} cy={(BOARD.farY + BOARD.nearY) / 2 + 80} rx={130} ry={H * 0.4} fill="url(#sr-cast)" opacity="0.6" />
 
       {/* ── Where the board meets the table ──────────────────────────────── */}
       {/* Only the outer half of each stroke shows, since the board covers the
@@ -122,18 +127,11 @@ export default function Surround({ theme, spread = 0 }: {
       <path d={apron} fill="none" stroke="#000000" strokeWidth={26} opacity="0.5" />
 
       {/* ── The underside: the apron's own near face ─────────────────────── */}
-      <rect
-        x={near.x0 - spread - 22}
-        y={floor}
-        width={near.x1 - near.x0 + spread * 2 + 44}
-        height={underside}
-        rx={3}
-        fill="url(#sr-underside)"
-      />
-      <path d={`M ${near.x0 - spread - 20} ${floor + 1} L ${near.x1 + spread + 20} ${floor + 1}`} stroke={theme.frame.mid} strokeWidth={1.5} opacity="0.35" />
+      <rect x={left - 22} y={floor} width={right - left + 44} height={underside} rx={3} fill="url(#sr-underside)" />
+      <path d={`M ${left - 20} ${floor + 1} L ${right + 20} ${floor + 1}`} stroke={theme.frame.mid} strokeWidth={1.5} opacity="0.35" />
 
       {/* And the contact shadow it throws straight down onto the table. */}
-      <rect x={near.x0 - spread - 60} y={floor + underside - 4} width={near.x1 - near.x0 + spread * 2 + 120} height={92} fill="url(#sr-contact)" />
+      <rect x={left - 60} y={floor + underside - 4} width={right - left + 120} height={92} fill="url(#sr-contact)" />
 
       {/* ── The floor ─────────────────────────────────────────────────────── */}
       <rect x={-spread} y={floor} width={W} height={H - floor} fill="url(#sr-floor)" />
