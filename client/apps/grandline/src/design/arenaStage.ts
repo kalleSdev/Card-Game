@@ -11,7 +11,7 @@ import { ENERGY_CAP } from "@cg/battle";
  *
  * The board is built as an object rather than as a set of bands: a thick slab
  * with a well cut into it, a rim around the well, a plinth at each end holding
- * a leader, sockets in the right hand rim for the decks, and shelves at the
+ * a leader, sockets in the right hand rim for the decks, and a base under the
  * corners for whatever is resting on it. Everything else is measured off those
  * parts, so moving a part moves what sits on it.
  *
@@ -43,7 +43,7 @@ import { ENERGY_CAP } from "@cg/battle";
  */
 export const STAGE = {
   width: 1440,
-  height: 1240,
+  height: 834,
 } as const;
 
 /**
@@ -55,7 +55,7 @@ export const STAGE = {
  * screen shows more board *and* more room, in the same proportion at every
  * width.
  */
-export const REACH = 0.4;
+export const REACH = 0;
 
 /** How far past the composition the board itself extends, for a given spread. */
 export function boardReach(spread: number): number {
@@ -69,9 +69,16 @@ export function boardReach(spread: number): number {
  * `slabEdges(y)` for the width at a depth rather than working it out again.
  */
 export const BOARD = {
-  /** The slab's far edge, and where its near edge begins. */
-  farY: 118,
-  nearY: 1002,
+  /**
+   * The slab's far edge, and where its near edge begins.
+   *
+   * The board sits low enough in the stage for their whole hand to be held
+   * above it — a hand cut off by the top of the screen is a hand you cannot
+   * count — and what is left below it is exactly a hand card deep, which is
+   * all yours needs.
+   */
+  farY: 90,
+  nearY: 686,
   /**
    * How much of the slab's thickness shows along the near edge.
    *
@@ -89,7 +96,7 @@ export const BOARD = {
   farX1: 1367,
   nearX0: 46,
   nearX1: 1394,
-  round: 46,
+  round: 38,
 } as const;
 
 /**
@@ -100,18 +107,18 @@ export const BOARD = {
  * in a band this deep, and a band this deep at the other end holds exactly the
  * same things at exactly the same distances from the edge.
  */
-export const RIM_DEPTH = 206;
+export const RIM_DEPTH = 115;
 
 /** The opening cut into the slab, which the playing surface sits down inside. */
 export const WELL = {
   farY: BOARD.farY + RIM_DEPTH,
   nearY: BOARD.nearY - RIM_DEPTH,
-  farX0: 224,
-  farX1: 1216,
-  nearX0: 200,
-  nearX1: 1240,
+  farX0: 253,
+  farX1: 1187,
+  nearX0: 229,
+  nearX1: 1211,
   /** How far the surface sits below the rim it is set into. */
-  depth: 20,
+  depth: 6,
   round: 28,
   /** Where the two halves meet. */
   get seamY() { return (this.farY + this.nearY) / 2; },
@@ -206,17 +213,18 @@ export function cardHeight(width: number): number {
  * board with cards on it and starts looking like a board with counters on it.
  */
 export const CARD = {
-  play: 152,
-  get playHeight() { return cardHeight(this.play); },
-  gap: 18,
   /**
-   * How far a row sits back from the seam.
-   *
-   * The rows are placed against the middle of the board rather than centred in
-   * their own half, so the two sides face each other across one line and the
-   * space each side has left over is at its own end, where its leader is.
+   * A card on the field. Smaller than one in your hand: the field has two
+   * rows to hold between two stations with room to spare round each, and a
+   * card in play is read from further away for less — what it hits for and
+   * what is left of it — while a card in hand is read for everything it says.
    */
-  seamGap: 16,
+  play: 96,
+  get playHeight() { return cardHeight(this.play); },
+  /** A card in your hand: 0.076 of the board's width, as on the reference. */
+  hand: 104,
+  get handHeight() { return cardHeight(this.hand); },
+  gap: 16,
   /** How much a card in a hand hides behind the one before it. */
   handOverlap: 32,
   /** How far a card lifts when it is pointed at, and when it is picked up. */
@@ -226,12 +234,53 @@ export const CARD = {
   inset: 12,
 } as const;
 
-/** The band one side's cards in play lie in: exactly a card deep. */
+/**
+ * The battlefield: the parchment, as the one rectangle every card on it is
+ * placed from.
+ *
+ * The parchment tapers with the board, so the rectangle is the parchment's
+ * far width, which is the narrowest, and its full depth. Three zones are
+ * measured off it and nothing draws them: the surface is one sheet, and the
+ * zones are where things go on it, not marks on it. Each side's zone is a
+ * row deep and starts one clearance in from where its own station stands out
+ * over the parchment; what is left between the two is the middle, where the
+ * sides meet. Given once for the far side and reflected, so the two are one
+ * shape.
+ */
+export const ZONE = {
+  /** Clear parchment between a station's edge and the row in front of it. */
+  clearance: 4,
+} as const;
+
+export interface Battlefield extends Box {
+  /** Their row. */
+  opponent: Box;
+  /** The open middle, where the two sides meet. */
+  center: Box;
+  /** Your row. */
+  player: Box;
+}
+
+export function battlefield(): Battlefield {
+  const x = WELL.farX0 + WELL.depth;
+  const width = WELL.farX1 - WELL.farX0 - WELL.depth * 2;
+  const y = WELL.farY + WELL.depth / 2;
+  const height = WELL.nearY - WELL.farY - WELL.depth;
+
+  const far = station("far").plate.body;
+  const rowTop = far.y + far.height + ZONE.clearance;
+  const row = CARD.playHeight;
+  const opponent = { x, y: rowTop, width, height: row };
+  const player = { x, y: mirrorY(rowTop + row), width, height: row };
+  const center = { x, y: rowTop + row, width, height: player.y - (rowTop + row) };
+
+  return { x, y, width, height, opponent, center, player };
+}
+
+/** The band one side's cards in play lie in: its zone of the battlefield. */
 export function cardBand(side: Side): Band {
-  const height = CARD.playHeight;
-  // Written once for the far side; the near side is that band reflected.
-  const farTop = CENTRE.y - CARD.seamGap - height;
-  return { top: side === "far" ? farTop : mirrorY(farTop + height), height };
+  const zone = side === "far" ? battlefield().opponent : battlefield().player;
+  return { top: zone.y, height: zone.height };
 }
 
 /** The outer edge of that band, which is where the plinth behind it stops. */
@@ -261,13 +310,25 @@ export function cardOuter(side: Side): number {
  * into the rim rather than measured off the window.
  */
 export const LEADER = {
-  window: { width: 188, height: 212 },
-  /** The carved trim around the opening. */
+  window: { width: 110, height: 133 },
+  /** The brass retaining frame around the opening. */
   trim: 12,
-  /** How far the window's outer edge sits inside the board's outer edge. */
-  inset: 16,
-  /** One of the two plates beside the window, and the gap it keeps from it. */
-  stat: { width: 76, height: 34, gap: 12 },
+  /**
+   * The smallest step the niche takes: a third of the frame. It is the dark
+   * seat between the opening and the picture, and the rounding of the
+   * picture's bottom corners; every layer outside the picture widens it by
+   * its own offset, which is what keeps an arch an arch at every size.
+   */
+  foot: 4,
+  /** How far in from the opening the picture starts: the seat. */
+  get picture() { return this.foot; },
+  /**
+   * One of the two number plates, and how far in from a shoulder's outer edge
+   * its middle sits. They stand on the plate's shoulders, at the corners that
+   * face the field, half over the edge the way a plaque screwed to the foot
+   * of a frame is.
+   */
+  stat: { width: 54, height: 30, gap: 33 },
 } as const;
 
 export interface LeaderSeat {
@@ -276,13 +337,6 @@ export interface LeaderSeat {
   y: number;
   width: number;
   height: number;
-  /**
-   * Where the plates sit inside that box, as a distance down from its top.
-   *
-   * The plates hold to the window's battlefield-facing edge, which is its
-   * bottom at the far end and its top at the near one.
-   */
-  statTop: number;
   /**
    * The depth everything else on this rim lines up with: the window's own
    * middle, so the leader, the name, the dial and the energy row all sit on one
@@ -294,7 +348,8 @@ export interface LeaderSeat {
 export function leaderSeat(side: Side): LeaderSeat {
   const { width, height } = LEADER.window;
   // As with the rows: given for the far end and reflected for the near one.
-  const farTop = BOARD.farY + LEADER.inset;
+  // The window sits in the station's face, one pad in from its outer edge.
+  const farTop = BOARD.farY - STATION.plate.out + STATION.plate.pad;
   const y = side === "far" ? farTop : mirrorY(farTop + height);
 
   return {
@@ -302,231 +357,169 @@ export function leaderSeat(side: Side): LeaderSeat {
     y,
     width,
     height,
-    statTop: side === "far" ? height - LEADER.stat.height : 0,
     line: y + height / 2,
   };
 }
 
 /**
- * The two blocks that carry the leaders.
+ * The fittings down the two sides of the board, mounted on the rim.
  *
- * A plinth is raised out of the rim and breaks into the well, so a leader has a
- * piece of the board built around it rather than a panel laid on top of it. It
- * is exactly wide enough to hold the window and both of its plates, and it
- * stops where the cards start, so the block behind a row is never the block
- * under it.
+ * On the left the board's information — which game this is, whose turn it
+ * is — three stones, and the way out; on the right the two decks and the
+ * button that ends a turn. None of that is the game, so it is all out at the
+ * sides away from the field, and each piece is its own fitting set into the
+ * rim: a plate with a brass edge, a stone in a ring, a well with a brass
+ * frame. There is no housing behind them. The wood, the brass and the stone
+ * frame run on underneath, and the fittings sit across them where the rim is
+ * too narrow to hold them on the wood alone.
+ *
+ * Each column is centred on the board's own middle, so it reads as one thing
+ * rather than as two clusters at opposite ends of the rim, and each fitting
+ * is measured from the rim's own edges at its depth, so the column follows
+ * the board's taper.
  */
-export const PLINTH = {
-  get width() {
-    return LEADER.window.width + (LEADER.stat.gap + LEADER.stat.width) * 2;
-  },
-  get centreX() { return CENTRE.x; },
-  get far() {
-    return { top: BOARD.farY, bottom: cardOuter("far"), width: this.width };
-  },
-  get near() {
-    return { top: cardOuter("near"), bottom: BOARD.nearY, width: this.width };
-  },
-} as const;
-
-/**
- * The information area, carved down the left rim.
- *
- * Which game this is, whose turn it is, which table you are playing on and the
- * way out. None of it is the game, so it is all at one end of the board away
- * from the middle — but it is still part of the board, so it is cut into the
- * rim rather than laid on it.
- *
- * Three fittings rather than one panel: a plaque at the top for the match, a
- * plaque under it for the turn, and the controls at the bottom. A single box
- * behind all of it would be the thing this is trying to stop being.
- *
- * The column is one x and one width for its whole height, taken where the rim
- * is narrowest at each end — the slab's edge at the top, the well's at the
- * bottom, since both slide left as the board comes towards you. Its two ends
- * are mirrors of each other about the seam, which is the only symmetry a strip
- * down one side can have.
- */
-export const RAIL = {
-  /** Clear rim either side of the column. */
-  margin: 10,
-  /** Air between two fittings, and between the words and the controls. */
-  gap: 20,
-  wide: 44,
-  /** The plaque that carries the match, and the one that carries the turn. */
-  plaque: 80,
+export const SIDE = {
+  /** Clear wood between the slab's edge and a fitting. */
+  margin: 8,
+  /** Clear wood between the slab's edge and the right column. */
+  edge: 19,
+  /** Rim between one fitting and the next. */
+  gap: 10,
+  /** The left column: the two plates, the stones, and the key. */
+  width: 108,
+  plaque: 58,
   status: 62,
-  /** A theme gem, the air between two of them, and the way out. */
-  gem: 20,
-  gemGap: 14,
-  leave: 32,
-  /** How far a fitting's contents sit inside the recess cut for them. */
-  seat: 4,
-  /** The socket a gem sits in reaches this far past it. */
-  gemRing: 4,
-  get height() {
-    return this.plaque + this.gap + this.status + this.wide
-      + (this.gem + this.gemRing * 2) + this.gap + this.leave;
-  },
+  stone: 32,
+  stoneGap: 7,
+  leave: 42,
+  /** The left column sits a little above the board's middle, as it does on
+      the reference. */
+  lift: 12,
+  /** And the right column sits higher still. */
+  rightLift: 34,
+  /** The two marks engraved on the left rim, above and below the column. */
+  emblem: { radius: 38, offset: 168 },
+  /** The right column: how far a deck's frame sits past the deck. */
+  deckSeat: 6,
+  /** The button that ends a turn, and the frame round it. */
+  button: { width: 104, height: 46, seat: 5 },
 } as const;
 
-export interface RailSeat {
-  x: number;
-  width: number;
+export interface LeftFittings {
   /** The match: its name, and who it is against. */
-  plaque: Band;
+  plaque: Box;
   /** Whose turn it is, and which turn. */
-  status: Band;
-  /** Bare rim between the plaques and the controls, where a note is engraved. */
-  note: Band;
-  /** One socket per table you can play on. */
-  gems: { cx: number; cy: number; radius: number }[];
+  status: Box;
+  /** Three stones in a row, in brass rings. Board hardware; they do nothing. */
+  stones: { cx: number; cy: number; radius: number }[];
   /** The way out. */
-  leave: { x: number; y: number; width: number; height: number };
+  leave: Box;
+  /** Bare rim below the column, where a note is engraved. */
+  note: Box;
+  /** The two compass marks. */
+  emblems: { cx: number; cy: number; radius: number }[];
 }
 
-export function railSeat(gems: number): RailSeat {
-  // The column is centred on the board's own middle, so its four fittings read
-  // as one thing rather than as two clusters at opposite ends of the rim, and
-  // the bare wood it leaves over is shared equally above and below it.
-  const top = CENTRE.y - RAIL.height / 2;
-  const bottom = top + RAIL.height;
-  const x = slabEdges(top).x0 + RAIL.margin;
-  const width = wellEdges(bottom).x0 - RAIL.margin - x;
+export function leftFittings(): LeftFittings {
+  const { gap, width } = SIDE;
+  const stoneRow = SIDE.stone + SIDE.stoneGap;
+  const height = SIDE.plaque + gap + SIDE.status + gap + stoneRow + gap + SIDE.leave;
+  const top = CENTRE.y - SIDE.lift - height / 2;
+  const bottom = top + height;
+  // The column hangs off the slab's edge at its narrowest, so no fitting
+  // ever reaches past the wood at either end.
+  const x = Math.max(slabEdges(top).x0, slabEdges(bottom).x0) + SIDE.margin;
 
-  const statusTop = top + RAIL.plaque + RAIL.gap;
-  const gemRadius = RAIL.gem / 2 + RAIL.gemRing;
-  const gemCy = statusTop + RAIL.status + RAIL.wide + gemRadius;
-  const leaveTop = gemCy + gemRadius + RAIL.gap;
-  const row = gems * RAIL.gem + (gems - 1) * RAIL.gemGap;
+  const statusTop = top + SIDE.plaque + gap;
+  const stonesTop = statusTop + SIDE.status + gap;
+  const leaveTop = stonesTop + stoneRow + gap;
+  const row = 3 * SIDE.stone + 2 * SIDE.stoneGap;
+
+  const emblemX = x + width / 2;
+  return {
+    plaque: { x, y: top, width, height: SIDE.plaque },
+    status: { x, y: statusTop, width, height: SIDE.status },
+    stones: Array.from({ length: 3 }, (_unused, i) => ({
+      cx: x + width / 2 - row / 2 + SIDE.stone / 2 + i * (SIDE.stone + SIDE.stoneGap),
+      cy: stonesTop + stoneRow / 2,
+      radius: SIDE.stone / 2,
+    })),
+    leave: { x, y: leaveTop, width, height: SIDE.leave },
+    note: { x, y: bottom + gap, width, height: WELL.nearY - gap - (bottom + gap) },
+    emblems: [
+      { cx: emblemX, cy: CENTRE.y - SIDE.emblem.offset, radius: SIDE.emblem.radius },
+      { cx: emblemX, cy: CENTRE.y + SIDE.emblem.offset, radius: SIDE.emblem.radius },
+    ],
+  };
+}
+
+export interface RightFittings {
+  /** The two decks' frames, the same distance either side of the seam. */
+  decks: Record<Side, Box>;
+  /** The button's frame, on the seam. */
+  button: Box;
+}
+
+export function rightFittings(): RightFittings {
+  const deck = { width: RIGHT.deckWidth + SIDE.deckSeat * 2, height: RIGHT.deckHeight + SIDE.deckSeat * 2 };
+  /** Where every fitting is centred at a depth: hard against the board's
+      outer edge, one margin in, as on the reference. */
+  const middle = (y: number) => slabEdges(y).x1 - SIDE.edge - deck.width / 2;
+  const seam = WELL.seamY - SIDE.rightLift;
+
+  const socket = (side: Side): Box => {
+    const cy = side === "far" ? seam - RIGHT.deckOffset : seam + RIGHT.deckOffset;
+    return { x: middle(cy) - deck.width / 2, y: cy - deck.height / 2, width: deck.width, height: deck.height };
+  };
+  const button = {
+    width: SIDE.button.width + SIDE.button.seat * 2,
+    height: SIDE.button.height + SIDE.button.seat * 2,
+  };
 
   return {
-    x,
-    width,
-    plaque: { top, height: RAIL.plaque },
-    status: { top: statusTop, height: RAIL.status },
-    // Under the whole column, on bare rim, in the room the board has left
-    // over before the well's own near edge.
-    note: {
-      top: bottom + RAIL.gap,
-      height: WELL.nearY - RAIL.gap - (bottom + RAIL.gap),
+    decks: { far: socket("far"), near: socket("near") },
+    button: {
+      x: middle(seam) - button.width / 2,
+      y: seam - button.height / 2,
+      width: button.width,
+      height: button.height,
     },
-    gems: Array.from({ length: gems }, (_unused, i) => ({
-      cx: x + width / 2 - row / 2 + RAIL.gem / 2 + i * (RAIL.gem + RAIL.gemGap),
-      cy: gemCy,
-      radius: gemRadius,
-    })),
-    leave: { x: x + RAIL.seat * 3, y: leaveTop, width: width - RAIL.seat * 6, height: RAIL.leave },
   };
 }
 
 /**
- * Where the two hands hang off the board's ends.
+ * Where the two hands are held: just outside the board's two ends, the same
+ * clearance from each.
  *
- * Both are held over the board's outer edge by the same amount, so a card in
- * either hand overlaps the slab by the same strip. What differs is how much of
- * the card there is to see: yours runs off the bottom of the stage on purpose,
- * because the stage stops where it stops and a hand of readable cards is worth
- * more than a hand of whole ones. Theirs is cropped to a countable sliver,
- * since a card back has nothing on it worth the room.
+ * Yours hangs from the near edge, whole, and reaches to the bottom of the
+ * stage: the stage was measured so that it does. Theirs is held at the far
+ * edge, also whole, and smaller — it is a row of backs to be counted, not
+ * cards to be read, and drawn at full size it would not fit in the room the
+ * stage has above the board. Yours lies a little over the rim's edge, the
+ * way cards held at a table do; theirs is held just clear of the far edge.
  */
 export const HAND = {
-  /** How far a hand card's outer edge rides over the board's own edge. */
-  lift: 16,
-  get nearTop() { return BOARD.nearY - this.lift; },
   /**
-   * Their hand, as a fan held beyond the far edge of the table.
-   *
-   * The near hand is a fan pivoting on its bottom edge, camber pushing the
-   * middle card furthest onto the board, and it runs off the bottom of the
-   * stage because the stage stops before the card does. The far hand is that
-   * same object reflected: it pivots on its top edge, its camber pushes the
-   * middle card furthest onto the board from the other direction, and it runs
-   * off the top of the stage. What differs is only how much of it there is to
-   * see, because there is less room above the board than below it.
-   *
-   * `reach` is the exact mirror of where the near hand's cards begin, so the
-   * deepest card at each end of the board stops at the same distance from its
-   * own leader: level with the window, sixteen units over the plinth's outer
-   * edge, and clear of the dial, the channel and every fitting on the rim.
+   * How far a hand rides over the board's edge. A hand held just off the
+   * table is a hand hovering; one whose cards lie a little over the rim is a
+   * hand at the table.
    */
+  over: 8,
+  /** Where your hand's top edge sits. */
+  get nearTop() { return BOARD.nearY - this.over; },
   far: {
+    /** How much smaller their cards are drawn than yours. */
+    scale: 0.72,
+    /** Clear wood between the fan and the board's far edge. */
+    gap: 14,
     /** Degrees of splay per card from the middle of the fan. */
-    tilt: 2.2,
-    /**
-     * How much of a card hides behind the one before it.
-     *
-     * Less than yours hides behind its neighbour, for two reasons. There is far
-     * less of each of their cards to see, so what there is has to be wide
-     * enough to read as a card; and a wider fan puts the cards at its ends out
-     * past the leader's plinth, where the rim is bare and they can come further
-     * onto the board.
-     */
-    overlap: 30,
-    /**
-     * How far onto the board a card may reach where the leader's plinth is
-     * behind it: level with the window, which is the mirror of where the near
-     * hand's own cards begin.
-     */
-    get reach() { return leaderSeat("far").y; },
-    /**
-     * How far it may reach anywhere else: level with the outer edge of the
-     * energy channel, so a card at the end of the fan comes further onto the
-     * rim without ever lying over a fitting cut into it.
-     */
-    get deep() { return station("far").channel.y; },
-    /**
-     * The line the fan is held on.
-     *
-     * A whole card above the shallowest reach, which puts it off the top of the
-     * stage. That is the point: the cards are not cropped to a band, they are
-     * whole cards held beyond the edge of the table, and what bounds each one
-     * at the bottom is its own rounded edge rather than a line drawn across the
-     * row. The layer's own crop takes care of the rest, at the edge of the
-     * screen, where a crop is honest.
-     */
-    get pivotY() { return this.reach - CARD.playHeight; },
-    /**
-     * How far a card may come onto the board, given where it is and how far the
-     * fan has turned it.
-     *
-     * The deepest it can go without lying over anything cut into the rim: the
-     * leader's plinth stops it level with the window, the dial's socket stops
-     * it at the socket, and out on bare rim it reaches the channel's line. So
-     * the middle of the fan tucks away behind the plinth and its ends come
-     * forward, and the row has a shape instead of an edge.
-     *
-     * `turn` is the card's own rotation, which carries its lower corners
-     * sideways: a card at the end of the fan leans out over rim its upright
-     * self would never have reached.
-     *
-     * The answer is taken on both sides of the board's middle and the shallower
-     * one wins. The fan is symmetrical, so its silhouette has to be — and the
-     * two rims are not mirror images of each other, since the dial's socket
-     * sits closer in on the left than the energy channel does on the right.
-     */
-    floorFor(x0: number, turn: number): number {
-      const shift = CARD.playHeight * Math.sin((turn * Math.PI) / 180);
-      const from = x0 + shift;
-      const to = from + CARD.play;
-
-      const socket = station("far").ability;
-      const bands: [number, number, number][] = [
-        [CENTRE.x - PLINTH.width / 2, CENTRE.x + PLINTH.width / 2, this.reach],
-        [socket.cx - socket.radius, socket.cx + socket.radius, socket.cy - socket.radius],
-      ];
-
-      let floor = this.deep;
-      for (const side of [0, 1]) {
-        // The card's own span, then the same span reflected about the middle.
-        const a = side === 0 ? from : CENTRE.x * 2 - to;
-        const b = side === 0 ? to : CENTRE.x * 2 - from;
-        for (const [start, end, limit] of bands) {
-          if (b > start && a < end) floor = Math.min(floor, limit);
-        }
-      }
-      return floor;
-    },
+    tilt: 2,
+    /** How much of a card hides behind the one before it, at their scale. */
+    overlap: 22,
+    get width() { return Math.round(CARD.hand * this.scale); },
+    get height() { return Math.round(CARD.handHeight * this.scale); },
+    /** The line the fan hangs from: its cards' top edge. */
+    get top() { return BOARD.farY - this.gap - this.height; },
   },
 } as const;
 
@@ -540,100 +533,145 @@ export const HAND = {
  */
 export const ENERGY = {
   sockets: ENERGY_CAP,
-  size: 24,
-  gap: 7,
+  size: 18,
+  gap: 4,
   get width() { return this.sockets * this.size + (this.sockets - 1) * this.gap; },
 } as const;
 
 /**
- * The player's station: the fittings the board is cut to hold.
+ * The player's station: three fittings mounted on the rim at the end of the
+ * board, with the rim's own wood, brass and stone running on underneath.
  *
- * A leader, a dial, a row of stones and a number are four different things, and
- * until now three of them were placed by their own constants and only met on
- * the rim by luck. They are one construction: a plinth in the middle of the
- * rim, a socket cut to the left of it for the dial, and a channel cut to the
- * right of it holding the energy readout and the stones.
+ * In the middle, the plate: a piece of ivory standing on the rim from the
+ * board's outer edge to the parchment's, with the leader's arched cavity cut
+ * into it and a brass retaining frame round the opening. Its foot steps out
+ * into two shoulders, and a dark plate for a number is mounted on each, at
+ * the corners that face the field. To its left, a gap of rim, then the dial
+ * in its socket; to its right, a gap of rim, then the counter rail — one
+ * horizontal brass frame with the number and the ten stones in it. Three
+ * pieces, spaced, and nothing joining them but the board: a station is a
+ * place on the board where a player's things are, not a thing itself.
  *
- * The two bays either side of the plinth are the same width, because the slab
- * is symmetrical about the board's middle and both are measured from the slab's
- * edge inwards. So the dial keeps exactly the clearance from the plinth that
- * the channel does, and neither is a number anybody chose.
+ * The dial and the rail sit as high on the rim as they can, on the wood.
+ * The plate is taller than the rim is deep, so it hangs a hair over the
+ * board's outer edge and reaches to the parchment; that is what it is for.
  *
- * Nothing here takes FAR_SCALE. These are holes in the board, not objects
- * standing on it: their perspective is the slab's own taper, and a hole drawn
- * 2.5% small would simply not line up with the hole it is supposed to be.
+ * Everything is worked out for the far end and reflected for the near one,
+ * so the two stations are one construction seen from opposite ends of the
+ * table.
  */
 export const STATION = {
-  /** Clear rim left outside the outermost fitting, at the narrower end. */
-  margin: 18,
-  /** The energy channel: how deep across the rim, and how it is cut. */
-  channel: { height: 64, round: 14, pad: 12, gap: 14 },
-  /**
-   * The plate the number is on, set into the channel's floor.
-   *
-   * The same fitting as the two plates beside a leader — same height, same
-   * corner — because it is the same thing: a number set into the board.
-   */
-  readout: { width: 80, height: 34, round: 7 },
+  /** The plate. */
+  plate: {
+    /** Ivory showing round the brass frame. */
+    pad: 6,
+    /** How far the plate hangs out past the slab's edge. */
+    out: 25,
+    /** How far each shoulder steps out, and how tall the shoulders are. */
+    shoulder: 68,
+    shoulderHeight: 42,
+  },
+  /** Rim between the plate and the fittings either side of it. */
+  gap: 34,
+  /** Where the dial's and the rail's middles sit, in from the board's edge. */
+  line: 50,
   /** The dial that sits in the socket, and the recess left around it. */
-  dial: 112,
-  ring: 12,
+  dial: 78,
+  ring: 6,
+  /** The counter rail: how deep, and its own frame round what is in it. */
+  rail: { height: 48, pad: 14, gap: 10 },
+  /** The plate the number is on, set into the rail's floor. */
+  readout: { width: 80, height: 30 },
 } as const;
 
+/** A box on the stage. */
+export interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface Station {
-  /** The depth this station lines up on: its own leader's middle. */
+  /** The depth the dial and the rail line up on. */
   line: number;
-  /** The channel cut into the rim, which everything about energy sits in. */
-  channel: { x: number; y: number; width: number; height: number };
-  /** The plate inside it that carries the number. */
-  readout: { x: number; y: number; width: number; height: number };
-  /** The row of stone sockets inside it. */
-  gems: { x: number; y: number; width: number; height: number };
+  /** The plate: its upper body, and its shoulders. */
+  plate: { body: Box; shoulders: Box };
+  /** The two number plates, on the shoulders: attack, then health. */
+  stats: [Box, Box];
   /** The socket cut for the dial, and the dial that sits in it. */
   ability: { cx: number; cy: number; radius: number; dial: number };
+  /** The rail, which everything about energy sits in. */
+  channel: Box;
+  /** The plate inside it that carries the number. */
+  readout: Box;
+  /** The row of stone sockets inside it. */
+  gems: Box;
 }
 
 /** A box given for the far side, reflected whole for the near one. */
-function seatBox(side: Side, x: number, top: number, width: number, height: number) {
+function seatBox(side: Side, x: number, top: number, width: number, height: number): Box {
   return { x, y: side === "far" ? top : mirrorY(top + height), width, height };
 }
 
 export function station(side: Side): Station {
-  // Measured at the far line, which is the narrower end of the slab, so a
-  // channel that fits there fits at the other end too — and both ends get the
-  // same box rather than one each.
-  const farLine = leaderSeat("far").line;
-  const { channel, readout } = STATION;
-  const plinthLeft = CENTRE.x - PLINTH.width / 2;
-  const plinthRight = CENTRE.x + PLINTH.width / 2;
+  // Everything is worked out for the far end and reflected for the near one.
+  const seat = leaderSeat("far");
+  const { plate, gap, rail, readout } = STATION;
+  const { stat } = LEADER;
 
-  const width = channel.pad * 2 + readout.width + channel.gap + ENERGY.width;
-  const right = slabEdges(farLine).x1 - STATION.margin;
-  const left = right - width;
-  /** The clear rim between the plinth and the channel, whatever that came to. */
-  const bay = left - plinthRight;
+  // The plate: the frame with a pad of ivory round it, from a hair over the
+  // board's edge to just past the parchment's.
+  const bodyX = seat.x - LEADER.trim - plate.pad;
+  const bodyWidth = seat.width + (LEADER.trim + plate.pad) * 2;
+  const top = BOARD.farY - plate.out;
+  const bottom = seat.y + seat.height + plate.pad;
+  const shouldersX = bodyX - plate.shoulder;
+  const shouldersWidth = bodyWidth + plate.shoulder * 2;
+  const shouldersTop = bottom - plate.shoulderHeight;
 
-  const line = side === "far" ? farLine : mirrorY(farLine);
+  // The number plates, on the shoulders' outer corners, half over the edge.
+  const statY = bottom - plate.pad - stat.height;
+  const statLeft = shouldersX - stat.width / 2 + stat.gap;
+  const statRight = shouldersX + shouldersWidth - stat.width / 2 - stat.gap;
+
+  // The dial and the rail, on the wood, as high as they go.
   const radius = STATION.dial / 2 + STATION.ring;
+  const line = BOARD.farY + STATION.line;
+  const dialCx = bodyX - gap - radius;
+  const channelWidth = rail.pad * 2 + readout.width + rail.gap + ENERGY.width;
+  const channelX = bodyX + bodyWidth + gap + 16;
 
   return {
-    line,
-    channel: seatBox(side, left, farLine - channel.height / 2, width, channel.height),
-    readout: seatBox(side, left + channel.pad, farLine - readout.height / 2, readout.width, readout.height),
-    gems: seatBox(side, right - channel.pad - ENERGY.width, farLine - ENERGY.size / 2, ENERGY.width, ENERGY.size),
-    // The dial's socket takes the same clearance from the plinth on its side.
-    ability: { cx: plinthLeft - bay - radius, cy: line, radius, dial: STATION.dial },
+    line: side === "far" ? line : mirrorY(line),
+    plate: {
+      body: seatBox(side, bodyX, top, bodyWidth, bottom - top),
+      shoulders: seatBox(side, shouldersX, shouldersTop, shouldersWidth, plate.shoulderHeight),
+    },
+    stats: [
+      seatBox(side, statLeft, statY, stat.width, stat.height),
+      seatBox(side, statRight, statY, stat.width, stat.height),
+    ],
+    ability: { cx: dialCx, cy: side === "far" ? line : mirrorY(line), radius, dial: STATION.dial },
+    channel: seatBox(side, channelX, line - rail.height / 2, channelWidth, rail.height),
+    readout: seatBox(side, channelX + rail.pad, line - readout.height / 2, readout.width, readout.height),
+    gems: seatBox(
+      side,
+      channelX + channelWidth - rail.pad - ENERGY.width,
+      line - ENERGY.size / 2,
+      ENERGY.width,
+      ENERGY.size,
+    ),
   };
 }
 
-/** The deck sockets and the button, cut into the right hand rim. */
+/** The decks, on the right hand rim. */
 export const RIGHT = {
   deckWidth: 78,
   deckHeight: 106,
-  /** How far each socket sits from the seam. */
-  deckOffset: 138,
-  buttonWidth: 148,
-  buttonHeight: 54,
+  /** How far each socket sits from the seam: close enough that the housing
+      round them clears the station's rail at the corner. */
+  deckOffset: 100,
 } as const;
 
 /** The banner behind a leader, which is how the sides are told apart. */
@@ -646,33 +684,62 @@ export const BANNER = {
 /**
  * How the rim is built up, as distances outward from the well's edge.
  *
- * Read from the play surface outwards: a chamfer falling into the well, wood,
- * a band of brass inlay, then wood again out to the slab's edge. Five surfaces
- * at four different heights, which is what a rim has to have before it reads
- * as constructed rather than as a border. The bands keep their share of a rim
- * that is now thicker at both ends than the far one used to be.
+ * Read from the play surface outwards: a chamfer of stone falling into the
+ * well, the stone frame, a band of brass where the wood's edge stands over
+ * the stone, then wood out to the slab's edge. Three bands at three heights
+ * — stone below wood, brass at the step between them — which is what a rim
+ * has to have before it reads as constructed rather than as a border. The
+ * brass is a finger wide. It is the accent on this board and nothing else,
+ * so it is the narrowest band; any wider and it becomes a gold racetrack
+ * drawing the eye off the battlefield it is supposed to frame.
  */
 export const RIM = {
   /** The chamfer, from the well's edge outwards. */
-  bevel: 34,
-  /**
-   * The brass inlay: where it starts and where it stops.
-   *
-   * A finger's width. Brass is the accent on this board and nothing else, so
-   * it is the narrowest band on the rim; any wider and it becomes a gold
-   * racetrack drawing the eye off the battlefield it is supposed to frame.
-   */
-  inlayIn: 46,
-  inlayOut: 56,
-  /** The channel cut into the wood further out, for shadow to sit in. */
-  channelIn: 78,
-  channelOut: 92,
+  bevel: 6,
+  /** The stone frame's flat, from the top of the chamfer outwards. */
+  stone: 34,
+  /** The brass, at the foot of the wood's step. */
+  brass: 8,
+  /** Where the brass starts and stops, from the well's edge. */
+  get brassIn() { return this.bevel + this.stone; },
+  get brassOut() { return this.brassIn + this.brass; },
 } as const;
 
-/** The corners of the rim, where anything resting on the board stands. */
-export const SHELF = {
-  /** How far in from the slab's edge a prop may stand. */
-  inset: 36,
+/**
+ * The one scale every edge on the board is cut to.
+ *
+ * A board is machined from a handful of settings — one cutter for its edges,
+ * one for its corners, one depth for its holes — and it reads as machined
+ * because those settings repeat. Before this existed the board carried
+ * eleven corner radii and four outline weights, one per component, and it
+ * read as assembled from parts that had never met. Everything here is taken
+ * from the two numbers the board already had: the slab's own corner and the
+ * well's.
+ */
+export const SHELL = {
+  /** The weight of every physical edge: where one surface stops. */
+  edge: 2,
+  /** The weight of a lit edge, a hairline seam, or a brass lip. */
+  lit: 1.5,
+  /**
+   * Corners, one family. The base is the slab's corner plus its own reach;
+   * the slab is the slab's; the frame is the well's; and a hole cut into any
+   * of them takes half the well's.
+   */
+  radius: {
+    base: BOARD.round + 10,
+    slab: BOARD.round,
+    frame: WELL.round,
+    hole: WELL.round / 2,
+  },
+  /**
+   * The contact shadow a raised layer drops onto the one below it, from the
+   * lamp: down and a little to the right, tight, because the layers are
+   * close.
+   */
+  cast: { dx: 5, dy: 10, blur: 9 },
+  /** How far into a hole the walls' shadow reaches across the floor. */
+  occlusion: 18,
 } as const;
 
 /** How long the board takes to acknowledge a click, in milliseconds. */
@@ -702,8 +769,8 @@ export const LAYER = {
   structure: 20,
   /** The surface that is played on, set down inside the well. */
   surface: 30,
-  /** Things resting on the board that are not part of the game. */
-  props: 40,
+  /** The two stations: stone standing on the frame and out over the field. */
+  stations: 40,
   /** Leaders, cards, decks, hands: everything the rules know about. */
   play: 50,
   /** What the board says about what you can do right now. */
@@ -719,21 +786,24 @@ export type LayerName = keyof typeof LAYER;
 /**
  * How far each layer stands from the surface, in the board's own units.
  *
- * The surface is zero, the room is a long way behind it, and the cards and
- * their dust stand in front. These are what turn the lean into depth: with
- * everything at zero the board tips as one flat sheet, and with the layers
- * spread along Z they slide against each other the way a real stack does.
+ * The board and everything set into it are at one depth. The layers used to
+ * be spread along Z so they slid against each other under the lean, but the
+ * board is pitched all the time now, not only when the cursor moves, and a
+ * layer standing 150 units in front of the wood is drawn 36 units further
+ * down the screen than the hole it is supposed to be sitting in: every
+ * number missed its plate. A fitting is drawn where its hole is, so the
+ * content sits at the board's own depth. Only the dust stands off it.
  */
 export const DEPTH: Record<LayerName, number> = {
   scene: -420,
-  atmosphere: -260,
-  structure: -40,
+  atmosphere: 0,
+  structure: 0,
   surface: 0,
-  props: 26,
-  play: 60,
-  highlight: 72,
-  particles: 120,
-  hud: 150,
+  stations: 0,
+  play: 0,
+  highlight: 0,
+  particles: 60,
+  hud: 0,
 };
 
 /**
@@ -776,7 +846,7 @@ export const PERSPECTIVE = 1900;
 export const CAMERA = {
   pitch: 14,
   horizon: 0.42,
-  distance: 0.82,
+  distance: 0.96,
 } as const;
 
 /**

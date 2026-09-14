@@ -5,23 +5,23 @@ import {
 import type { PlayerId } from "@cg/contracts";
 import type { BattleCard, BattleIntent, BattlePlayer, BattleState } from "@cg/battle";
 import {
-  BOARD, CAMERA, CENTRE, FAR_SCALE, HAND, HAZE, PERSPECTIVE, RAIL, STAGE, TILT, WELL,
-  cardBand, leaderSeat, railSeat, slabEdges, station, useStageFit,
-  type Band, type RailSeat, type Side,
+  CAMERA, CENTRE, FAR_SCALE, HAND, HAZE, PERSPECTIVE, STAGE, TILT, WELL,
+  cardBand, leaderSeat, leftFittings, slabEdges, station, useStageFit,
+  type Box, type Side,
 } from "../../design/arenaStage";
-import { ARENA_THEME_LIST, useArenaTheme, type ArenaTheme, type ArenaThemeId } from "../../design/arenaThemes";
+import { useArenaTheme, type ArenaTheme } from "../../design/arenaThemes";
 import { text } from "../../design/tokens";
 import Layer from "./arena/Layer";
 import Scene from "./arena/Scene";
+import Stations from "./arena/Stations";
 import Structure from "./arena/Structure";
 import Surround from "./arena/Surround";
-import Tabletop from "./arena/Tabletop";
 import Atmosphere from "./arena/Atmosphere";
 import Surface from "./arena/Surface";
 import LeaderNiche, { AbilityDial } from "./arena/LeaderNiche";
 import EnergyRail, { EnergyReadout } from "./arena/EnergyRail";
 import BoardRow from "./arena/BoardRow";
-import RightRail from "./arena/RightRail";
+import RightRail, { key } from "./arena/RightRail";
 import { EnemyHand, Hand } from "./arena/Hands";
 
 /**
@@ -64,7 +64,9 @@ export function Arena({
   onLeave: () => void;
   children?: ReactNode;
 }) {
-  const [theme, setTheme] = useArenaTheme();
+  // The setter is not wired to anything on the board any more: the stones
+  // that switched tables were the one control the housing did not keep.
+  const [theme] = useArenaTheme();
   const { ref: fit, frame } = useStageFit();
   const { stage, room } = useTilt(frame.scale);
   const [held, setHeld] = useState<string | null>(null);
@@ -174,7 +176,6 @@ export function Arena({
             layer further off than the board, which is why it is the only one
             the board can stand in front of. */}
         <Layer name="atmosphere">
-          <Tabletop theme={theme} />
           <Surround theme={theme} spread={frame.spread} />
         </Layer>
 
@@ -188,17 +189,22 @@ export function Arena({
           <Surface theme={theme} spread={frame.spread} />
         </Layer>
 
+        {/* The two stations: the frame's stone, widened at each end and cut
+            for the leader, the dial and the energy. Over the surface, because
+            each stands a little out over the field. */}
+        <Layer name="stations">
+          <Stations theme={theme} spread={frame.spread} />
+        </Layer>
+
         {/* Everything the rules know about. Cropped at the board's edge, which
             is what lets a hand hang off it the way it does on a table. */}
         <Layer name="play" core spread={frame.spread} crop>
-          {/* Their hand, held beyond the far edge. Nothing crops it but the
-              board's own edge: each card carries its own clip, so the row has
-              no box behind it to read as one. */}
+          {/* Their hand, held above the far edge, whole. */}
           <div
             style={{
               position: "absolute",
               left: 0,
-              top: HAND.far.pivotY,
+              top: HAND.far.top,
               width: STAGE.width,
               display: "flex",
               justifyContent: "center",
@@ -207,20 +213,17 @@ export function Arena({
             <EnemyHand theme={theme} count={state.players[top].hand.length} />
           </div>
 
-          {/* Scaled about the board's far edge rather than about the plinth's
-              inner face, so the far leader stays seated the same distance inside
-              the frame as the near one and shrinks inwards from there. */}
-          <Far originX={CENTRE.x} originY={BOARD.farY}>
-            <LeaderNiche
-              theme={theme}
-              side={top === you ? "you" : "them"}
-              end="far"
-              card={state.players[top].leader}
-              attackable={Boolean(attacking) && top !== acting}
-              active={!state.winner && actor === top}
-              onClick={top === acting ? undefined : onTheirLeader}
-            />
-          </Far>
+          {/* Not scaled with the far cards: the leader sits in a cavity the
+              board cut full size, and has to fill it. */}
+          <LeaderNiche
+            theme={theme}
+            side={top === you ? "you" : "them"}
+            end="far"
+            card={state.players[top].leader}
+            attackable={Boolean(attacking) && top !== acting}
+            active={!state.winner && actor === top}
+            onClick={top === acting ? undefined : onTheirLeader}
+          />
 
           <Far originX={CENTRE.x} originY={farRow.top + farRow.height / 2}>
           <BoardRow
@@ -262,8 +265,8 @@ export function Arena({
           <AbilityDial theme={theme} end="far" />
           <AbilityDial theme={theme} end="near" />
 
-          {/* Your hand, sitting over the bottom rail. Pointing at a card brings
-              it up far enough to read. */}
+          {/* Your hand, held below the near edge, whole. Pointing at a card
+              brings it up out of the fan. */}
           <div
             style={{
               position: "absolute",
@@ -334,7 +337,6 @@ export function Arena({
             turn={state.turn}
             line={turnLine(state, yourTurn, local)}
             note={note}
-            onTheme={setTheme}
             onLeave={onLeave}
           />
         </Layer>
@@ -522,7 +524,7 @@ function RimName({ theme, y, name, far = false }: {
         alignItems: "center",
         ...text("label"),
         fontSize: far ? 8 : 9,
-        color: theme.ink,
+        color: theme.frameInlay,
         opacity: far ? 0.85 : 1,
         pointerEvents: "none",
       }}
@@ -560,43 +562,41 @@ function Channel({ theme, end, player }: {
 }
 
 /**
- * The board's information area, down the left rim.
+ * What sits in the left hand fittings: the board's information, and the way
+ * out.
  *
- * Which game this is, whose turn it is, which table you are playing on and the
- * way out. It used to be a column of web type stacked on bare wood, which is
- * what it looked like. Now the board is cut for it — two plaques, a socket for
- * each table and a slot for the button — and this puts the words and the
- * controls into those holes. Nothing here draws a box: every edge you can see
- * belongs to the board.
+ * Which game this is, whose turn it is, and the way out. The two plates,
+ * the stones and the frame for the key are the board's, drawn with the
+ * structure; this puts the words and the key into them. Nothing here draws a
+ * box: every edge you can see belongs to the board.
  *
  * Type goes one of two ways depending on what it is sitting on. Inside a recess
  * it is pale with a dark line above it, because that is what paint in a hole
- * looks like. On bare wood it is the board's own dark ink with a light line
- * under it, which is what a cut letter looks like on a lit surface.
+ * looks like. On bare stone it is the wood's own lit edge colour, dimmer than
+ * paint, which is what a letter cut into the board looks like under a lamp.
  */
-function LeftRail({ theme, title, badge, turn, line, note, onTheme, onLeave }: {
+function LeftRail({ theme, title, badge, turn, line, note, onLeave }: {
   theme: ArenaTheme;
   title: string;
   badge: string;
   turn: number;
   line: string;
   note: string | null;
-  onTheme: (id: ArenaThemeId) => void;
   onLeave: () => void;
 }) {
-  const seat = railSeat(ARENA_THEME_LIST.length);
+  const seat = leftFittings();
 
   return (
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
       {/* The match, on the upper plaque. */}
-      <Plaque seat={seat} band={seat.plaque}>
+      <Plaque box={seat.plaque}>
         <span
           style={{
             ...text("title"),
             fontSize: 17,
             lineHeight: 1.05,
             letterSpacing: "0.04em",
-            color: theme.frame.light,
+            color: theme.paint,
             textShadow: SUNK,
           }}
         >
@@ -617,7 +617,7 @@ function LeftRail({ theme, title, badge, turn, line, note, onTheme, onLeave }: {
       </Plaque>
 
       {/* The turn, on the lower one. */}
-      <Plaque seat={seat} band={seat.status}>
+      <Plaque box={seat.status}>
         <span
           style={{
             ...text("label"),
@@ -634,7 +634,7 @@ function LeftRail({ theme, title, badge, turn, line, note, onTheme, onLeave }: {
             ...text("data"),
             fontSize: 14,
             lineHeight: 1,
-            color: theme.frame.light,
+            color: theme.paint,
             textShadow: SUNK,
           }}
         >
@@ -642,62 +642,31 @@ function LeftRail({ theme, title, badge, turn, line, note, onTheme, onLeave }: {
         </span>
       </Plaque>
 
-      {/* Anything the board has to say, cut into the wood between the plaques
-          and the controls rather than given a plate of its own. */}
+      {/* Anything the board has to say, cut into the wood below the column
+          rather than given a plate of its own. */}
       {note && (
         <div
           style={{
             position: "absolute",
-            left: seat.x,
-            top: seat.note.top,
-            width: seat.width,
+            left: seat.note.x,
+            top: seat.note.y,
+            width: seat.note.width,
             display: "flex",
             justifyContent: "center",
             ...text("small"),
             fontSize: 9.5,
             lineHeight: 1.35,
             textAlign: "center",
-            color: theme.ink,
-            textShadow: CUT,
+            color: theme.frameInlay,
+            textShadow: SUNK,
           }}
         >
           {note}
         </div>
       )}
 
-      {/* One stone per table, each in its own socket. */}
-      {ARENA_THEME_LIST.map((option, i) => {
-        const gem = seat.gems[i];
-        const here = option.id === theme.id;
-        return (
-          <button
-            key={option.id}
-            title={`${option.name} — ${option.blurb}`}
-            onClick={() => onTheme(option.id)}
-            style={{
-              position: "absolute",
-              left: gem.cx - RAIL.gem / 2,
-              top: gem.cy - RAIL.gem / 2,
-              width: RAIL.gem,
-              height: RAIL.gem,
-              borderRadius: "50%",
-              padding: 0,
-              cursor: "pointer",
-              pointerEvents: "auto",
-              background: `linear-gradient(150deg, ${option.felt.light}, ${option.felt.dark})`,
-              // Brass round every stone, brighter on the one you are playing
-              // on. A set stone keeps its ring whether it is chosen or not;
-              // what changes is how much light the ring is catching.
-              border: `1px solid ${here ? theme.gold.light : theme.gold.dark}`,
-              boxShadow: here
-                ? `inset 0 1px 0 rgba(255,255,255,0.45), 0 0 4px ${theme.gold.light}`
-                : "inset 0 1px 2px rgba(0,0,0,0.5)",
-            }}
-          />
-        );
-      })}
-
-      {/* The way out, sitting in its slot. */}
+      {/* The way out: the same key as the one that ends a turn, in its own
+          frame at the foot of the column. */}
       <button
         onClick={onLeave}
         style={{
@@ -708,13 +677,9 @@ function LeftRail({ theme, title, badge, turn, line, note, onTheme, onLeave }: {
           height: seat.leave.height,
           pointerEvents: "auto",
           cursor: "pointer",
-          borderRadius: RAIL.seat,
-          background: `linear-gradient(180deg, ${theme.wing.light}, ${theme.wing.mid})`,
-          border: `1px solid ${theme.wingEdge}`,
-          boxShadow: `inset 0 1px 0 ${theme.frame.light}, 0 1px 2px ${theme.shadow}`,
+          ...key(theme, false),
           ...text("label"),
           fontSize: 8,
-          color: theme.ink,
         }}
       >
         Leave
@@ -726,32 +691,25 @@ function LeftRail({ theme, title, badge, turn, line, note, onTheme, onLeave }: {
 /** Paint in a hole: pale, with the wall's shadow falling across the top of it. */
 const SUNK = "0 1px 0 rgba(0,0,0,0.55)";
 
-/**
- * A letter cut into a lit surface: the board's own ink, with the light catching
- * the lower wall of the cut.
- */
-const CUT = "0 1px 0 rgba(255,255,255,0.32)";
-
-/** The words that go in one of the rail's two plaques. */
-function Plaque({ seat, band, children }: {
-  seat: RailSeat;
-  band: Band;
+/** The words that go in one of the housing's two plaques. */
+function Plaque({ box, children }: {
+  box: Box;
   children: ReactNode;
 }) {
   return (
     <div
       style={{
         position: "absolute",
-        left: seat.x,
-        top: band.top,
-        width: seat.width,
-        height: band.height,
+        left: box.x,
+        top: box.y,
+        width: box.width,
+        height: box.height,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
         gap: 6,
-        padding: `0 ${RAIL.seat * 2}px`,
+        padding: "0 8px",
         boxSizing: "border-box",
         textAlign: "center",
       }}

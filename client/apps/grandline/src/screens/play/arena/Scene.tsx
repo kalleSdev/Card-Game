@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
 import { LAYER, TILT } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
+import Tabletop from "./Tabletop";
 
 /**
  * The room the board is standing in.
@@ -21,10 +22,10 @@ import type { ArenaTheme } from "../../../design/arenaThemes";
  * own style, so React has no opinion about the property and will not overwrite
  * what the loop puts there.
  *
- * The table itself is not drawn here. It is a surface in the scene, not a
- * backdrop, so it lives inside the stage with the board and takes the board's
- * camera; this layer is only the dark beyond the table's edge. For a board
- * without a painted table, the whole room is drawn here in gradients.
+ * For a room with a painted table, the painting is laid over all of this and
+ * is the room. It fills the window and it does not take the board's pitch:
+ * the board is an object standing in the room, and the room is what the
+ * window shows. For a room without one, the gradients below are the room.
  *
  * The window breathes. One sheet of the lamp's colour, laid diagonally over
  * the room from the window's corner at a few per cent, whose opacity drifts
@@ -101,6 +102,7 @@ export default function Scene({ theme, nodeRef }: {
           background: `linear-gradient(150deg, ${theme.lamp}1C 0%, ${theme.lamp}0A 24%, transparent 46%)`,
         }}
       />
+      <Tabletop theme={theme} />
     </div>
   );
 }

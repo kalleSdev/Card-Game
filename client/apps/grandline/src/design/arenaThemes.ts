@@ -3,20 +3,24 @@ import { useCallback, useEffect, useState } from "react";
 /**
  * What the arena is made of.
  *
- * The board is a painted object — a plate, a bezel, panels, banners, brass and
- * a playing surface — and none of that belongs in the app's palette. The app
- * palette is for screens you read; this is for a table you play on, and it is
- * allowed to be warm, cold or loud as long as the cards on top of it stay
- * legible.
+ * The board is one object. A dark wooden body with a stone frame let into it,
+ * a band of brass let into the stone, and a parchment field let into that —
+ * one manufactured thing, and it is the same thing whichever room it is
+ * carried into. There used to be three boards: the same shapes painted bone,
+ * slate and candy-pink, with a blue deck for you and a red one for them. Three
+ * colourways of a board is three boards, and a board that changes colour is
+ * not an object. So the materials are written once, here, and a theme is only
+ * the room: the colour of its lamp, the air over the far end of the table,
+ * and the dark the table stands in.
  *
  * Every colour is a flat value rather than a gradient string, because the board
  * is painted in SVG: the gradients, bevels and shadows are built from these
  * three-stop ramps at draw time. A theme that shipped CSS gradients could only
  * be used by the one element that pasted it in.
  *
- * The rules each theme has to keep, since the cards sit on top of it:
- *   · the surface stays mid-toned enough for card art to read against it
- *   · the two banners are told apart by hue, not only by brightness
+ * The rules the board keeps, since the cards sit on top of it:
+ *   · the field stays mid-toned enough for card art to read against it
+ *   · the two sides are told apart by where they sit, not by paint
  *   · the accent is the brightest thing on the board, so the eye finds the
  *     button that ends a turn without being told where it is
  */
@@ -28,35 +32,37 @@ export interface Ramp {
   dark: string;
 }
 
-export interface ArenaTheme {
-  id: ArenaThemeId;
-  name: string;
-  blurb: string;
-  /** The plate the whole board is cut from. */
+/** The board itself: what it is built from. The same for every room. */
+export interface BoardMaterial {
+  /** The body the whole board is cut from: dark, old wood. */
   frame: Ramp;
   frameEdge: string;
+  /** The lit hairline where a wooden edge catches the lamp. */
   frameInlay: string;
-  /** The dark surround the panels are set into. */
+  /** The floor of every hole cut into the wood. */
   bezel: string;
-  /** The two big panels either side of each leader. */
+  /** The stone frame let into the wood, and the blocks the leaders stand on. */
   wing: Ramp;
   wingEdge: string;
-  /** The playing surface. */
+  /** The playing field. */
   felt: Ramp;
   feltEdge: string;
   seam: string;
-  /** Brass: the trim around a leader window, the ring of a dial. */
+  /** Brass: the inlay round the field, the trim on a fitting, the ring of a dial. */
   gold: Ramp;
-  /** The colour behind a leader, which is how you tell the sides apart. */
-  banner: { you: Ramp; them: Ramp };
-  bannerTrim: { you: string; them: string };
+  /** The backs of the two decks: the same dark leather at both ends. */
+  deck: Ramp;
   /** The brightest thing on the board. */
   accent: string;
   accentInk: string;
-  /** Lettering painted onto the frame. */
+  /** Lettering cut into stone. */
   ink: string;
   inkSoft: string;
-  /** An empty place on the surface, and one a card can be dropped into. */
+  /** Lettering painted pale into a hole, or onto a dark plate. */
+  paint: string;
+  /** A number that has gone the wrong way. Not a material; an alarm. */
+  warn: string;
+  /** An empty place on the field, and one a card can be dropped into. */
   slot: string;
   slotLive: string;
   /** The glass in the energy rail and the ability dial. */
@@ -64,15 +70,21 @@ export interface ArenaTheme {
   gemEmpty: string;
   /** What the board casts onto the table underneath it. */
   shadow: string;
-  /** The dark the whole board sits on. */
+}
+
+/** The room the board is in: everything about a theme that is not the board. */
+export interface ArenaTheme extends BoardMaterial {
+  id: ArenaThemeId;
+  name: string;
+  blurb: string;
+  /** The dark the whole board sits on, where there is no table painted. */
   table: string;
   /**
    * The colour of the air over the far half of the board.
    *
-   * This is what stops three themes built from the same greyscale materials
-   * reading as the same board in different paint: cold air greys the far end,
-   * warm air yellows it, and the eye reads those as different places rather
-   * than as different colour schemes.
+   * This is what stops three rooms built round the same board reading as the
+   * same room: cold air greys the far end, warm air yellows it, and the eye
+   * reads those as different places rather than as different colour schemes.
    */
   hazeTint: string;
   /** The colour of the lamp hung over the board. */
@@ -81,104 +93,70 @@ export interface ArenaTheme {
 
 export type ArenaThemeId = "harbour" | "deepwater" | "carnival";
 
+/**
+ * The board.
+ *
+ * Dark aged wood for the body; warm ivory going to aged stone for the frame
+ * and the plinths; a brass that is warm rather than bright, since it is the
+ * only metal here and it has to sit under the same lamp as everything else
+ * without shouting; and a near-black charcoal for the floor of every hole.
+ * The field is parchment, a shade quieter than the frame, so a card's own
+ * colours are the loudest thing on it.
+ */
+export const BOARD_MATERIAL: BoardMaterial = {
+  frame: { light: "#6A5340", mid: "#463527", dark: "#2A1D13" },
+  frameEdge: "#150E08",
+  frameInlay: "#A08865",
+  bezel: "#0C0907",
+  wing: { light: "#EFE6D6", mid: "#D6CAB6", dark: "#AE9F88" },
+  wingEdge: "#6E6050",
+  felt: { light: "#E8CBA3", mid: "#D3AC7E", dark: "#AE8759" },
+  feltEdge: "#6E4B27",
+  seam: "rgba(110,75,39,0.38)",
+  gold: { light: "#E9CF8E", mid: "#B8913F", dark: "#6F4F1D" },
+  deck: { light: "#4A3B31", mid: "#2E241D", dark: "#1A130E" },
+  accent: "#F0D080",
+  accentInk: "#3A2708",
+  ink: "#2E2216",
+  inkSoft: "rgba(46,34,22,0.6)",
+  paint: "#EFE6D6",
+  warn: "#C4483A",
+  slot: "rgba(70,45,20,0.22)",
+  slotLive: "rgba(240,208,128,0.42)",
+  gem: { light: "#9BD4FF", mid: "#4E9BE6", dark: "#1F5C9E" },
+  gemEmpty: "rgba(30,32,38,0.5)",
+  shadow: "rgba(14,9,4,0.62)",
+};
+
 export const ARENA_THEMES: Record<ArenaThemeId, ArenaTheme> = {
-  // Bone, brass and sun-bleached parchment. The one the board was painted as.
+  // A warm room with a lamp in it. The one the board was painted for.
   harbour: {
+    ...BOARD_MATERIAL,
     id: "harbour",
     name: "Harbour",
-    blurb: "Bone and parchment, warm brass",
-    frame: { light: "#F3ECE1", mid: "#D3C7B7", dark: "#A2947F" },
-    frameEdge: "#6F6252",
-    frameInlay: "#FFFBF3",
-    bezel: "#12100E",
-    wing: { light: "#F2ECE1", mid: "#DCD2C4", dark: "#B6AA99" },
-    wingEdge: "#7E7263",
-    felt: { light: "#F0CB9C", mid: "#DFAB74", dark: "#BE8850" },
-    feltEdge: "#7E552C",
-    seam: "rgba(122,80,42,0.38)",
-    gold: { light: "#F7DC9A", mid: "#D2A548", dark: "#8A6522" },
-    banner: {
-      you: { light: "#4E6FC4", mid: "#2F4C93", dark: "#1B2F63" },
-      them: { light: "#C4483A", mid: "#9C2B22", dark: "#651612" },
-    },
-    bannerTrim: { you: "#D2A548", them: "#D2A548" },
-    accent: "#F5C63F",
-    accentInk: "#4A3308",
-    ink: "#38291A",
-    inkSoft: "rgba(56,41,26,0.6)",
-    slot: "rgba(103,66,32,0.22)",
-    slotLive: "rgba(245,198,63,0.42)",
-    gem: { light: "#9BD4FF", mid: "#4E9BE6", dark: "#1F5C9E" },
-    gemEmpty: "rgba(30,32,38,0.5)",
-    shadow: "rgba(28,18,8,0.6)",
+    blurb: "Lamplight and old wood",
     table: "#17140F",
     hazeTint: "#EBD6AE",
     lamp: "#FFE6B8",
   },
 
-  // The same table, left out in the cold. Slate, steel and deep water.
+  // The same board, left out in the cold.
   deepwater: {
+    ...BOARD_MATERIAL,
     id: "deepwater",
     name: "Deepwater",
-    blurb: "Slate and cold green water",
-    frame: { light: "#D6E2EA", mid: "#9CAFBD", dark: "#63788A" },
-    frameEdge: "#33475A",
-    frameInlay: "#EFF6FB",
-    bezel: "#080D12",
-    wing: { light: "#DCE7EE", mid: "#B4C4D0", dark: "#8496A6" },
-    wingEdge: "#42576A",
-    felt: { light: "#2F7A76", mid: "#1F5559", dark: "#123539" },
-    feltEdge: "#0A2529",
-    seam: "rgba(180,232,232,0.22)",
-    gold: { light: "#DCEAF2", mid: "#93AFC2", dark: "#4E6070" },
-    banner: {
-      you: { light: "#4FA0D8", mid: "#2C6FA8", dark: "#17436A" },
-      them: { light: "#8375D6", mid: "#5B4B9E", dark: "#352A63" },
-    },
-    bannerTrim: { you: "#B9D4E4", them: "#B9D4E4" },
-    accent: "#7FE3D0",
-    accentInk: "#05302B",
-    ink: "#16242E",
-    inkSoft: "rgba(22,36,46,0.6)",
-    slot: "rgba(210,240,240,0.12)",
-    slotLive: "rgba(127,227,208,0.36)",
-    gem: { light: "#C6EEFF", mid: "#6FC6F2", dark: "#2A7CAE" },
-    gemEmpty: "rgba(12,26,32,0.55)",
-    shadow: "rgba(4,14,20,0.66)",
+    blurb: "Cold light over deep water",
     table: "#0B1116",
     hazeTint: "#B9D8DE",
     lamp: "#CFEEFF",
   },
 
-  // Loud on purpose. Sunset felt, candy plate, everything turned up.
+  // The same board, under coloured lanterns.
   carnival: {
+    ...BOARD_MATERIAL,
     id: "carnival",
     name: "Carnival",
-    blurb: "Sunset felt and candy brass",
-    frame: { light: "#FFE3F5", mid: "#EFA0DA", dark: "#A94FB0" },
-    frameEdge: "#5B1B62",
-    frameInlay: "#FFF4FC",
-    bezel: "#1A0A20",
-    wing: { light: "#FFEDF9", mid: "#F6C2E6", dark: "#D189C4" },
-    wingEdge: "#7E3379",
-    felt: { light: "#FFA85C", mid: "#F2648F", dark: "#7A45E0" },
-    feltEdge: "#43156B",
-    seam: "rgba(255,255,255,0.45)",
-    gold: { light: "#FFF3A8", mid: "#FFD24D", dark: "#B87A12" },
-    banner: {
-      you: { light: "#4BE8DF", mid: "#00B3B0", dark: "#046C72" },
-      them: { light: "#FF5FA8", mid: "#C6197A", dark: "#750B49" },
-    },
-    bannerTrim: { you: "#FFD24D", them: "#FFD24D" },
-    accent: "#FFE14D",
-    accentInk: "#5A3C00",
-    ink: "#45103F",
-    inkSoft: "rgba(69,16,63,0.6)",
-    slot: "rgba(60,12,64,0.24)",
-    slotLive: "rgba(255,225,77,0.46)",
-    gem: { light: "#C9FBFF", mid: "#5FE3F5", dark: "#1B7FA8" },
-    gemEmpty: "rgba(30,10,34,0.55)",
-    shadow: "rgba(38,4,44,0.62)",
+    blurb: "Lanterns and sunset air",
     table: "#16091A",
     hazeTint: "#FFC7EE",
     lamp: "#FFE6A8",

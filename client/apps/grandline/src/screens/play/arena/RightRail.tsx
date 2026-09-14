@@ -1,16 +1,17 @@
 import { useState } from "react";
-import { MOTION, RIGHT, STAGE, WELL } from "../../../design/arenaStage";
-import { buttonSocket, deckSocket } from "./board";
+import { MOTION, RIGHT, SIDE, STAGE, rightFittings, type Box } from "../../../design/arenaStage";
 import { text } from "../../../design/tokens";
 import type { ArenaTheme, Ramp } from "../../../design/arenaThemes";
 
 /**
- * The right hand edge of the board: two decks, and the button that ends a turn.
+ * What sits in the right hand fittings: two decks, and the button that ends
+ * a turn.
  *
- * The decks lean out of the frame rather than lying flat on it, because a deck
- * is a physical stack and a flat rectangle would read as another card slot. The
- * button overhangs the surface for the opposite reason: it is the one control
- * on the board and it has to be found without being looked for.
+ * The three frames, their recesses and their lighting are the board's, drawn
+ * with the structure. This puts the stacks and the key into them. A deck is a
+ * physical stack, so it is drawn as four backs one on the other rather than
+ * as a flat rectangle, which would read as another card slot; it throws no
+ * shadow of its own, because the socket it sits in is already dark round it.
  */
 
 export default function RightRail({
@@ -26,6 +27,8 @@ export default function RightRail({
   onEndTurn: () => void;
   onCancel: () => void;
 }) {
+  const seat = rightFittings();
+
   return (
     <div
       style={{
@@ -37,27 +40,18 @@ export default function RightRail({
         pointerEvents: "none",
       }}
     >
-      <DeckStack
-        theme={theme}
-        count={topDeck}
-        colour={theme.banner.them}
-        socket={deckSocket("far")}
-      />
+      <DeckStack theme={theme} count={topDeck} colour={theme.deck} socket={seat.decks.far} />
 
       <EndTurn
         theme={theme}
+        socket={seat.button}
         yourTurn={yourTurn}
         attacking={attacking}
         onEndTurn={onEndTurn}
         onCancel={onCancel}
       />
 
-      <DeckStack
-        theme={theme}
-        count={bottomDeck}
-        colour={theme.banner.you}
-        socket={deckSocket("near")}
-      />
+      <DeckStack theme={theme} count={bottomDeck} colour={theme.deck} socket={seat.decks.near} />
     </div>
   );
 }
@@ -66,14 +60,14 @@ export default function RightRail({
 const NEARLY_OUT = 5;
 
 /** How far each card in the stack is offset from the one below it. */
-const LEAN = 4;
+const LEAN = 3;
 
 function DeckStack({ theme, count, colour, socket }: {
   theme: ArenaTheme;
   count: number;
   colour: Ramp;
-  /** The recess in the rim this deck is sitting in. */
-  socket: { x: number; y: number; w: number; h: number };
+  /** The recess in the housing this deck is sitting in. */
+  socket: Box;
 }) {
   const low = count <= NEARLY_OUT;
   // Four backs is enough thickness to read as a stack; more would just be more
@@ -86,13 +80,10 @@ function DeckStack({ theme, count, colour, socket }: {
         position: "absolute",
         // Sitting in its socket rather than beside it: the recess is a little
         // larger than the stack, and the stack sits in the middle of it.
-        left: socket.x + (socket.w - RIGHT.deckWidth) / 2 - LEAN,
-        top: socket.y + (socket.h - RIGHT.deckHeight) / 2 + LEAN,
+        left: socket.x + (socket.width - RIGHT.deckWidth) / 2 - LEAN,
+        top: socket.y + (socket.height - RIGHT.deckHeight) / 2 + LEAN,
         width: RIGHT.deckWidth,
         height: RIGHT.deckHeight,
-        // A stack in a hole is dark underneath and only just proud of the rim.
-        filter: `drop-shadow(0 3px 5px rgba(0,0,0,0.7))`,
-        transform: "rotate(-1.2deg)",
       }}
     >
       {layers.map(layer => (
@@ -105,14 +96,15 @@ function DeckStack({ theme, count, colour, socket }: {
             borderRadius: 7,
             background: `linear-gradient(150deg, ${colour.light}, ${colour.mid} 45%, ${colour.dark})`,
             border: `1px solid ${theme.frameEdge}`,
-            boxShadow: `inset 0 1px 0 ${theme.gold.light}66, inset 0 -6px 10px rgba(0,0,0,0.34)`,
-            outline: `1px solid ${theme.gold.dark}55`,
+            // The lamp on the top edge of each back, and the one below it in
+            // its shadow: what separates one card in a stack from the next.
+            boxShadow: `inset 1px 1px 0 ${theme.gold.light}55, inset 0 -6px 10px rgba(0,0,0,0.34)`,
           }}
         />
       ))}
 
-      {/* The count sits on a plate rather than on the card, so it stays legible
-          whichever colour the deck is. */}
+      {/* The count sits on a plate rather than on the card, so it reads as a
+          number on a fitting and not as a number on a card. */}
       <span
         style={{
           position: "absolute",
@@ -136,8 +128,10 @@ function DeckStack({ theme, count, colour, socket }: {
   );
 }
 
-function EndTurn({ theme, yourTurn, attacking, onEndTurn, onCancel }: {
+function EndTurn({ theme, socket, yourTurn, attacking, onEndTurn, onCancel }: {
   theme: ArenaTheme;
+  /** The recess in the housing the key sits in. */
+  socket: Box;
   yourTurn: boolean;
   attacking: boolean;
   onEndTurn: () => void;
@@ -155,32 +149,48 @@ function EndTurn({ theme, yourTurn, attacking, onEndTurn, onCancel }: {
       disabled={!live}
       style={{
         position: "absolute",
-        // It reaches back over the surface, out of its own rail, because the
-        // eye is already on the middle of the board when the turn is over.
-        left: buttonSocket().x + (buttonSocket().w - RIGHT.buttonWidth) / 2,
-        top: WELL.seamY - RIGHT.buttonHeight / 2,
-        width: RIGHT.buttonWidth,
-        height: RIGHT.buttonHeight,
+        left: socket.x + SIDE.button.seat,
+        top: socket.y + SIDE.button.seat,
+        width: SIDE.button.width,
+        height: SIDE.button.height,
         pointerEvents: "auto",
-        borderRadius: 13,
         cursor: live ? "pointer" : "default",
-        border: `2px solid ${theme.frameEdge}`,
-        background: live
-          ? attacking
-            ? `linear-gradient(180deg, ${theme.wing.light}, ${theme.wing.dark})`
-            : `linear-gradient(180deg, ${theme.accent}, ${theme.gold.mid})`
-          : `linear-gradient(180deg, ${theme.wing.mid}, ${theme.wing.dark})`,
-        color: live && !attacking ? theme.accentInk : theme.inkSoft,
-        boxShadow: live
-          ? `inset 0 2px 0 rgba(255,255,255,0.5), inset 0 -3px 6px rgba(0,0,0,0.3), 0 ${lifted ? 9 : 5}px ${lifted ? 18 : 12}px ${theme.shadow}`
-          : `inset 0 3px 8px rgba(0,0,0,0.35)`,
-        transform: lifted ? "translateY(-2px)" : "none",
+        ...key(theme, live, attacking, lifted),
+        transform: lifted ? "translateY(-1px)" : "none",
         transition: `transform ${MOTION.card}ms ease, box-shadow ${MOTION.card}ms ease`,
         ...text("label"),
-        fontSize: 11,
+        fontSize: 10,
       }}
     >
       {attacking ? "Cancel" : "End turn"}
     </button>
   );
+}
+
+/**
+ * A key: a brass button standing in a recess the board cut for it.
+ *
+ * The same piece whether it ends a turn or leaves the table, so the two read
+ * as the same fitting. Brass while it can be pressed, because brass is the
+ * one thing on this board that asks to be touched; the rest of the time it is
+ * the same dark plate as every other fitting, and it sits down. Its only
+ * shadow is the lit top edge and the dark under-edge every raised brass piece
+ * on the board has: the recess round it is already dark, and a key with a
+ * shadow under it is a key lying on the board.
+ */
+export function key(theme: ArenaTheme, live: boolean, quiet = false, lifted = false) {
+  return {
+    borderRadius: 8,
+    border: `1px solid ${theme.gold.dark}`,
+    background: live
+      ? quiet
+        ? `linear-gradient(180deg, ${theme.wing.light}, ${theme.wing.dark})`
+        : `linear-gradient(180deg, ${theme.accent}, ${theme.gold.mid})`
+      : theme.bezel,
+    color: live ? theme.accentInk : theme.gold.light,
+    opacity: live ? 1 : 0.85,
+    boxShadow: live
+      ? `inset 1px 1px 0 rgba(255,255,255,0.45), inset 0 ${lifted ? -2 : -3}px 5px rgba(0,0,0,0.3)`
+      : `inset 2px 2px 3px ${theme.shadow}`,
+  } as const;
 }

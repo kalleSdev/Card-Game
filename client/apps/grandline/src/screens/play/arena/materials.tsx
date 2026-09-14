@@ -45,13 +45,16 @@ export const MATERIAL_TILE: Record<MaterialName, number> = {
  * How strongly each material is allowed to show, and how it is mixed in.
  *
  * The play surface is the quietest thing on the board because cards sit on it
- * and it must not compete with them. Stone is the loudest because a plinth is
- * meant to look rough. Brass is mixed softly so it reads as aged metal picking
- * up the lamp rather than as grey stone.
+ * and it must not compete with them. Stone used to be the loudest, when it
+ * was only two small blocks meant to look rough; now it is the whole frame
+ * and both stations, and at that size the tile's own dark patches read as
+ * dirt on a panel rather than grain, so it is mixed more quietly. Brass is
+ * mixed softly so it reads as aged metal picking up the lamp rather than as
+ * grey stone.
  */
 export const MATERIAL_MIX: Record<MaterialName, { opacity: number; blend: "overlay" | "soft-light" }> = {
   wood: { opacity: 0.88, blend: "overlay" },
-  stone: { opacity: 0.78, blend: "overlay" },
+  stone: { opacity: 0.58, blend: "overlay" },
   brass: { opacity: 0.5, blend: "soft-light" },
   parchment: { opacity: 0.32, blend: "soft-light" },
 };

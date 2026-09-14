@@ -1,4 +1,4 @@
-import { HAZE, LIGHT, STAGE, WELL } from "../../../design/arenaStage";
+import { HAZE, LIGHT, SHELL, STAGE, WELL } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import { surfacePath, wellPath } from "./board";
 import Materials, { MATERIAL_MIX, materialFill } from "./materials";
@@ -93,19 +93,19 @@ function round(v: number): number {
  * of the material rather than light falling on it.
  */
 const PATCHES: { cx: number; cy: number; rx: number; ry: number; o: number; up: boolean }[] = [
-  { cx: 380, cy: 330, rx: 300, ry: 190, o: 0.3, up: true },
-  { cx: 1120, cy: 350, rx: 280, ry: 200, o: 0.33, up: false },
-  { cx: 300, cy: 662, rx: 260, ry: 160, o: 0.27, up: false },
-  { cx: 900, cy: 618, rx: 250, ry: 170, o: 0.21, up: true },
-  { cx: 646, cy: 302, rx: 190, ry: 112, o: 0.18, up: false },
-  { cx: 1004, cy: 700, rx: 220, ry: 120, o: 0.24, up: false },
+  { cx: 380, cy: WELL.farY + 6, rx: 300, ry: 190, o: 0.3, up: true },
+  { cx: 1120, cy: WELL.farY + 26, rx: 280, ry: 200, o: 0.33, up: false },
+  { cx: 300, cy: WELL.farY + 338, rx: 260, ry: 160, o: 0.27, up: false },
+  { cx: 900, cy: WELL.farY + 294, rx: 250, ry: 170, o: 0.21, up: true },
+  { cx: 646, cy: WELL.farY + -22, rx: 190, ry: 112, o: 0.18, up: false },
+  { cx: 1004, cy: WELL.farY + 376, rx: 220, ry: 120, o: 0.24, up: false },
   // Two gentler ones over the middle. There was a single broad lightener here
   // and it had to go: laid over the body gradient it cancelled some of it, so
   // the one patch meant to keep the centre from being blank was measurably
   // flattening it instead. Two smaller ones pulling opposite ways add
   // variation where one large one removed it.
-  { cx: 620, cy: 430, rx: 200, ry: 130, o: 0.09, up: false },
-  { cx: 830, cy: 540, rx: 190, ry: 120, o: 0.07, up: true },
+  { cx: 620, cy: WELL.farY + 106, rx: 200, ry: 130, o: 0.09, up: false },
+  { cx: 830, cy: WELL.farY + 216, rx: 190, ry: 120, o: 0.07, up: true },
 ];
 
 /**
@@ -302,13 +302,6 @@ export default function Surface({ theme, spread = 0 }: {
             lamp is over that end and reaches down into it. */}
         <rect x={-spread} y={FELT.y0} width={W + spread * 2} height={96} fill="url(#sf-far)" />
 
-        {/* And the material darkening immediately inside the recess, all the
-            way round. A stroke on the surface's own outline, so it follows the
-            taper exactly and lands only on the paper. Wide and weak on
-            purpose: the blurred shadow above has already done the shading, and
-            anything narrower than this reads as a drawn border rather than as
-            paper going into shade. */}
-        <path d={surface} fill="none" stroke={theme.feltEdge} strokeWidth={44} opacity="0.1" />
 
         <rect x={-spread} y={WELL.farY} width={W + spread * 2} height={WELL.height / 2} fill="url(#sf-haze)" />
         <rect x={-spread} y={WELL.seamY} width={W + spread * 2} height={WELL.height / 2} fill="url(#sf-fall)" />
@@ -320,7 +313,8 @@ export default function Surface({ theme, spread = 0 }: {
         />
       </g>
 
-      <path d={surface} fill="none" stroke={theme.feltEdge} strokeWidth="1.5" opacity="0.8" />
+      {/* The paper's own edge, where it stops and the recess floor shows. */}
+      <path d={surface} fill="none" stroke={theme.feltEdge} strokeWidth={SHELL.lit} opacity="0.8" />
     </svg>
   );
 }

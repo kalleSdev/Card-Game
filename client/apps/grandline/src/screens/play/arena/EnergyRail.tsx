@@ -302,14 +302,14 @@ export default function EnergyRail({
 }
 
 /**
- * The number, on a plate set into the same channel as the stones.
+ * The number, on the plate set into the same channel as the stones.
  *
  * The stones say how much energy there is at a glance and how much of it has
  * gone; they are bad at the one question a player asks while working out
  * whether a card is affordable, which is exactly how many. So the channel
- * carries both, and the plate is the same fitting as the two under a leader:
- * dark, brass rimmed, and sunk with the shadow falling from its top inside
- * edge, because it is below the floor it is set into.
+ * carries both. The plate is the board's — the same hole with a brass lip as
+ * the two at the foot of a leader's frame, cut by the station — and this is
+ * the number painted onto its floor.
  *
  * The denominator is the rules' own cap, taken from the engine. Nothing here
  * decides how much energy a player may have.
@@ -326,10 +326,6 @@ export function EnergyReadout({ theme, have }: {
       style={{
         width: STATION.readout.width,
         height: STATION.readout.height,
-        borderRadius: STATION.readout.round,
-        background: theme.bezel,
-        border: `1px solid ${theme.gold.mid}`,
-        boxShadow: `inset 0 2px 3px ${theme.shadow}, 0 1px 0 ${theme.frame.light}44`,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -366,7 +362,7 @@ export function EnergyReadout({ theme, have }: {
             lineHeight: 1,
             // Empty is still a number a player reads, so it goes pale rather
             // than dim: the board's own light paint, not its shadow.
-            color: spent ? theme.frame.light : theme.gem.light,
+            color: spent ? theme.paint : theme.gem.light,
             transition: `color ${MOTION.glow}ms ease-out`,
           }}
         >
@@ -380,7 +376,7 @@ export function EnergyReadout({ theme, have }: {
             // A hair of air, so the cap reads as a denominator and not as a
             // third digit. Any more and ten out of ten stops fitting the plate.
             marginLeft: 3,
-            color: theme.frame.light,
+            color: theme.paint,
             opacity: 0.55,
           }}
         >

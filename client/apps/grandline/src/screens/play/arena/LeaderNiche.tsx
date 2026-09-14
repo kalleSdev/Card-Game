@@ -2,70 +2,66 @@ import type { CSSProperties } from "react";
 import type { BattleCard } from "@cg/battle";
 import { LEADER, MOTION, STATION, leaderSeat, station, type Side } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
-import { COLOR, RADIUS, TEXT, text } from "../../../design/tokens";
+import { COLOR, text } from "../../../design/tokens";
 import { artUrl, cardShortName } from "../../../data/pool";
 
 /**
- * The niche a leader stands in: an arched window cut into the board, brass
- * around it and a number either side of it.
+ * What stands in a leader's niche: the picture, the name, and the two numbers.
  *
  * A leader is not a card. It is never picked up, never laid down and never put
  * back in a deck, so it is not drawn as one: its picture is set into an opening
  * in the board and cropped to that opening's outline. That is why every leader
  * is framed identically whatever its art does, and why nothing here draws a card
  * border or a printed statline. What changes about a leader during a match is
- * what it hits for and what is left of it, and those two numbers are set into
- * the plinth beside it, on the edge that faces the battlefield.
+ * what it hits for and what is left of it, and those two numbers sit on the
+ * plates the station carries at the foot of the frame.
+ *
+ * The niche itself — the cavity in the stone, the brass retaining frame round
+ * it, the plates, the dial's socket — is the board's, and the board draws it
+ * in the stations layer. This draws only what changes during a match, at the
+ * places the board measured, and draws no frame, plate or shadow of its own:
+ * a picture with a shadow under it is a picture stuck on, and this one is set
+ * in.
  *
  * The seat is one piece of geometry, taken from the stage and mirrored about the
  * board's seam, so the far leader and the near one are the same construction
  * seen from opposite ends of the table.
- *
- * Everything is measured off the window. The moulding, the seat the picture sits
- * in, the stat plates and the dial are all offsets from one outline, so the
- * board carries one shape rather than several that nearly agree.
  */
 
 // ── The one shape ────────────────────────────────────────────────────────────
 
 const TRIM = LEADER.trim;
 
-/**
- * The smallest step this niche takes: a third of the moulding. It is the
- * keyline of banner trim at the window's outer edge, the dark seat the picture
- * is set into, and the offset of every shadow. Anything finer stops reading once
- * the whole stage is scaled down to a laptop.
- */
-const LINE = TRIM / 3;
+/** The smallest step this niche takes: the dark seat between the opening and
+    the picture, and the offset of the one shadow drawn here. */
+const LINE = LEADER.foot;
 
-/** How far in from the window's edge the picture starts: keyline, moulding, seat. */
-const PICTURE = LINE + TRIM + LINE;
+/** How far in from the opening the picture starts. */
+const PICTURE = LEADER.picture;
 
-/** How far outside the window the target ring reaches, when there is one. */
+/** How far outside the opening the target ring reaches, when there is one:
+    over the brass frame, which is what it is aimed at. */
 const TARGET = TRIM;
 
 /** The bottom corners of the picture, before each ring outside it widens them. */
-const FOOT = LINE;
+const FOOT = LEADER.foot;
 
-/**
- * The dial's ring is drawn twice the thickness of the window's moulding,
- * because it is the heavier of the two brass pieces standing on a banner.
- */
-const DIAL_RING = TRIM * 2;
+/** The dial's bezel: the same finger of brass as the window's frame. */
+const DIAL_RING = TRIM;
 
 /** The seat's own geometry, which both ends of the board are cut from. */
 const WINDOW = LEADER.window;
-const STAT = LEADER.stat;
 
 /**
  * The niche's outline, offset in or out, as one piece of geometry.
  *
- * `inset` is how far inside the window's own edge a layer sits: 0 is the window
- * as it is cut into the board, PICTURE is the picture, and a negative number
- * reaches outside it. Offsetting works evenly because the dome's radius is half
- * the window's width, so every layer shares the dome's centre and comes out the
- * same thickness the whole way round. Without that, a stack of these would read
- * as several rings rather than as one moulding.
+ * The same outline the board cuts the cavity to (`nichePath` in board.ts),
+ * given here relative to the window's own box so it can be a clip path on a
+ * div. `inset` is how far inside the opening a layer sits: 0 is the opening,
+ * PICTURE is the picture, and a negative number reaches outside it.
+ * Offsetting works evenly because the dome's radius is half the window's
+ * width, so every layer shares the dome's centre and comes out the same
+ * thickness the whole way round.
  *
  * The shape is given twice, as a clip path and as a border radius, and the two
  * describe the same outline: the clip is what crops the picture and what the
@@ -114,9 +110,9 @@ const ABILITY_PROGRESS: number = 0;
 
 // ── The niche ────────────────────────────────────────────────────────────────
 
-export default function LeaderNiche({ theme, side, end, card, attackable, active, onClick }: {
+export default function LeaderNiche({ theme, end, card, attackable, active, onClick }: {
   theme: ArenaTheme;
-  /** Which banner this leader flies, which is only used for the trim colour. */
+  /** Whose leader this is. The board no longer paints the two sides apart. */
   side: "you" | "them";
   /** Which end of the board this leader stands at. */
   end: Side;
@@ -132,6 +128,7 @@ export default function LeaderNiche({ theme, side, end, card, attackable, active
   // board's middle line, set the same distance inside the board's outer edge,
   // and everything else is an offset inside that one box.
   const seat = leaderSeat(end);
+  const { stats } = station(end);
 
   return (
     <div
@@ -144,10 +141,12 @@ export default function LeaderNiche({ theme, side, end, card, attackable, active
       }}
     >
       {/*
-        The window, in layers from the outside in. The glow and the shadow live
-        on this wrapper as filters rather than on the moulding as a box shadow,
-        because a drop shadow is cast from the shape after it has been clipped
-        and so follows the arch, while a box shadow only ever knows about the box.
+        The opening. Nothing physical is drawn here: the cavity, the brass
+        frame and the seat are the board's. What this wrapper carries is the
+        state a player has to read off the leader — whose turn it is, and
+        whether this one can be hit — as a ring over the brass frame, since a
+        ring is the one thing a real board would not have and so reads as the
+        game speaking rather than the furniture.
       */}
       <div
         onClick={hit ? onClick : undefined}
@@ -156,49 +155,30 @@ export default function LeaderNiche({ theme, side, end, card, attackable, active
           inset: 0,
           pointerEvents: hit ? "auto" : "none",
           cursor: hit ? "crosshair" : "default",
-          filter: [
-            `drop-shadow(0 ${LINE}px ${TRIM}px ${theme.shadow})`,
-            // Whose turn it is has to be readable from the leader on its own,
-            // since that is the one thing on a side a player is already looking
-            // at. Two passes, because one hard-edged halo reads as an outline.
-            active ? `drop-shadow(0 0 ${TRIM}px ${theme.accent})` : "",
-            active ? `drop-shadow(0 0 ${TRIM * 2}px ${theme.accent})` : "",
-            attackable ? `drop-shadow(0 0 ${TRIM}px ${COLOR.signal})` : "",
-          ].filter(Boolean).join(" "),
-          transition: `filter ${MOTION.glow}ms ease-out`,
         }}
       >
         {/*
-          The target ring, and only while this leader can actually be hit, so it
-          reads as the answer to a question the player has just asked. Red comes
-          from the app's palette rather than the table's: no theme owns a danger
-          colour, and a table that had one would be arguing with the cards.
+          The rings, and only while they mean something. Red comes from the
+          app's palette rather than the table's: no theme owns a danger colour,
+          and a table that had one would be arguing with the cards. The turn's
+          ring is the board's own accent, faint, so it says "you" without
+          lighting the leader up.
         */}
-        {attackable && <div style={{ ...niche(-TARGET), background: COLOR.signal }} />}
+        {(attackable || active) && (
+          <div
+            style={{
+              ...niche(-TARGET),
+              background: attackable ? COLOR.signal : theme.accent,
+              opacity: attackable ? 1 : 0.55,
+              transition: `opacity ${MOTION.glow}ms ease-out`,
+            }}
+          />
+        )}
 
-        {/* The banner's trim line, carried round the window, so the niche reads
-            as part of the banner it stands on rather than as something laid on it */}
-        <div style={{ ...niche(0), background: theme.bannerTrim[side] }} />
-
-        {/* The moulding. One light-to-dark ramp down the whole shape does the
-            work of a round profile: every face that turns towards the top of the
-            screen catches the light, every face that turns away sits in shadow,
-            including the inside of the bottom rail, which is lighter than its
-            outside for exactly that reason */}
-        <div
-          style={{
-            ...niche(LINE),
-            backgroundImage: `linear-gradient(180deg, ${theme.gold.light} 0%, ${theme.gold.mid} 40%, ${theme.gold.dark} 100%)`,
-          }}
-        />
-
-        {/* The dark seat: what you would see looking into a real opening, where
-            the picture sits a little below the brass around it */}
-        <div style={{ ...niche(LINE + TRIM), background: theme.bezel }} />
-
-        {/* The picture, cropped to the window instead of to a card. The dark
-            fill underneath is what the opening reads as while the image is on
-            its way, or if it never arrives */}
+        {/* The picture, cropped to the opening instead of to a card, a seat's
+            width inside it so the cavity's dark shows round it. The dark fill
+            underneath is what the opening reads as while the image is on its
+            way, or if it never arrives */}
         <div
           style={{
             ...niche(PICTURE),
@@ -231,7 +211,7 @@ export default function LeaderNiche({ theme, side, end, card, attackable, active
               overflow: "hidden",
               textOverflow: "ellipsis",
               ...text("label"),
-              color: theme.frame.light,
+              color: theme.paint,
             }}
           >
             {cardShortName(card.defId)}
@@ -239,14 +219,11 @@ export default function LeaderNiche({ theme, side, end, card, attackable, active
         </div>
       </div>
 
-      {/* The numbers, one either side of the window rather than under it.
-          Attack on the left and health on the right, the way they read on a
-          card, held to the window's battlefield-facing edge so both players'
-          plates sit the same distance from the play area and neither pair ends
-          up behind a row of cards. Always both of them and always drawn even at
-          zero: a box that vanishes is a board that moves */}
-      <StatPlate theme={theme} value={card.atk} top={seat.statTop} at="left" />
-      <StatPlate theme={theme} value={card.currentHp} hurt={hurt} top={seat.statTop} at="right" />
+      {/* The numbers, on the plates the station carries at each foot of the
+          frame. Attack on the left and health on the right, the way they read
+          on a card. Always both of them and always drawn even at zero. */}
+      <StatPlate theme={theme} value={card.atk} box={stats[0]} seat={seat} />
+      <StatPlate theme={theme} value={card.currentHp} hurt={hurt} box={stats[1]} seat={seat} />
     </div>
   );
 }
@@ -254,19 +231,21 @@ export default function LeaderNiche({ theme, side, end, card, attackable, active
 // ── The numbers ──────────────────────────────────────────────────────────────
 
 /**
- * One number, on a plate set into the board.
+ * One number, on the plate the board set into the station for it.
  *
  * There is no label on it. At this size a label would be smaller than it is
  * useful, and the two plates are always in the same two places, so position is
- * what says which is which.
+ * what says which is which. And there is no plate drawn here: the plate is a
+ * hole in the stone with a brass lip, drawn by the board, and this is the
+ * number painted onto its floor.
  */
-function StatPlate({ theme, value, top, at, hurt = false }: {
+function StatPlate({ theme, value, box, seat, hurt = false }: {
   theme: ArenaTheme;
   value: number;
-  /** How far down the window this plate sits. */
-  top: number;
-  /** Which side of the window it is set into. */
-  at: "left" | "right";
+  /** The plate the board cut for this number, on the stage. */
+  box: { x: number; y: number; width: number; height: number };
+  /** The window's own box, which this is placed relative to. */
+  seat: { x: number; y: number };
   /** Health below its maximum. Attack never sets this. */
   hurt?: boolean;
 }): JSX.Element {
@@ -274,17 +253,10 @@ function StatPlate({ theme, value, top, at, hurt = false }: {
     <div
       style={{
         position: "absolute",
-        top,
-        left: at === "left" ? -(STAT.gap + STAT.width) : WINDOW.width + STAT.gap,
-        width: STAT.width,
-        height: STAT.height,
-        borderRadius: RADIUS.sm,
-        background: theme.bezel,
-        border: `1px solid ${theme.gold.mid}`,
-        // Sunk, not raised: the shadow falls from the top inside edge, which is
-        // what tells the eye the plate is below the board's surface. The second
-        // one is what the plate drops onto whatever it is hanging over.
-        boxShadow: `inset 0 ${LINE}px ${LINE}px ${theme.shadow}, 0 ${LINE}px ${LINE}px ${theme.shadow}`,
+        top: box.y - seat.y,
+        left: box.x - seat.x,
+        width: box.width,
+        height: box.height,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -292,8 +264,9 @@ function StatPlate({ theme, value, top, at, hurt = false }: {
         // A step up the type scale from the data size. These two numbers are
         // read from further away than anything else on the board, and the scale
         // has nothing between the two.
-        fontSize: TEXT.heading.size,
+        fontSize: 18,
         color: hurt ? COLOR.signal : theme.gold.light,
+        pointerEvents: "none",
       }}
     >
       {value}
@@ -304,12 +277,14 @@ function StatPlate({ theme, value, top, at, hurt = false }: {
 // ── The dial ─────────────────────────────────────────────────────────────────
 
 /**
- * The dial: a brass ring with a well in it, dropped into the socket the board
- * is cut with on the quiet side of the rim.
+ * The dial: a brass ring with a well in it, sitting in the socket the board
+ * cut for it beside the leader.
  *
  * It is placed from the station rather than from the leader, because it is a
  * fitting in the board and not a part of the window. That is also why it takes
- * no FAR_SCALE: it has to land in a hole that was drawn full size.
+ * no FAR_SCALE: it has to land in a hole that was drawn full size. It throws
+ * no shadow of its own: the socket it sits in is already dark round it, and a
+ * ring with a shadow under it is a ring lying on the board.
  */
 export function AbilityDial({ theme, end }: { theme: ArenaTheme; end: Side }): JSX.Element {
   const socket = station(end).ability;
@@ -326,7 +301,7 @@ export function AbilityDial({ theme, end }: { theme: ArenaTheme; end: Side }): J
         backgroundImage: `linear-gradient(180deg, ${theme.gold.light} 0%, ${theme.gold.mid} 40%, ${theme.gold.dark} 100%)`,
         // The lit top edge is a hairline of the brass ramp's own light, so the
         // ring reads as turned rather than as printed
-        boxShadow: `0 ${LINE}px ${TRIM}px ${theme.shadow}, inset 0 ${LINE}px 0 ${theme.gold.light}`,
+        boxShadow: `inset 0 ${LINE}px 0 ${theme.gold.light}`,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

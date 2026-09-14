@@ -1,5 +1,5 @@
 import {
-  BOARD, PLINTH, RIGHT, STAGE, WELL, boardReach, slabEdges, wellEdges,
+  BOARD, LEADER, SHELL, STAGE, WELL, boardReach, station,
 } from "../../../design/arenaStage";
 
 /**
@@ -74,29 +74,48 @@ export function slabPath(spread = 0): string {
       { x: BOARD.nearX1 + reach, y: BOARD.nearY },
       { x: BOARD.nearX0 - reach, y: BOARD.nearY },
     ],
-    BOARD.round,
+    SHELL.radius.slab,
   );
 }
 
+/** How far the base shows past the slab on every side. */
+export const BASE = { out: 8, far: 6, near: 6, face: 10 } as const;
+
 /**
- * The step the slab stands on, on a screen wider than the composition.
+ * The base the slab stands on.
  *
- * Without it a wide board is one enormous flat plate with a small hole in the
- * middle. With it the board is two tiers: the apron reaches the edges of the
- * screen and the slab sits on top of it, which is a shape rather than an
- * expanse. It is the same material, one level down, and it is drawn only when
- * there is room for it.
+ * The board is two tiers: a base that owns the whole footprint and stands on
+ * the table, and the slab raised on it. That is what makes it an object with
+ * thickness rather than a plate with a hole in it, and it is drawn on every
+ * screen — it used to appear only when the screen was wide enough to leave
+ * room for it, which made the board a different construction on a laptop.
  */
-export function apronPath(spread: number): string {
-  const out = boardReach(spread) + 26;
+export function apronPath(spread = 0): string {
+  const out = boardReach(spread) + BASE.out;
   return roundedPolygon(
     [
-      { x: BOARD.farX0 - out, y: BOARD.farY - 20 },
-      { x: BOARD.farX1 + out, y: BOARD.farY - 20 },
-      { x: BOARD.nearX1 + out, y: BOARD.nearY + BOARD.lip + 12 },
-      { x: BOARD.nearX0 - out, y: BOARD.nearY + BOARD.lip + 12 },
+      { x: BOARD.farX0 - out, y: BOARD.farY - BASE.far },
+      { x: BOARD.farX1 + out, y: BOARD.farY - BASE.far },
+      { x: BOARD.nearX1 + out, y: BOARD.nearY + BOARD.lip + BASE.near },
+      { x: BOARD.nearX0 - out, y: BOARD.nearY + BOARD.lip + BASE.near },
     ],
-    BOARD.round + 10,
+    SHELL.radius.base,
+  );
+}
+
+/** The base's near face: its own thickness, seen end on below the slab's. */
+export function baseFacePath(spread = 0): string {
+  const out = boardReach(spread) + BASE.out;
+  const top = BOARD.nearY + BOARD.lip + BASE.near;
+  const inset = SHELL.radius.base / 3;
+  return roundedPolygon(
+    [
+      { x: BOARD.nearX0 - out, y: top },
+      { x: BOARD.nearX1 + out, y: top },
+      { x: BOARD.nearX1 + out - inset, y: top + BASE.face },
+      { x: BOARD.nearX0 - out + inset, y: top + BASE.face },
+    ],
+    SHELL.radius.base / 2,
   );
 }
 
@@ -107,7 +126,7 @@ export function apronPath(spread: number): string {
  * picture of one: you can see how deep it is.
  */
 export function lipPath(spread = 0): string {
-  const inset = BOARD.round / 3;
+  const inset = SHELL.radius.slab / 3;
   const reach = boardReach(spread);
   return roundedPolygon(
     [
@@ -116,7 +135,7 @@ export function lipPath(spread = 0): string {
       { x: BOARD.nearX1 + reach - inset, y: BOARD.nearY + BOARD.lip },
       { x: BOARD.nearX0 - reach + inset, y: BOARD.nearY + BOARD.lip },
     ],
-    BOARD.round / 2,
+    SHELL.radius.slab / 2,
   );
 }
 
@@ -129,7 +148,7 @@ export function wellPath(): string {
       { x: WELL.nearX1, y: WELL.nearY },
       { x: WELL.nearX0, y: WELL.nearY },
     ],
-    WELL.round,
+    SHELL.radius.frame,
   );
 }
 
@@ -151,7 +170,7 @@ export function wellOffsetPath(out: number): string {
       { x: WELL.nearX1 + out, y: WELL.nearY + out },
       { x: WELL.nearX0 - out, y: WELL.nearY + out },
     ],
-    WELL.round + out,
+    SHELL.radius.frame + out,
   );
 }
 
@@ -176,96 +195,62 @@ export function surfacePath(): string {
       { x: WELL.nearX1 - drop, y: WELL.nearY - drop / 2 },
       { x: WELL.nearX0 + drop, y: WELL.nearY - drop / 2 },
     ],
-    WELL.round,
+    SHELL.radius.frame,
   );
 }
 
 /**
- * A plinth: the block a leader stands in.
- *
- * It is cut from the rim and pushed forward into the well, so the leader has a
- * piece of board built around it. Its far face is narrower than its near one
- * for the same reason the slab's is.
+ * A station's plate: a body with two shoulders at its foot, the foot being
+ * the end that faces the field. Eight corners, all rounded the board's way.
  */
-export function plinthPath(side: "far" | "near"): string {
-  const block = PLINTH[side];
-  const centre = PLINTH.centreX;
-  const outer = side === "far" ? block.top : block.bottom;
-  const inner = side === "far" ? block.bottom : block.top;
-
-  // The face towards the well is the wider one, because it is nearer the eye
-  // on the near plinth and further into the light on the far one.
-  const outerHalf = block.width / 2 - 16;
-  const innerHalf = block.width / 2;
-
-  return roundedPolygon(
-    [
-      { x: centre - outerHalf, y: outer },
-      { x: centre + outerHalf, y: outer },
-      { x: centre + innerHalf, y: inner },
-      { x: centre - innerHalf, y: inner },
-    ],
-    22,
-  );
-}
-
-/** Where a deck sits in the right hand rim. */
-export function deckSocket(side: "far" | "near"): { x: number; y: number; w: number; h: number } {
-  const y = side === "far" ? WELL.seamY - RIGHT.deckOffset : WELL.seamY + RIGHT.deckOffset;
-  const rim = rimRight(y);
-  const w = RIGHT.deckWidth + 22;
-  const h = RIGHT.deckHeight + 22;
-  return { x: rim.middle - w / 2, y: y - h / 2, w, h };
-}
-
-/** Where the button sits: on the rim at the seam, overhanging the well. */
-export function buttonSocket(): { x: number; y: number; w: number; h: number } {
-  const rim = rimRight(WELL.seamY);
-  const w = RIGHT.buttonWidth + 18;
-  const h = RIGHT.buttonHeight + 16;
-  return { x: rim.outer - w - 10, y: WELL.seamY - h / 2, w, h };
-}
-
-/** The right hand rim at a depth: where it starts, stops, and its middle. */
-export function rimRight(y: number): { inner: number; outer: number; middle: number } {
-  const inner = wellEdges(y).x1;
-  const outer = slabEdges(y).x1;
-  return { inner, outer, middle: (inner + outer) / 2 };
-}
-
-/** The left hand rim at a depth, which is where the writing goes. */
-export function rimLeft(y: number): { inner: number; outer: number; middle: number } {
-  const inner = wellEdges(y).x0;
-  const outer = slabEdges(y).x0;
-  return { inner, outer, middle: (inner + outer) / 2 };
+export function platePath(side: "far" | "near"): string {
+  const { body, shoulders } = station(side).plate;
+  const b = { x0: body.x, x1: body.x + body.width, y0: body.y, y1: body.y + body.height };
+  const s = { x0: shoulders.x, x1: shoulders.x + shoulders.width, y0: shoulders.y, y1: shoulders.y + shoulders.height };
+  const points = side === "far"
+    ? [
+      { x: b.x0, y: b.y0 }, { x: b.x1, y: b.y0 },
+      { x: b.x1, y: s.y0 }, { x: s.x1, y: s.y0 },
+      { x: s.x1, y: s.y1 }, { x: s.x0, y: s.y1 },
+      { x: s.x0, y: s.y0 }, { x: b.x0, y: s.y0 },
+    ]
+    : [
+      { x: s.x0, y: s.y0 }, { x: s.x1, y: s.y0 },
+      { x: s.x1, y: s.y1 }, { x: b.x1, y: s.y1 },
+      { x: b.x1, y: b.y1 }, { x: b.x0, y: b.y1 },
+      { x: b.x0, y: s.y1 }, { x: s.x0, y: s.y1 },
+    ];
+  return roundedPolygon(points, SHELL.radius.hole);
 }
 
 /**
- * The four corners of the rim, where anything resting on the board stands.
+ * The niche's outline: a half circle on straight sides, which is what makes it
+ * an arch rather than a rounded box.
  *
- * Given as a box each, so a prop can be placed by its own footprint rather than
- * by a number somebody guessed.
+ * `inset` is how far inside the window's own edge the outline sits: 0 is the
+ * opening as it is cut into the stone, a positive number is a layer inside
+ * it, a negative one reaches outside. Offsetting works evenly because the
+ * dome's radius is half the window's width, so every layer shares the dome's
+ * centre and comes out the same thickness the whole way round. The bottom
+ * corners widen by the offset for the same reason.
+ *
+ * Given once here, so the stone cavity the board cuts and the picture the
+ * leader drops into it are the same shape from the same numbers.
  */
-export function shelves(): { key: string; x: number; y: number; w: number; h: number }[] {
-  const farRim = { top: BOARD.farY, bottom: WELL.farY };
-  const nearRim = { top: WELL.nearY, bottom: BOARD.nearY };
-  const plinthFar = PLINTH.far.width / 2 + 20;
-  const plinthNear = PLINTH.near.width / 2 + 20;
-  const centre = PLINTH.centreX;
-
-  const box = (key: string, y0: number, y1: number, x0: number, x1: number) => ({
-    key, x: x0, y: y0, w: x1 - x0, h: y1 - y0,
-  });
-
-  const far = slabEdges((farRim.top + farRim.bottom) / 2);
-  const near = slabEdges((nearRim.top + nearRim.bottom) / 2);
-
-  return [
-    box("far-left", farRim.top + 12, farRim.bottom - 8, far.x0 + 24, centre - plinthFar),
-    box("far-right", farRim.top + 12, farRim.bottom - 8, centre + plinthFar, far.x1 - 24),
-    box("near-left", nearRim.top + 8, nearRim.bottom - 12, near.x0 + 24, centre - plinthNear),
-    box("near-right", nearRim.top + 8, nearRim.bottom - 12, centre + plinthNear, near.x1 - 24),
-  ];
+export function nichePath(x: number, y: number, width: number, height: number, inset: number): string {
+  const w = width - inset * 2;
+  const h = height - inset * 2;
+  const dome = w / 2;
+  const f = LEADER.foot + LEADER.picture - inset;
+  const ox = x + inset;
+  const oy = y + inset;
+  return `M ${round(ox)} ${round(oy + dome)}`
+    + ` A ${round(dome)} ${round(dome)} 0 0 1 ${round(ox + w)} ${round(oy + dome)}`
+    + ` L ${round(ox + w)} ${round(oy + h - f)}`
+    + ` A ${round(f)} ${round(f)} 0 0 1 ${round(ox + w - f)} ${round(oy + h)}`
+    + ` L ${round(ox + f)} ${round(oy + h)}`
+    + ` A ${round(f)} ${round(f)} 0 0 1 ${round(ox)} ${round(oy + h - f)}`
+    + ` Z`;
 }
 
 /** The whole stage, for anything that has to cover it. */
