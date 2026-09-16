@@ -43,7 +43,17 @@ import { ENERGY_CAP } from "@cg/battle";
  */
 export const STAGE = {
   width: 1440,
-  height: 834,
+  height: 966,
+  /**
+   * The part of the stage that is on screen: from `top` down, `fit` deep.
+   * Above it is the upper half of their hand, held beyond the far edge of the
+   * table and cut off by the top of the window; below it is the foot of your
+   * hand, cut off by the bottom. The stage is fitted to this band and the
+   * rest runs past the window's edges, the way a table seen from a chair
+   * runs past the edges of what you are looking at.
+   */
+  top: 110,
+  fit: 826,
 } as const;
 
 /**
@@ -77,8 +87,8 @@ export const BOARD = {
    * count — and what is left below it is exactly a hand card deep, which is
    * all yours needs.
    */
-  farY: 90,
-  nearY: 686,
+  farY: 206,
+  nearY: 802,
   /**
    * How much of the slab's thickness shows along the near edge.
    *
@@ -179,11 +189,12 @@ export function wellEdges(y: number): { x0: number; x1: number } {
 /**
  * How much smaller everything on the far side of the board draws.
  *
- * Barely. From overhead the far end of a table is hardly further away than the
- * near end, and a card that shrank noticeably would be saying the camera is
- * somewhere it is not.
+ * Nothing, now. The far end used to be shrunk by hand when the board was
+ * seen from straight above; the camera is a real one now and does that
+ * itself, and a second shrink on top was one more resampling of every far
+ * card for no depth the pitch was not already giving.
  */
-export const FAR_SCALE = 0.975;
+export const FAR_SCALE = 1;
 
 /**
  * How much of the far half is taken by the air between here and there.
@@ -219,14 +230,14 @@ export const CARD = {
    * card in play is read from further away for less — what it hits for and
    * what is left of it — while a card in hand is read for everything it says.
    */
-  play: 96,
+  play: 104,
   get playHeight() { return cardHeight(this.play); },
-  /** A card in your hand: 0.076 of the board's width, as on the reference. */
-  hand: 104,
+  /** A card in your hand: a little larger than on the reference, so it can be read. */
+  hand: 116,
   get handHeight() { return cardHeight(this.hand); },
   gap: 16,
   /** How much a card in a hand hides behind the one before it. */
-  handOverlap: 32,
+  handOverlap: 42,
   /** How far a card lifts when it is pointed at, and when it is picked up. */
   hover: 40,
   lift: 86,
@@ -365,7 +376,7 @@ export function leaderSeat(side: Side): LeaderSeat {
  * The fittings down the two sides of the board, mounted on the rim.
  *
  * On the left the board's information — which game this is, whose turn it
- * is — three stones, and the way out; on the right the two decks and the
+ * is — and the way out; on the right the two decks and the
  * button that ends a turn. None of that is the game, so it is all out at the
  * sides away from the field, and each piece is its own fitting set into the
  * rim: a plate with a brass edge, a stone in a ring, a well with a brass
@@ -385,12 +396,11 @@ export const SIDE = {
   edge: 19,
   /** Rim between one fitting and the next. */
   gap: 10,
-  /** The left column: the two plates, the stones, and the key. */
+  /** The left column: the actions plate, the two plates, and the key. */
   width: 108,
+  actions: 34,
   plaque: 58,
   status: 62,
-  stone: 32,
-  stoneGap: 7,
   leave: 42,
   /** The left column sits a little above the board's middle, as it does on
       the reference. */
@@ -398,7 +408,7 @@ export const SIDE = {
   /** And the right column sits higher still. */
   rightLift: 34,
   /** The two marks engraved on the left rim, above and below the column. */
-  emblem: { radius: 38, offset: 168 },
+  emblem: { radius: 38, offset: 196 },
   /** The right column: how far a deck's frame sits past the deck. */
   deckSeat: 6,
   /** The button that ends a turn, and the frame round it. */
@@ -406,12 +416,12 @@ export const SIDE = {
 } as const;
 
 export interface LeftFittings {
+  /** What has happened so far: a plate that shows the history when pointed at. */
+  actions: Box;
   /** The match: its name, and who it is against. */
   plaque: Box;
   /** Whose turn it is, and which turn. */
   status: Box;
-  /** Three stones in a row, in brass rings. Board hardware; they do nothing. */
-  stones: { cx: number; cy: number; radius: number }[];
   /** The way out. */
   leave: Box;
   /** Bare rim below the column, where a note is engraved. */
@@ -422,28 +432,22 @@ export interface LeftFittings {
 
 export function leftFittings(): LeftFittings {
   const { gap, width } = SIDE;
-  const stoneRow = SIDE.stone + SIDE.stoneGap;
-  const height = SIDE.plaque + gap + SIDE.status + gap + stoneRow + gap + SIDE.leave;
+  const height = SIDE.actions + gap + SIDE.plaque + gap + SIDE.status + gap + SIDE.leave;
   const top = CENTRE.y - SIDE.lift - height / 2;
   const bottom = top + height;
   // The column hangs off the slab's edge at its narrowest, so no fitting
   // ever reaches past the wood at either end.
   const x = Math.max(slabEdges(top).x0, slabEdges(bottom).x0) + SIDE.margin;
 
-  const statusTop = top + SIDE.plaque + gap;
-  const stonesTop = statusTop + SIDE.status + gap;
-  const leaveTop = stonesTop + stoneRow + gap;
-  const row = 3 * SIDE.stone + 2 * SIDE.stoneGap;
+  const plaqueTop = top + SIDE.actions + gap;
+  const statusTop = plaqueTop + SIDE.plaque + gap;
+  const leaveTop = statusTop + SIDE.status + gap;
 
   const emblemX = x + width / 2;
   return {
-    plaque: { x, y: top, width, height: SIDE.plaque },
+    actions: { x, y: top, width, height: SIDE.actions },
+    plaque: { x, y: plaqueTop, width, height: SIDE.plaque },
     status: { x, y: statusTop, width, height: SIDE.status },
-    stones: Array.from({ length: 3 }, (_unused, i) => ({
-      cx: x + width / 2 - row / 2 + SIDE.stone / 2 + i * (SIDE.stone + SIDE.stoneGap),
-      cy: stonesTop + stoneRow / 2,
-      radius: SIDE.stone / 2,
-    })),
     leave: { x, y: leaveTop, width, height: SIDE.leave },
     note: { x, y: bottom + gap, width, height: WELL.nearY - gap - (bottom + gap) },
     emblems: [
@@ -491,31 +495,36 @@ export function rightFittings(): RightFittings {
  * Where the two hands are held: just outside the board's two ends, the same
  * clearance from each.
  *
- * Yours hangs from the near edge, whole, and reaches to the bottom of the
- * stage: the stage was measured so that it does. Theirs is held at the far
- * edge, also whole, and smaller — it is a row of backs to be counted, not
- * cards to be read, and drawn at full size it would not fit in the room the
- * stage has above the board. Yours lies a little over the rim's edge, the
- * way cards held at a table do; theirs is held just clear of the far edge.
+ * Yours hangs just past the near edge, compact and gently fanned, with its
+ * foot running off the bottom of the window. Theirs is held beyond the far
+ * edge, large and fanned towards them, with its upper half running off the
+ * top of the window: what shows is the lower half of each back, which is
+ * all a hand of backs has to show. Neither covers its leader.
  */
 export const HAND = {
   /**
-   * How far a hand rides over the board's edge. A hand held just off the
-   * table is a hand hovering; one whose cards lie a little over the rim is a
-   * hand at the table.
+   * How far your hand's top edge sits inside the board's near edge — or,
+   * negative, past it. It sits just past the plate's foot, which hangs over
+   * the edge, so the leader's name is never under a card.
    */
-  over: 8,
+  over: -28,
   /** Where your hand's top edge sits. */
   get nearTop() { return BOARD.nearY - this.over; },
   far: {
-    /** How much smaller their cards are drawn than yours. */
-    scale: 0.72,
-    /** Clear wood between the fan and the board's far edge. */
-    gap: 14,
+    /**
+     * How much larger their cards are drawn than yours. Theirs are held
+     * beyond the far edge with the upper half past the top of the window,
+     * so what shows is the lower half of a large card; yours are held close
+     * and read whole.
+     */
+    scale: 1.052,
+    /** Clear stage between the fan and the leader's plate, which stands out
+        past the board's far edge. */
+    gap: 32,
     /** Degrees of splay per card from the middle of the fan. */
-    tilt: 2,
+    tilt: 2.5,
     /** How much of a card hides behind the one before it, at their scale. */
-    overlap: 22,
+    overlap: 50,
     get width() { return Math.round(CARD.hand * this.scale); },
     get height() { return Math.round(CARD.handHeight * this.scale); },
     /** The line the fan hangs from: its cards' top edge. */
@@ -844,7 +853,7 @@ export const PERSPECTIVE = 1900;
  * board is a thing sitting on it.
  */
 export const CAMERA = {
-  pitch: 14,
+  pitch: 3,
   horizon: 0.42,
   distance: 0.96,
 } as const;
@@ -896,10 +905,10 @@ export const TILT = {
  * rather than as an object.
  */
 export const LIGHT = {
-  x: 400,
-  y: BOARD.farY - 40,
+  x: 360,
+  y: BOARD.farY - 60,
   /** How far the light reaches before the board is left to the dark. */
-  reach: 1180,
+  reach: 1260,
 } as const;
 
 /**
@@ -939,6 +948,9 @@ export interface StageFrame {
   width: number;
   /** How far the board reaches past the composition on each side. */
   spread: number;
+  /** Where the stage's top edge sits relative to the window's, in stage units;
+      negative when the stage runs off the top. */
+  top: number;
 }
 
 export function frameFor(width: number, height: number): StageFrame {
@@ -948,10 +960,13 @@ export function frameFor(width: number, height: number): StageFrame {
   // with it.
   const scale = Math.max(
     0.01,
-    Math.min(Math.max(width, 1) / STAGE.width, Math.max(height, 1) / STAGE.height) * CAMERA.distance,
+    Math.min(Math.max(width, 1) / STAGE.width, Math.max(height, 1) / STAGE.fit) * CAMERA.distance,
   );
   const stageWidth = Math.max(STAGE.width, width / scale);
-  return { scale, width: stageWidth, spread: (stageWidth - STAGE.width) / 2 };
+  // The band of the stage that has to be seen is centred in the window; what
+  // is above it hangs off the top, and what is below it off the bottom.
+  const top = Math.max(0, (height / scale - STAGE.fit) / 2) - STAGE.top;
+  return { scale, width: stageWidth, spread: (stageWidth - STAGE.width) / 2, top };
 }
 
 /**

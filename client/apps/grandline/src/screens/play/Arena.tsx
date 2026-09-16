@@ -47,9 +47,11 @@ import { EnemyHand, Hand } from "./arena/Hands";
  */
 
 export function Arena({
-  state, you, local, yourTurn, note, title, badge, opponentName, onIntent, onLeave, children,
+  state, you, local, yourTurn, note, title, badge, opponentName, history = [], onIntent, onLeave, children,
 }: {
   state: BattleState;
+  /** What has happened so far, most recent last, as lines a player can read. */
+  history?: string[];
   /** The seat drawn along the bottom. */
   you: PlayerId;
   /** Both seats played on one screen, so the board turns around each turn. */
@@ -68,7 +70,7 @@ export function Arena({
   // that switched tables were the one control the housing did not keep.
   const [theme] = useArenaTheme();
   const { ref: fit, frame } = useStageFit();
-  const { stage, room } = useTilt(frame.scale);
+  const { stage, room } = useTilt();
   const [held, setHeld] = useState<string | null>(null);
   useEffect(() => { setHeld(null); }, [state.activePlayer]);
 
@@ -140,7 +142,10 @@ export function Arena({
         // board recedes towards the same place.
         perspectiveOrigin: `50% ${CAMERA.horizon * 100}%`,
         display: "flex",
-        alignItems: "center",
+        // Not centred: the stage is set down from the top by what the frame
+        // worked out, so the part of it that has to be seen is centred and the
+        // foot of your hand runs off the bottom of the window.
+        alignItems: "flex-start",
         justifyContent: "center",
       }}
     >
@@ -153,6 +158,16 @@ export function Arena({
           // board fills the extra; the game inside it does not.
           width: frame.width,
           height: STAGE.height,
+          // The fit is a zoom, not a transform. A transform scales a picture
+          // of the stage: everything inside is laid out and rasterised at one
+          // stage unit to the pixel and then blown up by the fit, and at a
+          // fit of 1.24 every card, every letter and every leader's face was
+          // a quarter larger than it had been drawn — soft. A zoom lays the
+          // stage out at the fitted size, so a 12-unit letter is a 15-pixel
+          // letter drawn at 15 pixels. The transform below carries only the
+          // lean.
+          zoom: frame.scale,
+          marginTop: frame.top,
           // The stage is a fixed object that gets scaled, never squeezed: as a
           // flex child it would otherwise shrink to the window and every
           // measurement on the board would be off by whatever that took.
@@ -337,6 +352,7 @@ export function Arena({
             turn={state.turn}
             line={turnLine(state, yourTurn, local)}
             note={note}
+            history={history}
             onLeave={onLeave}
           />
         </Layer>
@@ -387,9 +403,10 @@ function turnLine(state: BattleState, yourTurn: boolean, local: boolean): string
  * whole arrangement exists to say.
  *
  * Somebody who has asked their system not to animate things gets a board that
- * sits still — but still gets the fit applied, since that is not animation.
+ * sits still at its pitch. The fit is not written here at all: it is a zoom
+ * on the stage, applied by layout, so nothing in this loop resamples.
  */
-function useTilt(scale: number): {
+function useTilt(): {
   /** Goes on the stage: the board, and everything standing on it. */
   stage: RefObject<HTMLDivElement>;
   /** Goes on the room the board is standing in. */
@@ -413,8 +430,7 @@ function useTilt(scale: number): {
     const paint = () => {
       const { x, y } = shown.current;
       if (stage.current) {
-        stage.current.style.transform =
-          `rotateX(${CAMERA.pitch + x}deg) rotateY(${y}deg) scale(${scale})`;
+        stage.current.style.transform = `rotateX(${CAMERA.pitch + x}deg) rotateY(${y}deg)`;
       }
       if (room.current) {
         room.current.style.transform = `translate(${-y * drift}px, ${-x * drift}px)`;
@@ -465,7 +481,7 @@ function useTilt(scale: number): {
       if (!still) window.removeEventListener("mousemove", onMove);
       cancelAnimationFrame(frame);
     };
-  }, [scale]);
+  }, []);
 
   return { stage, room };
 }
@@ -575,19 +591,76 @@ function Channel({ theme, end, player }: {
  * looks like. On bare stone it is the wood's own lit edge colour, dimmer than
  * paint, which is what a letter cut into the board looks like under a lamp.
  */
-function LeftRail({ theme, title, badge, turn, line, note, onLeave }: {
+function LeftRail({ theme, title, badge, turn, line, note, history, onLeave }: {
   theme: ArenaTheme;
   title: string;
   badge: string;
   turn: number;
   line: string;
   note: string | null;
+  history: string[];
   onLeave: () => void;
 }) {
   const seat = leftFittings();
+  const [showing, setShowing] = useState(false);
 
   return (
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+      {/* What has happened so far. A plate at the top of the column; point at
+          it and the history unrolls beside it, over the board, and rolls up
+          again when you look away. */}
+      <div
+        onMouseEnter={() => setShowing(true)}
+        onMouseLeave={() => setShowing(false)}
+        style={{
+          position: "absolute",
+          left: seat.actions.x,
+          top: seat.actions.y,
+          width: seat.actions.width,
+          height: seat.actions.height,
+          pointerEvents: "auto",
+          cursor: "default",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          ...text("label"),
+          fontSize: 8.5,
+          color: theme.gold.light,
+          textShadow: SUNK,
+        }}
+      >
+        Actions
+        {showing && (
+          <div
+            style={{
+              position: "absolute",
+              left: seat.actions.width + 12,
+              top: 0,
+              width: 240,
+              maxHeight: 320,
+              overflow: "hidden",
+              padding: "8px 10px",
+              boxSizing: "border-box",
+              borderRadius: 6,
+              background: theme.bezel,
+              border: `1px solid ${theme.gold.dark}`,
+              boxShadow: `2px 3px 6px rgba(0,0,0,0.6)`,
+              ...text("small"),
+              fontSize: 9.5,
+              lineHeight: 1.45,
+              textAlign: "left",
+              color: theme.paint,
+              zIndex: 1,
+            }}
+          >
+            {history.length === 0 && <div style={{ opacity: 0.6 }}>Nothing yet.</div>}
+            {history.slice(-14).map((entry, i) => (
+              <div key={i}>{entry}</div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* The match, on the upper plaque. */}
       <Plaque box={seat.plaque}>
         <span
@@ -677,7 +750,7 @@ function LeftRail({ theme, title, badge, turn, line, note, onLeave }: {
           height: seat.leave.height,
           pointerEvents: "auto",
           cursor: "pointer",
-          ...key(theme, false),
+          ...key(theme, "ivory"),
           ...text("label"),
           fontSize: 8,
         }}

@@ -25,7 +25,7 @@ import { Frame, Recess } from "./Stations";
  * At each end a player's station — drawn in its own layer, since its plate
  * reaches out over the parchment's edge. Down the right, the two decks in
  * brass frames and the key that ends a turn between them; down the left, two
- * plates for the board's writing, three stones in rings, the key that leaves,
+ * plates for the board's writing, the key that leaves,
  * and a compass mark engraved above and below. All drawn here, not by the
  * things that sit in them, which is the whole difference between a control
  * the board was built for and a control laid on top of it. There is no
@@ -50,10 +50,16 @@ const H = STAGE.height;
 /** A stroke on an outline, pushed a hair down and right, shows on the top and
     left edges of the shape it is clipped to: the edges that face the lamp. */
 const TOWARDS_LAMP = `translate(${SHELL.lit} ${SHELL.lit})`;
+/** Pushed up and left, it shows on the bottom and right of a band clipped
+    inside it: the far walls of a hole the lamp reaches. */
+const AWAY_FROM_LAMP = `translate(${-SHELL.lit} ${-SHELL.lit})`;
 
 /** The strength of a lit edge, and of the one in shadow. */
 const LIT = 0.85;
 const DARK = 0.8;
+/** How much of the lamp the slab's top takes: enough to be lit, not enough
+    to shine. Matte wood under a lamp gets lighter; it does not reflect it. */
+const SLAB_LAMP = 0.45;
 
 export default function Structure({ theme, spread = 0 }: {
   theme: ArenaTheme;
@@ -91,9 +97,9 @@ export default function Structure({ theme, spread = 0 }: {
         {/* The lamp. Everything on the board is shaded against this one shape,
             which is what keeps the whole object lit from the same place. */}
         <radialGradient id="st-lamp" gradientUnits="userSpaceOnUse" cx={LIGHT.x} cy={LIGHT.y} r={LIGHT.reach}>
-          <stop offset="0" stopColor={theme.lamp} stopOpacity="0.72" />
-          <stop offset="0.34" stopColor={theme.lamp} stopOpacity="0.3" />
-          <stop offset="0.7" stopColor={theme.lamp} stopOpacity="0.08" />
+          <stop offset="0" stopColor={theme.lamp} stopOpacity="0.82" />
+          <stop offset="0.3" stopColor={theme.lamp} stopOpacity="0.4" />
+          <stop offset="0.65" stopColor={theme.lamp} stopOpacity="0.1" />
           <stop offset="1" stopColor={theme.lamp} stopOpacity="0" />
         </radialGradient>
 
@@ -101,9 +107,9 @@ export default function Structure({ theme, spread = 0 }: {
             far corner from it is the dark one. */}
         <radialGradient id="st-falloff" gradientUnits="userSpaceOnUse" cx={LIGHT.x} cy={LIGHT.y} r={LIGHT.reach * 1.16}>
           <stop offset="0" stopColor="#161C26" stopOpacity="0" />
-          <stop offset="0.36" stopColor="#161C26" stopOpacity="0.14" />
-          <stop offset="0.7" stopColor="#141A24" stopOpacity="0.42" />
-          <stop offset="1" stopColor="#121820" stopOpacity="0.68" />
+          <stop offset="0.4" stopColor="#161C26" stopOpacity="0.16" />
+          <stop offset="0.72" stopColor="#141A24" stopOpacity="0.46" />
+          <stop offset="1" stopColor="#101620" stopOpacity="0.74" />
         </radialGradient>
 
         {/* The wood, lit down its length. */}
@@ -192,12 +198,19 @@ export default function Structure({ theme, spread = 0 }: {
         <path d={lip} fill="url(#st-face)" />
         <path d={slab} fill="url(#st-wood)" />
       </g>
-      <Material name="wood" clip="st-slab-clip" x={-spread} width={W + spread * 2} />
       <g clipPath="url(#st-slab-clip)">
         {/* Lit, then unlit, in that order, so the far corner from the lamp is
-            the one that goes dark rather than the middle of the board. */}
-        <rect {...full} fill="url(#st-lamp)" style={{ mixBlendMode: "soft-light" }} />
+            the one that goes dark rather than the middle of the board. The
+            lamp is held well under full strength here: at full it laid a
+            smooth bloom across the slab that read as varnish, and the grain
+            underneath it was flattened by a gradient it had no part in. */}
+        <rect {...full} fill="url(#st-lamp)" style={{ mixBlendMode: "soft-light" }} opacity={SLAB_LAMP} />
         <rect {...full} fill="url(#st-falloff)" />
+      </g>
+      {/* The grain goes on over the light, not under it, so the lamp changes
+          the wood's value and the wood keeps its own surface. */}
+      <Material name="wood" clip="st-slab-clip" x={-spread} width={W + spread * 2} />
+      <g clipPath="url(#st-slab-clip)">
         {/* The top and left edges, where the wood turns over towards the lamp. */}
         <path d={slab} fill="none" stroke={theme.frameInlay} strokeWidth={SHELL.lit} opacity={LIT} transform={TOWARDS_LAMP} />
       </g>
@@ -207,14 +220,22 @@ export default function Structure({ theme, spread = 0 }: {
       <path d={stone} fillRule="evenodd" fill="url(#st-stone)" />
       <Material name="stone" clip="st-stone-clip" x={-spread} width={W + spread * 2} />
       <g clipPath="url(#st-stone-clip)">
-        <rect {...full} fill="url(#st-lamp)" style={{ mixBlendMode: "soft-light" }} opacity="0.6" />
-        <rect {...full} fill="url(#st-falloff)" opacity="0.7" />
+        <rect {...full} fill="url(#st-lamp)" style={{ mixBlendMode: "soft-light" }} opacity="0.7" />
+        <rect {...full} fill="url(#st-falloff)" opacity="0.8" />
+        {/* The stone's own edge where it turns down into the chamfer, lit on
+            the side that faces the lamp. */}
+        <path d={wellOffsetPath(RIM.bevel)} fill="none" stroke={theme.wing.light} strokeWidth={SHELL.lit} opacity={LIT * 0.8} transform={AWAY_FROM_LAMP} />
       </g>
       <g>
         <path d={brass} fillRule="evenodd" fill="url(#st-brass)" />
         <Material name="brass" clip="st-brass-clip" x={-spread} width={W + spread * 2} />
-        {/* The brass's inner edge, where it stops and the stone begins. */}
+        {/* The brass's two edges: where it stops and the stone begins, and
+            where it stands up out of the wood. Raised, so the lamp catches
+            its top and left. */}
         <path d={wellOffsetPath(RIM.brassIn)} fill="none" stroke={theme.gold.dark} strokeWidth={SHELL.lit} opacity="0.8" />
+        <g clipPath="url(#st-brass-clip)">
+          <path d={wellOffsetPath(RIM.brassOut)} fill="none" stroke={theme.gold.light} strokeWidth={SHELL.lit} opacity={LIT * 0.7} transform={TOWARDS_LAMP} />
+        </g>
       </g>
       <g clipPath="url(#st-sunk-clip)">
         {/* The wood's step stands above all of this and drops its shadow
@@ -248,21 +269,15 @@ export default function Structure({ theme, spread = 0 }: {
           <BoxRecess theme={theme} box={box} />
         </g>
       ))}
-      <Frame theme={theme} box={right.button} r={SHELL.radius.hole / 2} />
+      {/* The key's recess: wood, a cut, the plate. No frame round it; the
+          decks get frames because the reference gives them frames, and the
+          key gets a cut because it gives it a cut. */}
       <BoxRecess theme={theme} box={right.button} r={SHELL.radius.hole / 2} />
 
-      {/* ── The left hand fittings: two plates, three stones, the key ────── */}
-      {[left.plaque, left.status].map(box => (
-        <g key={box.y}>
-          <Frame theme={theme} box={box} r={SHELL.radius.hole / 2} />
-          <BoxRecess theme={theme} box={box} r={SHELL.radius.hole / 2} />
-        </g>
+      {/* ── The left hand fittings: three plates and the key, each in a cut ─ */}
+      {[left.actions, left.plaque, left.status, left.leave].map(box => (
+        <BoxRecess key={box.y} theme={theme} box={box} r={SHELL.radius.hole / 2} />
       ))}
-      {left.stones.map((stone, i) => (
-        <Stone key={stone.cx} theme={theme} cx={stone.cx} cy={stone.cy} r={stone.radius} tint={STONES[i]} />
-      ))}
-      <Frame theme={theme} box={left.leave} r={SHELL.radius.hole / 2} />
-      <BoxRecess theme={theme} box={left.leave} r={SHELL.radius.hole / 2} />
       {left.emblems.map(mark => (
         <Emblem key={mark.cy} theme={theme} cx={mark.cx} cy={mark.cy} r={mark.radius} />
       ))}
@@ -297,32 +312,10 @@ function BoxRecess({ theme, box, r = SHELL.radius.hole }: { theme: ArenaTheme; b
 }
 
 /**
- * The three stones' glass. Board hardware, not the game: they are the
- * coloured caps on the reference board, and they do nothing.
- */
-const STONES = ["#E8E4DC", "#4E9BE6", "#9A5FD6"] as const;
-
-/** A stone in a brass ring, set into the rim. */
-function Stone({ theme, cx, cy, r, tint }: { theme: ArenaTheme; cx: number; cy: number; r: number; tint: string }) {
-  const id = `st-stone-${Math.round(cx)}-${Math.round(cy)}`;
-  return (
-    <g>
-      <radialGradient id={id} cx="0.35" cy="0.3" r="0.75">
-        <stop offset="0" stopColor="#FFFFFF" stopOpacity="0.9" />
-        <stop offset="0.3" stopColor={tint} />
-        <stop offset="1" stopColor={theme.bezel} />
-      </radialGradient>
-      <Recess theme={theme} x={cx - r - 3} y={cy - r - 3} w={(r + 3) * 2} h={(r + 3) * 2} r={r + 3} round />
-      <circle cx={cx} cy={cy} r={r} fill={`url(#${id})`} />
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke={theme.gold.dark} strokeWidth={SHELL.lit} opacity="0.9" />
-    </g>
-  );
-}
-
-/**
- * A compass mark engraved in the rim: a ring, a rose of eight points, and a
- * centre. Cut, not painted — a dark line with the lamp catching its lower
- * wall — and faint, because it is a mark on a board and not a picture.
+ * A compass mark inlaid in the rim: a ring, a rose of eight points, and a
+ * centre, in brass let into the wood. Worn: the brass is the dark of the
+ * ramp with the lamp catching its upper edge, and the whole mark is a little
+ * under full strength, because it is a mark on a board and not a picture.
  */
 function Emblem({ theme, cx, cy, r }: { theme: ArenaTheme; cx: number; cy: number; r: number }) {
   const points: string[] = [];
@@ -350,9 +343,10 @@ function Emblem({ theme, cx, cy, r }: { theme: ArenaTheme; cx: number; cy: numbe
     </g>
   );
   return (
-    <g opacity="0.7">
-      {cut({ fill: theme.frameInlay, stroke: theme.frameInlay, strokeWidth: SHELL.lit, transform: TOWARDS_LAMP, opacity: 0.5 })}
-      {cut({ fill: theme.frameEdge, stroke: theme.frameEdge, strokeWidth: SHELL.lit })}
+    <g opacity="0.8">
+      {cut({ fill: theme.frameEdge, stroke: theme.frameEdge, strokeWidth: SHELL.lit, transform: `translate(${SHELL.lit} ${SHELL.lit})`, opacity: 0.7 })}
+      {cut({ fill: theme.gold.dark, stroke: theme.gold.dark, strokeWidth: SHELL.lit })}
+      {cut({ fill: "none", stroke: theme.gold.light, strokeWidth: 0.8, opacity: 0.6, transform: `translate(${-SHELL.lit / 2} ${-SHELL.lit / 2})` })}
     </g>
   );
 }

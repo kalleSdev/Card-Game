@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { MOTION, RIGHT, SIDE, STAGE, rightFittings, type Box } from "../../../design/arenaStage";
+import CardBack from "../../../components/CardBack";
 import { text } from "../../../design/tokens";
 import type { ArenaTheme, Ramp } from "../../../design/arenaThemes";
 
@@ -40,7 +41,7 @@ export default function RightRail({
         pointerEvents: "none",
       }}
     >
-      <DeckStack theme={theme} count={topDeck} colour={theme.deck} socket={seat.decks.far} />
+      <DeckStack theme={theme} count={topDeck} colour={theme.deck} socket={seat.decks.far} far />
 
       <EndTurn
         theme={theme}
@@ -62,17 +63,20 @@ const NEARLY_OUT = 5;
 /** How far each card in the stack is offset from the one below it. */
 const LEAN = 3;
 
-function DeckStack({ theme, count, colour, socket }: {
+function DeckStack({ theme, count, colour, socket, far = false }: {
   theme: ArenaTheme;
   count: number;
   colour: Ramp;
   /** The recess in the housing this deck is sitting in. */
   socket: Box;
+  /** Their deck, which faces them: the backs are turned the other way up. */
+  far?: boolean;
 }) {
   const low = count <= NEARLY_OUT;
   // Four backs is enough thickness to read as a stack; more would just be more
   // edges to draw at this size.
   const layers = [3, 2, 1, 0];
+
 
   return (
     <div
@@ -86,7 +90,10 @@ function DeckStack({ theme, count, colour, socket }: {
         height: RIGHT.deckHeight,
       }}
     >
-      {layers.map(layer => (
+      {/* The stack: three backs' edges showing under the top one, each a
+          little further down and left, with the lamp on its top edge and the
+          one above it in its shadow. */}
+      {layers.slice(0, -1).map(layer => (
         <span
           key={layer}
           style={{
@@ -96,12 +103,15 @@ function DeckStack({ theme, count, colour, socket }: {
             borderRadius: 7,
             background: `linear-gradient(150deg, ${colour.light}, ${colour.mid} 45%, ${colour.dark})`,
             border: `1px solid ${theme.frameEdge}`,
-            // The lamp on the top edge of each back, and the one below it in
-            // its shadow: what separates one card in a stack from the next.
-            boxShadow: `inset 1px 1px 0 ${theme.gold.light}55, inset 0 -6px 10px rgba(0,0,0,0.34)`,
+            boxShadow: `inset 1px 1px 0 ${theme.gold.light}55, 2px 3px 4px rgba(0,0,0,0.5)`,
           }}
         />
       ))}
+      {/* The top card is the same back as every face-down card in the game,
+          the right way up for the player it belongs to. */}
+      <span style={{ position: "absolute", inset: 0, boxShadow: `2px 3px 5px rgba(0,0,0,0.55)`, borderRadius: 7, transform: far ? "rotate(180deg)" : "none" }}>
+        <CardBack width={RIGHT.deckWidth} height={RIGHT.deckHeight} />
+      </span>
 
       {/* The count sits on a plate rather than on the card, so it reads as a
           number on a fitting and not as a number on a card. */}
@@ -155,7 +165,7 @@ function EndTurn({ theme, socket, yourTurn, attacking, onEndTurn, onCancel }: {
         height: SIDE.button.height,
         pointerEvents: "auto",
         cursor: live ? "pointer" : "default",
-        ...key(theme, live, attacking, lifted),
+        ...key(theme, live ? (attacking ? "ivory" : "brass") : "dull", lifted),
         transform: lifted ? "translateY(-1px)" : "none",
         transition: `transform ${MOTION.card}ms ease, box-shadow ${MOTION.card}ms ease`,
         ...text("label"),
@@ -168,29 +178,28 @@ function EndTurn({ theme, socket, yourTurn, attacking, onEndTurn, onCancel }: {
 }
 
 /**
- * A key: a brass button standing in a recess the board cut for it.
+ * A key: a plate standing a little proud of the recess the board cut for it.
  *
- * The same piece whether it ends a turn or leaves the table, so the two read
- * as the same fitting. Brass while it can be pressed, because brass is the
- * one thing on this board that asks to be touched; the rest of the time it is
- * the same dark plate as every other fitting, and it sits down. Its only
- * shadow is the lit top edge and the dark under-edge every raised brass piece
- * on the board has: the recess round it is already dark, and a key with a
- * shadow under it is a key lying on the board.
+ * Two plates, as on the reference. The one that ends a turn is brass: bright
+ * and pressable while it is your turn, the same brass gone dull while it is
+ * not. The one that leaves is ivory with dark lettering. Both are lit the
+ * way every raised piece on the board is — the lamp on the top and left
+ * edges, the bottom and right in their own shadow, a hair of dark under the
+ * plate where it meets the recess floor.
  */
-export function key(theme: ArenaTheme, live: boolean, quiet = false, lifted = false) {
+export function key(theme: ArenaTheme, kind: "brass" | "dull" | "ivory", lifted = false) {
+  const background = kind === "ivory"
+    ? `linear-gradient(170deg, ${theme.wing.light}, ${theme.wing.mid})`
+    : kind === "brass"
+      ? `linear-gradient(170deg, ${theme.accent}, ${theme.gold.mid} 70%, ${theme.gold.dark})`
+      : `linear-gradient(170deg, ${theme.gold.mid}, ${theme.gold.dark})`;
+  const drop = lifted ? 1 : 2;
   return {
-    borderRadius: 8,
-    border: `1px solid ${theme.gold.dark}`,
-    background: live
-      ? quiet
-        ? `linear-gradient(180deg, ${theme.wing.light}, ${theme.wing.dark})`
-        : `linear-gradient(180deg, ${theme.accent}, ${theme.gold.mid})`
-      : theme.bezel,
-    color: live ? theme.accentInk : theme.gold.light,
-    opacity: live ? 1 : 0.85,
-    boxShadow: live
-      ? `inset 1px 1px 0 rgba(255,255,255,0.45), inset 0 ${lifted ? -2 : -3}px 5px rgba(0,0,0,0.3)`
-      : `inset 2px 2px 3px ${theme.shadow}`,
+    borderRadius: 7,
+    border: `1px solid ${theme.frameEdge}`,
+    background,
+    color: kind === "ivory" ? theme.ink : kind === "brass" ? theme.accentInk : theme.gold.light,
+    opacity: kind === "dull" ? 0.9 : 1,
+    boxShadow: `inset 1px 1px 0 rgba(255,255,255,${kind === "ivory" ? 0.6 : 0.4}), inset -1px -2px 3px rgba(0,0,0,0.35), ${drop}px ${drop + 1}px ${drop * 2}px rgba(0,0,0,0.55)`,
   } as const;
 }

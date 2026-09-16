@@ -28,14 +28,17 @@ export type MaterialName = "wood" | "stone" | "brass" | "parchment";
 /**
  * How many stage units one tile of each texture covers.
  *
- * Wood is the structural body, so its grain is the largest: about a third of a
- * metre of plank if the board were real. Stone sits on pieces small enough to
+ * Wood is the structural body, so its grain is the largest: two planks span
+ * the board, and the one knot in the tile lands on the rim's far band, under
+ * the stone, rather than repeating nine times across the wood the way it did
+ * at a third of that size — which was the one thing that made the board read
+ * as a tiled background rather than as a plank. Stone sits on pieces small enough to
  * take under a tile each. Brass runs along narrow trim, so it is finer. The
  * parchment block is 1400 units against a 948 by 520 battlefield, which means
  * the play surface is inside a single block and cannot repeat.
  */
 export const MATERIAL_TILE: Record<MaterialName, number> = {
-  wood: 300,
+  wood: 620,
   stone: 240,
   brass: 170,
   parchment: 700,
@@ -53,7 +56,7 @@ export const MATERIAL_TILE: Record<MaterialName, number> = {
  * grey stone.
  */
 export const MATERIAL_MIX: Record<MaterialName, { opacity: number; blend: "overlay" | "soft-light" }> = {
-  wood: { opacity: 0.88, blend: "overlay" },
+  wood: { opacity: 0.74, blend: "overlay" },
   stone: { opacity: 0.58, blend: "overlay" },
   brass: { opacity: 0.5, blend: "soft-light" },
   parchment: { opacity: 0.32, blend: "soft-light" },

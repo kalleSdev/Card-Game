@@ -298,10 +298,11 @@ export function AbilityDial({ theme, end }: { theme: ArenaTheme; end: Side }): J
         width: socket.dial,
         height: socket.dial,
         borderRadius: "50%",
-        backgroundImage: `linear-gradient(180deg, ${theme.gold.light} 0%, ${theme.gold.mid} 40%, ${theme.gold.dark} 100%)`,
+        backgroundImage: `linear-gradient(160deg, ${theme.gold.light} 0%, ${theme.gold.mid} 45%, ${theme.gold.dark} 100%)`,
         // The lit top edge is a hairline of the brass ramp's own light, so the
-        // ring reads as turned rather than as printed
-        boxShadow: `inset 0 ${LINE}px 0 ${theme.gold.light}`,
+        // ring reads as turned rather than as printed; the dark under-edge is
+        // the bezel's own thickness against the socket floor.
+        boxShadow: `inset 1px 1px 0 ${theme.gold.light}, inset -1px -1px 1px ${theme.gold.dark}, 1px 2px 3px rgba(0,0,0,0.5)`,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -316,7 +317,7 @@ export function AbilityDial({ theme, end }: { theme: ArenaTheme; end: Side }): J
           // The empty glass is laid over an opaque dark, so the brass behind it
           // does not show through and muddy the lettering
           backgroundColor: theme.bezel,
-          backgroundImage: `conic-gradient(${theme.gem.mid} ${ABILITY_PROGRESS * 360}deg, ${theme.gemEmpty} 0deg)`,
+          backgroundImage: `conic-gradient(${theme.gem.mid} ${ABILITY_PROGRESS * 360}deg, ${theme.gemEmpty} 0deg), radial-gradient(ellipse 70% 45% at 40% 22%, rgba(255,255,255,0.14), transparent 70%)`,
           boxShadow: `inset 0 ${LINE}px ${TRIM}px ${theme.shadow}`,
           display: "flex",
           alignItems: "center",

@@ -30,7 +30,7 @@ import { cardFace } from "../../../data/pool";
  * even a hand at the energy cap inside five degrees at either end, which is
  * shallow enough that the art stays square to the eye.
  */
-const TILT_PER_STEP = 1;
+const TILT_PER_STEP = 0.7;
 
 /**
  * How far the middle of the fan rides above its ends.
@@ -39,7 +39,7 @@ const TILT_PER_STEP = 1;
  * smallest movement the board makes on purpose, or a hand sitting still looks
  * like a hand with a card already picked out of it.
  */
-const CAMBER = CARD.hover / 4;
+const CAMBER = CARD.hover / 7;
 
 /**
  * A card's own two number boxes.
@@ -215,7 +215,11 @@ export function EnemyHand({ theme, count }: { theme: ArenaTheme; count: number }
               filter: `drop-shadow(2px 4px 5px ${theme.shadow})`,
             }}
           >
-            <CardBack width={width} height={height} />
+            {/* Turned to face them, as a hand held on the far side of the
+                table is. */}
+            <span style={{ display: "block", transform: "rotate(180deg)" }}>
+              <CardBack width={width} height={height} />
+            </span>
 
             {i === shown - 1 && count > shown && (
               <span

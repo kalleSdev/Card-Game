@@ -314,7 +314,44 @@ export default function Surface({ theme, spread = 0 }: {
       </g>
 
       {/* The paper's own edge, where it stops and the recess floor shows. */}
+      {/* The rose printed in the middle of the sheet, as on the reference: a
+          ring, eight points, and long faint rays running out to the corners.
+          Printed, not drawn on top: it is the paper's own ink, at the paper's
+          own edge colour, and quiet enough to lie under a card. */}
+      <g clipPath="url(#sf-clip)" opacity="0.22">
+        <Rose cx={(FELT.x0 + FELT.x1) / 2} cy={(FELT.y0 + FELT.y1) / 2} r={FELT.height * 0.3} reach={FELT.width * 0.55} ink={theme.feltEdge} />
+      </g>
       <path d={surface} fill="none" stroke={theme.feltEdge} strokeWidth={SHELL.lit} opacity="0.8" />
     </svg>
+  );
+}
+
+/** The compass rose printed on the parchment. */
+function Rose({ cx, cy, r, reach, ink }: { cx: number; cy: number; r: number; reach: number; ink: string }) {
+  const points: string[] = [];
+  const rays: string[] = [];
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4;
+    const long = i % 2 === 0;
+    const tip = long ? r : r * 0.6;
+    const base = r * 0.1;
+    const b1 = a - Math.PI / 8;
+    const b2 = a + Math.PI / 8;
+    points.push(
+      `M ${round(cx + Math.cos(a) * tip)} ${round(cy + Math.sin(a) * tip)}`
+      + ` L ${round(cx + Math.cos(b1) * base * 2)} ${round(cy + Math.sin(b1) * base * 2)}`
+      + ` L ${round(cx + Math.cos(a) * base)} ${round(cy + Math.sin(a) * base)}`
+      + ` L ${round(cx + Math.cos(b2) * base * 2)} ${round(cy + Math.sin(b2) * base * 2)} Z`,
+    );
+    rays.push(`M ${round(cx + Math.cos(a) * tip)} ${round(cy + Math.sin(a) * tip)} L ${round(cx + Math.cos(a) * reach)} ${round(cy + Math.sin(a) * reach)}`);
+  }
+  return (
+    <g fill="none" stroke={ink}>
+      <circle cx={cx} cy={cy} r={r * 1.12} strokeWidth={1.2} />
+      <circle cx={cx} cy={cy} r={r * 1.04} strokeWidth={0.8} />
+      <path d={points.join(" ")} strokeWidth={1} />
+      <path d={rays.join(" ")} strokeWidth={0.8} opacity="0.7" />
+      <circle cx={cx} cy={cy} r={r * 0.05} fill={ink} />
+    </g>
   );
 }

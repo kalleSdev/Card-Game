@@ -64,16 +64,16 @@ export default function Stations({ theme, spread = 0 }: {
             fittings are lit by the board's lamp and made of the board's
             materials. */}
         <radialGradient id="sn-lamp" gradientUnits="userSpaceOnUse" cx={LIGHT.x} cy={LIGHT.y} r={LIGHT.reach}>
-          <stop offset="0" stopColor={theme.lamp} stopOpacity="0.72" />
-          <stop offset="0.34" stopColor={theme.lamp} stopOpacity="0.3" />
-          <stop offset="0.7" stopColor={theme.lamp} stopOpacity="0.08" />
+          <stop offset="0" stopColor={theme.lamp} stopOpacity="0.82" />
+          <stop offset="0.3" stopColor={theme.lamp} stopOpacity="0.4" />
+          <stop offset="0.65" stopColor={theme.lamp} stopOpacity="0.1" />
           <stop offset="1" stopColor={theme.lamp} stopOpacity="0" />
         </radialGradient>
         <radialGradient id="sn-falloff" gradientUnits="userSpaceOnUse" cx={LIGHT.x} cy={LIGHT.y} r={LIGHT.reach * 1.16}>
           <stop offset="0" stopColor="#161C26" stopOpacity="0" />
-          <stop offset="0.36" stopColor="#161C26" stopOpacity="0.14" />
-          <stop offset="0.7" stopColor="#141A24" stopOpacity="0.42" />
-          <stop offset="1" stopColor="#121820" stopOpacity="0.68" />
+          <stop offset="0.4" stopColor="#161C26" stopOpacity="0.16" />
+          <stop offset="0.72" stopColor="#141A24" stopOpacity="0.46" />
+          <stop offset="1" stopColor="#101620" stopOpacity="0.74" />
         </radialGradient>
         <linearGradient id="sn-stone" gradientUnits="userSpaceOnUse" x1={0} y1={WELL.farY - 100} x2={0} y2={WELL.nearY + 100}>
           <stop offset="0" stopColor={theme.wing.light} />
@@ -89,6 +89,11 @@ export default function Stations({ theme, spread = 0 }: {
         <linearGradient id="sn-hole" gradientUnits="userSpaceOnUse" x1={0} y1={WELL.farY} x2={0} y2={WELL.nearY}>
           <stop offset="0" stopColor={theme.bezel} />
           <stop offset="1" stopColor={theme.frameEdge} stopOpacity="0.85" />
+        </linearGradient>
+
+        <linearGradient id="sn-glass" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#FFFFFF" stopOpacity="0.12" />
+          <stop offset="1" stopColor="#FFFFFF" stopOpacity="0" />
         </linearGradient>
 
         <filter id="sn-soft" x="-30%" y="-30%" width="160%" height="160%">
@@ -137,6 +142,12 @@ function Station({ theme, side, full }: {
         <rect {...full} fill="url(#sn-lamp)" style={{ mixBlendMode: "soft-light" }} opacity="0.6" />
         <rect {...full} fill="url(#sn-falloff)" opacity="0.7" />
         <path d={plate} fill="none" stroke={theme.wing.light} strokeWidth={SHELL.lit} opacity={LIT * 0.7} transform={TOWARDS_LAMP} />
+        {/* The bevel's shadow side: the plate's bottom and right edges, turned
+            away from the lamp. */}
+        <path d={plate} fill="none" stroke={theme.wingEdge} strokeWidth={SHELL.edge} opacity="0.5" transform={AWAY_FROM_LAMP} />
+        {/* A brass line let into the plate a hair inside its edge, as on the
+            reference. */}
+        <path d={plate} fill="none" stroke={theme.gold.mid} strokeWidth={SHELL.edge * 2} opacity="0.55" />
       </g>
       <path d={plate} fill="none" stroke={theme.frameEdge} strokeWidth={SHELL.edge} />
 
@@ -147,7 +158,11 @@ function Station({ theme, side, full }: {
       <clipPath id={`sn-frame-${side}`}><path d={frame} /></clipPath>
       <path d={frame} fill="none" stroke={theme.gold.dark} strokeWidth={SHELL.lit} opacity="0.85" />
       <path d={frame} fill="none" stroke={theme.gold.light} strokeWidth={SHELL.lit} opacity={LIT * 0.6} transform={TOWARDS_LAMP} clipPath={`url(#sn-frame-${side})`} />
-      <Hole theme={theme} d={cavity} />
+      <Hole theme={theme} d={cavity} deep />
+      {/* The seat's own edge, where the picture sits down into the cavity:
+          one clean dark line, so the picture reads as set in rather than
+          floating in a dark hole. */}
+      <path d={nichePath(leader.x, leader.y, leader.width, leader.height, LEADER.picture)} fill="none" stroke={theme.bezel} strokeWidth={SHELL.lit} opacity="0.9" />
 
       {/* ── The number plates, on the shoulders ──────────────────────────── */}
       {stats.map(box => (
@@ -170,6 +185,9 @@ function Station({ theme, side, full }: {
       <Frame theme={theme} box={channel} />
       <Recess theme={theme} x={channel.x} y={channel.y} w={channel.width} h={channel.height} r={SHELL.radius.hole} />
       <Recess theme={theme} x={readout.x} y={readout.y} w={readout.width} h={readout.height} r={SHELL.radius.hole / 2} />
+      {/* The glass over the track: one pale sheet across its upper half, which
+          is where a pane catches the lamp. */}
+      <rect x={channel.x + 2} y={channel.y + 2} width={channel.width - 4} height={channel.height / 2} rx={SHELL.radius.hole - 2} fill="url(#sn-glass)" />
     </g>
   );
 }
@@ -206,14 +224,14 @@ export function Frame({ theme, box, r = SHELL.radius.hole }: {
  * hairline; and a brass lip round the opening, which is the trim every
  * fitting on this board is set in.
  */
-function Hole({ theme, d }: { theme: ArenaTheme; d: string }) {
+function Hole({ theme, d, deep = false }: { theme: ArenaTheme; d: string; deep?: boolean }) {
   const id = `sn-hole-${hash(d)}`;
   return (
     <g>
       <clipPath id={id}><path d={d} /></clipPath>
       <path d={d} fill="url(#sn-hole)" />
       <g clipPath={`url(#${id})`}>
-        <path d={d} fill="none" stroke={theme.shadow} strokeWidth={SHELL.occlusion} filter="url(#sn-soft)" opacity={DARK} transform="translate(3 3)" />
+        <path d={d} fill="none" stroke={theme.shadow} strokeWidth={SHELL.occlusion * (deep ? 1.8 : 1)} filter="url(#sn-soft)" opacity={DARK} transform="translate(3 3)" />
         <path d={d} fill="none" stroke={theme.frameInlay} strokeWidth={SHELL.lit} opacity={LIT * 0.6} transform={AWAY_FROM_LAMP} />
       </g>
       <path d={d} fill="none" stroke={theme.gold.dark} strokeWidth={SHELL.lit} opacity="0.85" />
