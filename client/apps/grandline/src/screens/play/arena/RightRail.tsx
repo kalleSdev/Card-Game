@@ -2,7 +2,7 @@ import { useState } from "react";
 import { MOTION, RIGHT, SIDE, STAGE, rightFittings, type Box } from "../../../design/arenaStage";
 import CardBack from "../../../components/CardBack";
 import { text } from "../../../design/tokens";
-import type { ArenaTheme, Ramp } from "../../../design/arenaThemes";
+import type { ArenaTheme } from "../../../design/arenaThemes";
 
 /**
  * What sits in the right hand fittings: two decks, and the button that ends
@@ -41,7 +41,7 @@ export default function RightRail({
         pointerEvents: "none",
       }}
     >
-      <DeckStack theme={theme} count={topDeck} colour={theme.deck} socket={seat.decks.far} far />
+      <DeckStack theme={theme} count={topDeck} socket={seat.decks.far} far />
 
       <EndTurn
         theme={theme}
@@ -52,7 +52,7 @@ export default function RightRail({
         onCancel={onCancel}
       />
 
-      <DeckStack theme={theme} count={bottomDeck} colour={theme.deck} socket={seat.decks.near} />
+      <DeckStack theme={theme} count={bottomDeck} socket={seat.decks.near} />
     </div>
   );
 }
@@ -63,10 +63,9 @@ const NEARLY_OUT = 5;
 /** How far each card in the stack is offset from the one below it. */
 const LEAN = 3;
 
-function DeckStack({ theme, count, colour, socket, far = false }: {
+function DeckStack({ theme, count, socket, far = false }: {
   theme: ArenaTheme;
   count: number;
-  colour: Ramp;
   /** The recess in the housing this deck is sitting in. */
   socket: Box;
   /** Their deck, which faces them: the backs are turned the other way up. */
@@ -91,21 +90,23 @@ function DeckStack({ theme, count, colour, socket, far = false }: {
       }}
     >
       {/* The stack: three backs' edges showing under the top one, each a
-          little further down and left, with the lamp on its top edge and the
-          one above it in its shadow. */}
+          little further up and right, each dropping its shadow on the one
+          below. They are the same back as the top card, because a pile of
+          cards is the same card over and over; painted as wood they read as
+          a block the top card was lying on. */}
       {layers.slice(0, -1).map(layer => (
         <span
           key={layer}
           style={{
             position: "absolute",
             inset: 0,
-            transform: `translate(${layer * LEAN}px, ${-layer * LEAN}px)`,
+            transform: `translate(${layer * LEAN}px, ${-layer * LEAN}px)${far ? " rotate(180deg)" : ""}`,
             borderRadius: 7,
-            background: `linear-gradient(150deg, ${colour.light}, ${colour.mid} 45%, ${colour.dark})`,
-            border: `1px solid ${theme.frameEdge}`,
-            boxShadow: `inset 1px 1px 0 ${theme.gold.light}55, 2px 3px 4px rgba(0,0,0,0.5)`,
+            boxShadow: `2px 3px 4px rgba(0,0,0,0.5)`,
           }}
-        />
+        >
+          <CardBack width={RIGHT.deckWidth} height={RIGHT.deckHeight} />
+        </span>
       ))}
       {/* The top card is the same back as every face-down card in the game,
           the right way up for the player it belongs to. */}

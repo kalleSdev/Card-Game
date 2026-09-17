@@ -175,10 +175,14 @@ function BoardCard({ theme, card, align, selected, attackable, onClick }: {
         cursor: attackable ? "crosshair" : "pointer",
         transform: selected ? `translateY(${lean}px)` : "none",
         transition: `transform ${CARD_MOVE}, filter ${CARD_MOVE}`,
-        // Lit from above like everything else on this board, so the shadow drops
-        // by the trim's thickness and spreads by the gap between two cards,
-        // which keeps it off the card next door.
-        filter: `${spent ? `${SPENT} ` : ""}drop-shadow(0 ${EDGE}px ${CARD.gap}px ${theme.shadow})`,
+        // Lit by the board's lamp, high on the left, so the shadow falls a
+        // little down and to the right and stays tight: a card lying on the
+        // parchment is in contact with it, and a wide soft shadow under it
+        // had it floating. A picked-up card is off the surface, and its
+        // shadow spreads with the lift.
+        filter: `${spent ? `${SPENT} ` : ""}drop-shadow(${selected
+          ? `${EDGE}px ${CARD.hover / 6}px ${CARD.hover / 4}px`
+          : `2px 3px ${CARD.gap / 3}px`} ${theme.shadow})`,
         // Only against its own neighbours: a leaning card passes over the card
         // beside it, and the board's layering is not this row's business.
         zIndex: selected ? 1 : 0,

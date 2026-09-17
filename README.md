@@ -9,7 +9,7 @@ The main thing I wanted out of this was keeping the game rules completely
 separate from the interface. All the combat logic sits in one pure function, and
 both the UI and the server just call it.
 
-## Running it
+## Running it  
 
 ```bash
 npm install
@@ -33,7 +33,7 @@ npm run verify        # typecheck, lint and tests
 npm run build         # production build of both clients
 ```
 
-## How it's put together
+## How it's put together / structure
 
 ```
 client/

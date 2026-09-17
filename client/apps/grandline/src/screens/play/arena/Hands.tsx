@@ -127,10 +127,17 @@ export function Hand({ theme, cards, energy, held, live, onHold }: {
               // The pivot is the bottom edge, which is the end that stays put in
               // a real hand while the tops fan out.
               transformOrigin: "50% 100%",
-              transition: `transform ${up ? MOTION.lift : MOTION.card}ms ${EASE}`,
+              transition: `transform ${up ? MOTION.lift : MOTION.card}ms ${EASE}, filter ${MOTION.card}ms ${EASE}`,
               // Measured off the lift itself, so the shadow grows with the
-              // card's distance from the board.
-              filter: up ? `drop-shadow(0 ${CARD.lift / 8}px ${CARD.lift / 4}px ${theme.shadow})` : "none",
+              // card's distance from the board: a card under the pointer has
+              // come up a little and throws a little, and a card picked up
+              // throws its full height. Both fall down and right, from the
+              // board's one lamp.
+              filter: up
+                ? `drop-shadow(${CARD.lift / 16}px ${CARD.lift / 8}px ${CARD.lift / 4}px ${theme.shadow})`
+                : lifted
+                  ? `drop-shadow(${CARD.hover / 16}px ${CARD.hover / 8}px ${CARD.hover / 4}px ${theme.shadow})`
+                  : "none",
             }}
           >
             <PrintCard
