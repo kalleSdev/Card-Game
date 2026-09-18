@@ -70,7 +70,7 @@ that needs handling.
 
 The background and card effects are all CSS and SVG rather than images.
 
-## Online play
+## Online play (Work in progress)
 
 The server owns the match. Clients send intents and get back a redacted view of
 the state, so a client is never sent the opponent's hand and can't read it out
