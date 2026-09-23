@@ -126,7 +126,7 @@ Typecheck, lint, tests and build run on every push.
 - Sound
 - Art for the new set
 
-## Note
+## Note/Disclaimer
 
 Personal project, not for sale. Character names belong to their respective
 owners and are only used here for practice.
