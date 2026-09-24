@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ENERGY, MOTION, STATION } from "../../../design/arenaStage";
 import { MOTION as APP_MOTION, text } from "../../../design/tokens";
 import type { ArenaTheme } from "../../../design/arenaThemes";
@@ -154,6 +155,18 @@ const CSS = `
 .ar-energy-new {
   animation: ar-energy-arrive ${MOTION.glow}ms ${EASE} 1;
 }
+.ar-energy-spend {
+  animation: ar-energy-spend ${MOTION.glow}ms ${EASE} 1;
+}
+@keyframes ar-energy-spend {
+  0%   { transform: scale(1.3); opacity: 1; }
+  40%  { transform: scale(0.9); opacity: 0.6; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes ar-energy-count {
+  0%   { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
 @keyframes ar-energy-arrive {
   from { transform: scale(${ARRIVE_FROM}); }
   55%  { transform: scale(${ARRIVE_OVER}); }
@@ -200,6 +213,14 @@ export default function EnergyRail({
   const earned = Math.max(0, Math.min(ENERGY.sockets, Math.max(Math.round(max), spendable)));
   const lit = Math.max(0, Math.min(earned, spendable));
 
+  // The stones that were just paid out, so they can pulse as they go dark
+  const [prev, setPrev] = useState(lit);
+  const [spend, setSpend] = useState({ from: lit, to: lit, n: 0 });
+  if (lit !== prev) {
+    setPrev(lit);
+    setSpend(lit < prev ? { from: lit, to: prev, n: spend.n + 1 } : { from: lit, to: lit, n: spend.n });
+  }
+
   const width = ENERGY.width + PAD * 2;
   const height = ENERGY.size + PAD * 2;
 
@@ -231,9 +252,10 @@ export default function EnergyRail({
             // it is the same age; it just has no light for the brightening to
             // work on.
             const newest = filled && i === earned - 1;
+            const paid = i >= spend.from && i < spend.to;
 
             return (
-              <g key={i} transform={`translate(${n(cx)} ${n(cy)})`}>
+              <g key={paid ? `${i}-${spend.n}` : i} transform={`translate(${n(cx)} ${n(cy)})`}>
                 {/* The recess: a hole in the rail, brass rimmed like every other
                     opening cut into this board, lit along its upper edges. */}
                 <path d={SOCKET_PATH} fill={theme.gemEmpty} />
@@ -255,7 +277,7 @@ export default function EnergyRail({
 
                 {filled ? (
                   <g
-                    className={newest ? "ar-energy-stone ar-energy-new" : "ar-energy-stone"}
+                    className={`ar-energy-stone${newest ? " ar-energy-new" : ""}${paid ? " ar-energy-spend" : ""}`}
                     style={{
                       transform: `scale(${newest ? SETTLE : 1})`,
                       filter: stoneFilter(theme, spent, newest),
@@ -366,7 +388,9 @@ export function EnergyReadout({ theme, have }: {
             transition: `color ${MOTION.glow}ms ease-out`,
           }}
         >
-          {value}
+          <span key={value} style={{ display: "inline-block", animation: `ar-energy-count ${MOTION.glow}ms ${EASE} 1` }}>
+            {value}
+          </span>
         </span>
         <span
           style={{

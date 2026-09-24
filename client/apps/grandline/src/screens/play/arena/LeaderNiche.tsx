@@ -1,11 +1,11 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { BattleCard } from "@cg/battle";
 import { LEADER, MOTION, STATION, leaderSeat, station, type Side } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import { COLOR, text } from "../../../design/tokens";
 import { artUrl, cardShortName } from "../../../data/pool";
-import { cueAnimation, type CueSet } from "./cues";
-import HitMarks from "./HitMarks";
+import { cueAnimation, hitsIn, type CueSet } from "./cues";
+import HitMarks, { ImpactHp } from "./HitMarks";
 
 /**
  * What stands in a leader's niche: the picture, the name, and the two numbers.
@@ -129,7 +129,9 @@ export default function LeaderNiche({ theme, end, card, attackable, active, sele
 }): JSX.Element {
   const hit = Boolean(onClick);
   const mine = cues.byId[card.instanceId];
-  const hurt = card.currentHp < card.maxHp;
+  // Hurt as of before the blow, so the red comes with the number at impact
+  const hits = hitsIn(mine);
+  const hurt = (hits.length ? hits[0].from : card.currentHp) < card.maxHp;
   // The seat is the same seat at both ends of the board, mirrored about the
   // seam. Nothing here is measured for one player: the window is centred on the
   // board's middle line, set the same distance inside the board's outer edge,
@@ -156,8 +158,8 @@ export default function LeaderNiche({ theme, end, card, attackable, active, sele
         game speaking rather than the furniture.
       */}
       <div
-        key={mine ? cues.id : 0}
         onClick={hit ? onClick : undefined}
+        className={hit ? "ar-leader-hit" : undefined}
         style={{
           position: "absolute",
           inset: 0,
@@ -165,9 +167,10 @@ export default function LeaderNiche({ theme, end, card, attackable, active, sele
           cursor: attackable ? "crosshair" : hit ? "pointer" : "default",
           transform: selected ? "scale(1.05)" : "none",
           transition: `transform ${MOTION.card}ms ease-out`,
-          animation: cueAnimation(mine),
         }}
       >
+      {/* Cue animations only, so they never fight the selected scale above */}
+      <div key={mine ? cues.id : 0} style={{ position: "absolute", inset: 0, animation: cueAnimation(mine) }}>
         {/*
           The rings, and only while they mean something. Red comes from the
           app's palette rather than the table's: no theme owns a danger colour,
@@ -185,6 +188,9 @@ export default function LeaderNiche({ theme, end, card, attackable, active, sele
             }}
           />
         )}
+
+        {/* Pale ring on hover when clicking the leader does something */}
+        <div className="ar-leader-hover" style={{ ...niche(-LINE), background: theme.paint }} />
 
         {/* The picture, cropped to the opening instead of to a card, a seat's
             width inside it so the cavity's dark shows round it. The dark fill
@@ -228,14 +234,21 @@ export default function LeaderNiche({ theme, end, card, attackable, active, sele
             {cardShortName(card.defId)}
           </div>
         </div>
-        <HitMarks cues={mine} shape={niche(PICTURE)} />
+        <HitMarks cues={mine} shape={niche(PICTURE)} glow={theme.accent} />
+      </div>
       </div>
 
       {/* The numbers, on the plates the station carries at each foot of the
           frame. Attack on the left and health on the right, the way they read
           on a card. Always both of them and always drawn even at zero. */}
       <StatPlate theme={theme} value={card.atk} box={stats[0]} seat={seat} />
-      <StatPlate theme={theme} value={card.currentHp} hurt={hurt} box={stats[1]} seat={seat} />
+      <StatPlate
+        theme={theme}
+        value={<ImpactHp key={mine ? cues.id : 0} cues={mine} real={card.currentHp} />}
+        hurt={hurt}
+        box={stats[1]}
+        seat={seat}
+      />
     </div>
   );
 }
@@ -253,7 +266,7 @@ export default function LeaderNiche({ theme, end, card, attackable, active, sele
  */
 function StatPlate({ theme, value, box, seat, hurt = false }: {
   theme: ArenaTheme;
-  value: number;
+  value: ReactNode;
   /** The plate the board cut for this number, on the stage. */
   box: { x: number; y: number; width: number; height: number };
   /** The window's own box, which this is placed relative to. */

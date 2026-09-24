@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { BattleCard, BattleState } from "@cg/battle";
-import { CUE, buildCues, cueAnimation } from "./cues";
+import { CUE, buildCues, cueAnimation, hpAt } from "./cues";
 
 // Just enough of a state for the cue builder: leaders and boards.
 function stateWith(p1Board: (string | null)[], p2Board: (string | null)[]): BattleState {
@@ -20,7 +20,7 @@ describe("buildCues", () => {
       s, s, "P1",
     );
     expect(cues.byId.a).toEqual([{ kind: "strike", at: 0, dir: "up" }]);
-    expect(cues.byId.b).toEqual([{ kind: "hit", at: CUE.impact, dir: "up", damage: 2 }]);
+    expect(cues.byId.b).toEqual([{ kind: "hit", at: CUE.impact, dir: "up", damage: 2, from: 3, to: 1 }]);
   });
 
   it("hits the defending leader on a leader attack", () => {
@@ -70,10 +70,39 @@ describe("buildCues", () => {
   });
 });
 
+describe("hp at impact", () => {
+  it("counts a leader down hit by hit in one batch", () => {
+    const s = stateWith([], []);
+    const cues = buildCues(
+      { id: 1, list: [
+        { type: "ATTACK_LEADER", attackerPid: "P2", attackerId: "L2", damage: 2, leaderHpLeft: 1 },
+        { type: "ATTACK_LEADER", attackerPid: "P2", attackerId: "L2", damage: 1, leaderHpLeft: 0 },
+      ] },
+      s, s, "P1",
+    );
+    const leader = cues.byId.L1;
+    expect(hpAt(leader, 0, 0)).toBe(3);
+    expect(hpAt(leader, 0, 1)).toBe(1);
+    expect(hpAt(leader, 0, 2)).toBe(0);
+  });
+
+  it("shows the real value when nothing is hitting it", () => {
+    expect(hpAt(undefined, 7, 0)).toBe(7);
+  });
+});
+
+describe("draw", () => {
+  it("gives the drawn card a draw cue", () => {
+    const s = stateWith([], []);
+    const cues = buildCues({ id: 1, list: [{ type: "TURN_START", pid: "P1", turn: 2, drew: "d" }] }, s, s, "P1");
+    expect(cues.byId.d).toEqual([{ kind: "draw", at: 0 }]);
+  });
+});
+
 describe("cueAnimation", () => {
   it("puts a death under the recoil so the recoil shows first", () => {
     const css = cueAnimation([
-      { kind: "hit", at: 150, dir: "up", damage: 3 },
+      { kind: "hit", at: 150, dir: "up", damage: 3, from: 5, to: 2 },
       { kind: "die", at: 360 },
     ]);
     expect(css?.indexOf("ar-die")).toBeLessThan(css?.indexOf("ar-recoil-up") ?? 0);

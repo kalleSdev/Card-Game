@@ -1,11 +1,11 @@
-import { useState } from "react";
 import type { BattleCard } from "@cg/battle";
-import { CARD, ENERGY, HAND, LEADER, MOTION } from "../../../design/arenaStage";
+import { CARD, ENERGY, HAND, LEADER } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
-import { COLOR, MOTION as APP_MOTION, RADIUS, SPACE, text } from "../../../design/tokens";
+import { COLOR, RADIUS, SPACE, text } from "../../../design/tokens";
 import PrintCard from "../../../components/PrintCard";
 import CardBack from "../../../components/CardBack";
 import { cardFace } from "../../../data/pool";
+import { cueAnimation, type CueSet } from "./cues";
 
 /**
  * The two hands.
@@ -55,12 +55,6 @@ const STAT_HEIGHT = Math.round(STAT_WIDTH * (LEADER.stat.height / LEADER.stat.wi
 /** The cost plate is as tall as a stat box, so every number on a card is one size. */
 const COST_SIZE = STAT_HEIGHT;
 
-/**
- * The app's easing curve. The token scale packs a duration in with the curve and
- * the board keeps its own durations in MOTION, so only the curve is taken.
- */
-const EASE = APP_MOTION.quick.slice(APP_MOTION.quick.indexOf(" ") + 1);
-
 /** Where one card sits in the fan: how far it rises, and how far it turns. */
 function fan(index: number, count: number): { rise: number; tilt: number } {
   const middle = (count - 1) / 2;
@@ -75,98 +69,68 @@ function fan(index: number, count: number): { rise: number; tilt: number } {
 }
 
 /**
- * Your hand: a fan held just below the board's near edge, whole.
+ * Your hand: a fan held just below the board's near edge.
  *
- * Every card is on screen from top to bottom. Pointing at one brings it up
- * out of the fan, and picking one up brings it further and straightens it,
- * which is what makes the card you are about to place impossible to mistake
- * for the rest.
+ * Each card is placed from the middle of the fan with a transform, so when
+ * the hand changes size the cards slide to their new places instead of
+ * jumping. Hover and pickup are CSS (see interaction.ts).
  */
-export function Hand({ theme, cards, energy, held, live, onHold }: {
+export function Hand({ theme, cards, energy, held, live, cues, onHold }: {
   theme: ArenaTheme;
   cards: BattleCard[];
   /** What is left to spend, which decides what can be picked up. */
   energy: number;
   held: string | null;
   live: boolean;
+  cues: CueSet;
   onHold: (instanceId: string) => void;
 }): JSX.Element {
-  const [pointed, setPointed] = useState<string | null>(null);
+  const step = CARD.hand - CARD.handOverlap;
+  const middle = (cards.length - 1) / 2;
 
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", height: CARD.handHeight }}>
+    <div style={{ position: "relative", width: 0, height: CARD.handHeight }}>
       {cards.map((card, i) => {
         const affordable = card.cost <= energy;
         const up = held === card.instanceId;
-        // Checked against affordable rather than trusting the pointer alone: a
-        // card that goes out of reach while the cursor is on it never gets a
-        // mouse leave, since it stops taking the cursor at the same moment.
-        const lifted = up || (affordable && pointed === card.instanceId);
         const { rise, tilt } = fan(i, cards.length);
-        const lift = up ? CARD.lift : lifted ? CARD.hover : 0;
+        const x = (i - middle) * step - CARD.hand / 2;
+        const mine = cues.byId[card.instanceId];
 
         return (
           <div
             key={card.instanceId}
+            className="ar-hand-slot"
+            data-held={up || undefined}
             onClick={live && affordable ? () => onHold(card.instanceId) : undefined}
-            onMouseEnter={() => setPointed(card.instanceId)}
-            onMouseLeave={() => setPointed(null)}
             style={{
-              position: "relative",
-              marginLeft: i === 0 ? 0 : -CARD.handOverlap,
-              // The lifted card has to clear the cards laid over it, and the
-              // rest stack left to right the way a hand is gathered up.
-              zIndex: lifted ? cards.length : i,
+              width: CARD.hand,
+              zIndex: i,
               cursor: live && affordable ? "pointer" : "default",
-              pointerEvents: affordable ? "auto" : "none",
-              // A card you have picked up has left the fan, so it comes upright
-              // as it rises. The lift, the straightening and the shadow are
-              // three signals for one state, which is what makes the card you
-              // are about to place impossible to mistake for the rest.
-              transform: `translateY(${-(rise + lift)}px) rotate(${up ? 0 : tilt}deg)`,
-              // The pivot is the bottom edge, which is the end that stays put in
-              // a real hand while the tops fan out.
-              transformOrigin: "50% 100%",
-              transition: `transform ${up ? MOTION.lift : MOTION.card}ms ${EASE}, filter ${MOTION.card}ms ${EASE}`,
-              // Measured off the lift itself, so the shadow grows with the
-              // card's distance from the board: a card under the pointer has
-              // come up a little and throws a little, and a card picked up
-              // throws its full height. Both fall down and right, from the
-              // board's one lamp.
-              filter: up
-                ? `drop-shadow(0 ${CARD.lift / 8}px ${CARD.lift / 4}px ${theme.shadow})`
-                : lifted
-                  ? `drop-shadow(0 ${CARD.hover / 8}px ${CARD.hover / 4}px ${theme.shadow})`
-                  : "none",
+              // A picked up card comes upright
+              transform: `translate(${x}px, ${-rise}px) rotate(${up ? 0 : tilt}deg)`,
             }}
           >
-            <PrintCard
-              card={cardFace(card.defId)}
-              print="base"
-              width={CARD.hand}
-              interactive={false}
-              stats={false}
-            />
-
-            {/* A card you cannot pay for goes under the same dead glass the
-                spent energy sockets are made of, so one colour means one thing
-                across the whole board. It sits over the picture only: the
-                numbers on top of it are the numbers you are reading to work out
-                what you can afford next. */}
-            {!affordable && (
-              <span
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  borderRadius: RADIUS.lg,
-                  background: theme.gemEmpty,
-                  pointerEvents: "none",
-                }}
-              />
-            )}
-
-            <CostPlate theme={theme} value={card.cost} affordable={affordable} />
-            <Vitals theme={theme} card={card} />
+            <div className="ar-hand-lift">
+              <span className="ar-hand-shadow" />
+              <div
+                key={mine ? cues.id : 0}
+                style={{ position: "relative", isolation: "isolate", animation: cueAnimation(mine) }}
+              >
+                <PrintCard
+                  card={cardFace(card.defId)}
+                  print="base"
+                  width={CARD.hand}
+                  interactive={false}
+                  stats={false}
+                />
+                {/* Greyed out when it cannot be paid for. The numbers sit above it. */}
+                <span className="ar-dim" data-on={!affordable || undefined} />
+                <span className="ar-shade" data-on={!affordable || undefined} />
+                <CostPlate theme={theme} value={card.cost} />
+                <Vitals theme={theme} card={card} />
+              </div>
+            </div>
           </div>
         );
       })}
@@ -253,19 +217,8 @@ export function EnemyHand({ theme, count }: { theme: ArenaTheme; count: number }
   );
 }
 
-/**
- * What a card costs, in the top right corner.
- *
- * Glass in a socket, the same glass the energy rail is made of, so the number
- * you are spending and the thing you are spending it out of are plainly the same
- * currency. The ramp is built here rather than stored on the theme, which is how
- * every painted surface on this board is put together.
- */
-function CostPlate({ theme, value, affordable }: {
-  theme: ArenaTheme;
-  value: number;
-  affordable: boolean;
-}): JSX.Element {
+/** What a card costs, in the top right corner. Same plate as the stats. */
+function CostPlate({ theme, value }: { theme: ArenaTheme; value: number }): JSX.Element {
   return (
     <span
       style={{
@@ -278,17 +231,9 @@ function CostPlate({ theme, value, affordable }: {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        // Lit from above, like everything else on the board.
-        background: affordable
-          ? `radial-gradient(circle at 50% 30%, ${theme.gem.light}, ${theme.gem.mid} 55%, ${theme.gem.dark})`
-          : theme.gemEmpty,
-        // Brass either way. The socket is part of the board, and the board's
-        // fittings are brass whether there is anything live in them or not.
-        border: `1px solid ${theme.gold.dark}`,
-        // Cut out of the glass in the board's own near black. On a dead socket
-        // it goes the other way round, pale paint on a dark plate, because the
-        // cost of a card you cannot afford yet is still a number you read.
-        color: affordable ? theme.bezel : theme.paint,
+        background: theme.bezel,
+        border: `1px solid ${theme.gold.mid}`,
+        color: theme.gold.light,
         ...text("data"),
         pointerEvents: "none",
       }}

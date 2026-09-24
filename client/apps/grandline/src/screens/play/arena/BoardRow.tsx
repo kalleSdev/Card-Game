@@ -1,11 +1,12 @@
+import type { ReactNode } from "react";
 import type { BattleCard, BattlePlayer } from "@cg/battle";
 import { CARD, LEADER, MOTION, STAGE, wellEdges } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import { COLOR, RADIUS, text } from "../../../design/tokens";
 import PrintCard from "../../../components/PrintCard";
 import { cardFace } from "../../../data/pool";
-import { cueAnimation, type CueSet, type Ghost } from "./cues";
-import HitMarks from "./HitMarks";
+import { cueAnimation, hitsIn, type CueSet, type Ghost } from "./cues";
+import HitMarks, { ImpactHp } from "./HitMarks";
 
 /**
  * One side's cards in play, lying on the parchment.
@@ -60,14 +61,6 @@ const STAT = {
 
 /** The board's own duration, on the curve the rest of the app moves on. */
 const CARD_MOVE = `${MOTION.card}ms cubic-bezier(0.2, 0, 0.2, 1)`;
-
-/**
- * A card that has already acted. Dimmer and drained of some of its colour,
- * because "can this still do something" is the question a player asks of the
- * board more often than any other, and it should be answerable without reading
- * a single number.
- */
-const SPENT = "saturate(0.5) brightness(0.76)";
 
 export default function BoardRow({
   theme, band, align, player, attackable, selected, cues, ghosts, onCard, onSlot,
@@ -162,63 +155,67 @@ function BoardCard({ theme, card, align = "bottom", selected, attackable, cues, 
   onClick?: () => void;
 }) {
   const spent = card.exhausted || card.stunTurns > 0;
-  const hurt = card.currentHp < card.maxHp;
   const mine = cues.byId[card.instanceId];
+  // Hurt as of before the blow, so the red comes with the number at impact
+  const hits = hitsIn(mine);
+  const hurt = (hits.length ? hits[0].from : card.currentHp) < card.maxHp;
 
   return (
     <div
       onClick={onClick}
-      className={onClick ? "ar-board-card" : undefined}
+      className="ar-field"
+      data-live={onClick ? true : undefined}
+      data-selected={selected || undefined}
       style={{
-        position: "relative",
         width: CARD.play,
-        flex: "0 0 auto",
         pointerEvents: onClick ? "auto" : "none",
         cursor: attackable ? "crosshair" : "pointer",
-        // Selected cards grow a little in place, they never move
-        transform: selected ? "scale(1.06)" : "none",
-        transition: `transform ${CARD_MOVE}, filter ${CARD_MOVE}`,
-        // Contact shadow straight down, a bit softer when picked up
-        filter: `${spent ? `${SPENT} ` : ""}drop-shadow(0 ${selected ? 6 : 2}px ${selected ? 10 : CARD.gap / 3}px ${theme.shadow})`,
         zIndex: selected ? 1 : 0,
       }}
     >
-      <div
-        key={mine ? cues.id : 0}
-        style={{ position: "relative", animation: cueAnimation(mine) }}
-      >
-        <PrintCard
-          card={cardFace(card.defId)}
-          print="base"
-          width={CARD.play}
-          interactive={false}
-          stats={false}
-        />
-  
-        {/* What the card is worth right now, which is not what its print says. */}
-        <span
-          style={{
-            position: "absolute",
-            left: STAT.inset,
-            right: STAT.inset,
-            bottom: STAT.drop,
-            display: "flex",
-            justifyContent: "space-between",
-            pointerEvents: "none",
-          }}
+      <span className="ar-field-shadow" />
+      <span className="ar-field-shadow-up" />
+      <div className="ar-field-lift">
+        <div
+          key={mine ? cues.id : 0}
+          style={{ position: "relative", isolation: "isolate", animation: cueAnimation(mine) }}
         >
-          <StatBox theme={theme} value={card.atk} rim={theme.gold.mid} ink={theme.gold.light} />
-          <StatBox
-            theme={theme}
-            value={card.currentHp}
-            rim={hurt ? COLOR.signal : theme.gold.mid}
-            ink={hurt ? COLOR.signal : theme.gold.light}
+          <PrintCard
+            card={cardFace(card.defId)}
+            print="base"
+            width={CARD.play}
+            interactive={false}
+            stats={false}
           />
-        </span>
-  
-        <LeadingRule theme={theme} align={align} on={selected} />
-        <TargetRing on={attackable} />
-        <HitMarks cues={mine} shape={{ borderRadius: RADIUS.lg }} />
+          {/* A card that has already acted this turn */}
+          <span className="ar-dim" data-on={spent || undefined} style={{ opacity: spent ? 0.6 : undefined }} />
+          <span className="ar-shade" data-on={spent || undefined} style={{ opacity: spent ? 0.5 : undefined }} />
+
+          {/* Live numbers, not the printed ones */}
+          <span
+            style={{
+              position: "absolute",
+              left: STAT.inset,
+              right: STAT.inset,
+              bottom: STAT.drop,
+              display: "flex",
+              justifyContent: "space-between",
+              pointerEvents: "none",
+            }}
+          >
+            <StatBox theme={theme} value={card.atk} rim={theme.gold.mid} ink={theme.gold.light} />
+            <StatBox
+              theme={theme}
+              value={<ImpactHp key={mine ? cues.id : 0} cues={mine} real={card.currentHp} />}
+              rim={hurt ? COLOR.signal : theme.gold.mid}
+              ink={hurt ? COLOR.signal : theme.gold.light}
+            />
+          </span>
+
+          <LeadingRule theme={theme} align={align} on={selected} />
+          <TargetRing on={attackable} />
+          <HitMarks cues={mine} shape={{ borderRadius: RADIUS.lg }} glow={theme.accent} />
+        </div>
       </div>
     </div>
   );
@@ -235,7 +232,7 @@ function BoardCard({ theme, card, align = "bottom", selected, attackable, cues, 
  */
 function StatBox({ theme, value, rim, ink }: {
   theme: ArenaTheme;
-  value: number;
+  value: ReactNode;
   rim: string;
   ink: string;
 }) {
@@ -323,6 +320,7 @@ function EmptySlot({ theme, live, onClick }: {
   return (
     <div
       onClick={onClick}
+      data-slot
       style={{
         width: CARD.play,
         height: CARD.playHeight,

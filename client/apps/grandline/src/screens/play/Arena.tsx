@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import type { PlayerId } from "@cg/contracts";
 import type { BattleCard, BattleIntent, BattlePlayer, BattleState } from "@cg/battle";
 import {
@@ -20,6 +20,7 @@ import BoardRow from "./arena/BoardRow";
 import RightRail, { key } from "./arena/RightRail";
 import { EnemyHand, Hand } from "./arena/Hands";
 import { CUE_CSS, NO_CUES, buildCues, type CueSet, type EventFeed } from "./arena/cues";
+import { INTERACTION_CSS } from "./arena/interaction";
 
 /**
  * The arena: the board Draft and Deck are both played on.
@@ -70,6 +71,14 @@ export function Arena({
 
   const play = (intent: BattleIntent) => { if (yourTurn) onIntent(intent); };
 
+  // A click on nothing puts a held card back and drops a picked attacker
+  const onBackground = (e: MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.closest(".ar-hand-slot, .ar-field, .ar-leader-hit, button, [data-slot]")) return;
+    if (held) setHeld(null);
+    else if (attacking) play({ type: "CANCEL_ATTACK", pid: acting });
+  };
+
   const onMine = (card: BattleCard) => {
     if (attacking === card.instanceId) return play({ type: "CANCEL_ATTACK", pid: acting });
     play({ type: "SELECT_ATTACKER", pid: acting, instanceId: card.instanceId });
@@ -119,6 +128,7 @@ export function Arena({
   return (
     <div
       ref={fit}
+      onClick={onBackground}
       style={{
         position: "fixed",
         inset: 0,
@@ -130,7 +140,7 @@ export function Arena({
         justifyContent: "center",
       }}
     >
-      <style>{CUE_CSS}</style>
+      <style>{CUE_CSS + INTERACTION_CSS + TURN_CSS}</style>
       <Scene theme={theme} />
 
       <div
@@ -255,6 +265,7 @@ export function Arena({
               energy={mine.energy}
               held={held}
               live={yourTurn}
+              cues={cues}
               onHold={id => setHeld(held === id ? null : id)}
             />
           </div>
@@ -515,7 +526,7 @@ function LeftRail({ theme, title, badge, turn, line, note, history, onLeave }: {
       </Plaque>
 
       {/* The turn, on the lower one. */}
-      <Plaque box={seat.status}>
+      <Plaque box={seat.status} key={`${turn}-${line}`} className="ar-turn">
         <span
           style={{
             ...text("label"),
@@ -586,16 +597,27 @@ function LeftRail({ theme, title, badge, turn, line, note, history, onLeave }: {
   );
 }
 
+/** The turn plaque settles in when the turn changes. */
+const TURN_CSS = `
+@keyframes ar-turn {
+  0% { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: none; }
+}
+.ar-turn { animation: ar-turn 260ms ease-out both; }
+`;
+
 /** Paint in a hole: pale, with the wall's shadow falling across the top of it. */
 const SUNK = "0 1px 0 rgba(0,0,0,0.55)";
 
 /** The words that go in one of the housing's two plaques. */
-function Plaque({ box, children }: {
+function Plaque({ box, className, children }: {
   box: Box;
+  className?: string;
   children: ReactNode;
 }) {
   return (
     <div
+      className={className}
       style={{
         position: "absolute",
         left: box.x,
