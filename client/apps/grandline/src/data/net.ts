@@ -4,6 +4,7 @@ import type { ScoreIntent, ScorePlayer, ScoreState } from "@cg/score";
 import type { PlayerDraftResult, PlayerId } from "@cg/contracts";
 import { getToken, socketUrl } from "./api";
 import type { ClientMessage, RankChange, ServerMessage } from "./protocol";
+import type { EventFeed } from "../screens/play/arena/cues";
 
 /**
  * The socket, and everything that comes down it.
@@ -46,6 +47,8 @@ export interface Net {
   you: PlayerId | null;
   opponentName: string | null;
   state: BattleState | null;
+  /** The events that came with the last state, for the board's animations. */
+  events: EventFeed | null;
   /** The Score table, when that is the game being played. */
   scoreState: ScoreState | null;
   scoreYou: ScorePlayer | null;
@@ -76,6 +79,7 @@ export function useNet(enabled: boolean): Net {
   const [you, setYou] = useState<PlayerId | null>(null);
   const [opponentName, setOpponentName] = useState<string | null>(null);
   const [state, setState] = useState<BattleState | null>(null);
+  const [events, setEvents] = useState<EventFeed | null>(null);
   const [scoreState, setScoreState] = useState<ScoreState | null>(null);
   const [scoreYou, setScoreYou] = useState<ScorePlayer | null>(null);
   const [away, setAway] = useState<number | null>(null);
@@ -132,6 +136,7 @@ export function useNet(enabled: boolean): Net {
             break;
           case "state":
             setState(msg.state);
+            setEvents(e => ({ id: (e?.id ?? 0) + 1, list: msg.events }));
             break;
           case "scoreMatched":
             setScoreYou(msg.you);
@@ -181,7 +186,7 @@ export function useNet(enabled: boolean): Net {
   }, [enabled]);
 
   return {
-    status, error, code, you, opponentName, state, scoreState, scoreYou, away, endedBecause, rewards,
+    status, error, code, you, opponentName, state, events, scoreState, scoreYou, away, endedBecause, rewards,
     host: useCallback((draft: PlayerDraftResult) => post({ type: "createLobby", draft }), [post]),
     join: useCallback(
       (lobby: string, draft: PlayerDraftResult) => post({ type: "joinLobby", code: lobby.trim().toUpperCase(), draft }),

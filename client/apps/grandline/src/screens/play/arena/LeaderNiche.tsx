@@ -4,6 +4,8 @@ import { LEADER, MOTION, STATION, leaderSeat, station, type Side } from "../../.
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import { COLOR, text } from "../../../design/tokens";
 import { artUrl, cardShortName } from "../../../data/pool";
+import { cueAnimation, type CueSet } from "./cues";
+import HitMarks from "./HitMarks";
 
 /**
  * What stands in a leader's niche: the picture, the name, and the two numbers.
@@ -110,7 +112,7 @@ const ABILITY_PROGRESS: number = 0;
 
 // ── The niche ────────────────────────────────────────────────────────────────
 
-export default function LeaderNiche({ theme, end, card, attackable, active, onClick }: {
+export default function LeaderNiche({ theme, end, card, attackable, active, selected = false, cues, onClick }: {
   theme: ArenaTheme;
   /** Whose leader this is. The board no longer paints the two sides apart. */
   side: "you" | "them";
@@ -119,9 +121,14 @@ export default function LeaderNiche({ theme, end, card, attackable, active, onCl
   card: BattleCard;
   attackable: boolean;
   active: boolean;
+  /** Picked up as the attacker. */
+  selected?: boolean;
+  cues: CueSet;
+  /** Given when clicking the leader does something: attack it, or pick it up. */
   onClick?: () => void;
 }): JSX.Element {
-  const hit = attackable && Boolean(onClick);
+  const hit = Boolean(onClick);
+  const mine = cues.byId[card.instanceId];
   const hurt = card.currentHp < card.maxHp;
   // The seat is the same seat at both ends of the board, mirrored about the
   // seam. Nothing here is measured for one player: the window is centred on the
@@ -149,12 +156,16 @@ export default function LeaderNiche({ theme, end, card, attackable, active, onCl
         game speaking rather than the furniture.
       */}
       <div
+        key={mine ? cues.id : 0}
         onClick={hit ? onClick : undefined}
         style={{
           position: "absolute",
           inset: 0,
           pointerEvents: hit ? "auto" : "none",
-          cursor: hit ? "crosshair" : "default",
+          cursor: attackable ? "crosshair" : hit ? "pointer" : "default",
+          transform: selected ? "scale(1.05)" : "none",
+          transition: `transform ${MOTION.card}ms ease-out`,
+          animation: cueAnimation(mine),
         }}
       >
         {/*
@@ -164,12 +175,12 @@ export default function LeaderNiche({ theme, end, card, attackable, active, onCl
           ring is the board's own accent, faint, so it says "you" without
           lighting the leader up.
         */}
-        {(attackable || active) && (
+        {(attackable || active || selected) && (
           <div
             style={{
               ...niche(-TARGET),
               background: attackable ? COLOR.signal : theme.accent,
-              opacity: attackable ? 1 : 0.55,
+              opacity: attackable || selected ? 1 : 0.55,
               transition: `opacity ${MOTION.glow}ms ease-out`,
             }}
           />
@@ -217,6 +228,7 @@ export default function LeaderNiche({ theme, end, card, attackable, active, onCl
             {cardShortName(card.defId)}
           </div>
         </div>
+        <HitMarks cues={mine} shape={niche(PICTURE)} />
       </div>
 
       {/* The numbers, on the plates the station carries at each foot of the

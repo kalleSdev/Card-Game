@@ -242,7 +242,7 @@ export default function Structure({ theme, spread = 0 }: {
             across it: soft, and pushed down and right so it lies under the
             top and left walls, which are the ones between the lamp and the
             floor. */}
-        <path d={step} fill="none" stroke={theme.shadow} strokeWidth={SHELL.occlusion * 1.4} filter="url(#st-soft)" opacity={DARK * 0.8} transform="translate(4 4)" />
+        <path d={step} fill="none" stroke={theme.shadow} strokeWidth={SHELL.occlusion * 1.4} filter="url(#st-soft)" opacity={DARK * 0.8} transform="translate(0 2)" />
       </g>
       {/* The step itself: where the wood stops. */}
       <path d={step} fill="none" stroke={theme.frameEdge} strokeWidth={SHELL.edge} />
@@ -258,7 +258,7 @@ export default function Structure({ theme, spread = 0 }: {
       <g clipPath="url(#st-well-clip)">
         {/* The walls' shadow across the floor, heaviest under the top and
             left walls. */}
-        <path d={well} fill="none" stroke={theme.shadow} strokeWidth={SHELL.occlusion * 2.6} filter="url(#st-soft)" opacity={DARK} transform="translate(3 3)" />
+        <path d={well} fill="none" stroke={theme.shadow} strokeWidth={SHELL.occlusion * 2.6} filter="url(#st-soft)" opacity={DARK} transform="translate(0 2)" />
       </g>
       <path d={well} fill="none" stroke={theme.frameEdge} strokeWidth={SHELL.edge} />
 

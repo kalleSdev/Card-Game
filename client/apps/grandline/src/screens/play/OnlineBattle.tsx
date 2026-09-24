@@ -43,6 +43,7 @@ export default function OnlineBattle({ draft, title, store, onLeave }: {
     return (
       <Arena
         state={net.state}
+        events={net.events}
         you={net.you}
         local={false}
         yourTurn={!net.state.winner && net.state.activePlayer === net.you}

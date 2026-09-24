@@ -6,6 +6,7 @@ import {
 } from "@cg/battle";
 import { COLOR, SPACE, text } from "../../design/tokens";
 import HandOver from "./HandOver";
+import type { EventFeed } from "./arena/cues";
 import { Arena, seatName } from "./Arena";
 import { Button, Currency, Panel, Text } from "../../components/primitives";
 import { cardShortName } from "../../data/pool";
@@ -53,6 +54,8 @@ export default function BattleBoard({ initial, seed, drafts, opponent, title, st
   /** What has happened, as the engine reported it, put into words. */
   const [history, setHistory] = useState<string[]>([]);
   const [payout, setPayout] = useState<Reward>(null);
+  /** The last batch of events, which the board animates. */
+  const [feed, setFeed] = useState<EventFeed | null>(null);
 
   /**
    * Every intent played, in order. The server replays the match from the seed
@@ -89,6 +92,7 @@ export default function BattleBoard({ initial, seed, drafts, opponent, title, st
       latest.current = next;
       setState(next);
       setHistory(h => h.concat(tell(events, current, next, you, local)));
+      if (events.length) setFeed(f => ({ id: (f?.id ?? 0) + 1, list: events }));
       // A local game changes hands the moment the turn does
       if (local && !next.winner && next.activePlayer !== current.activePlayer) setPassing(true);
     }
@@ -105,6 +109,7 @@ export default function BattleBoard({ initial, seed, drafts, opponent, title, st
       latest.current = next;
       setState(next);
       setHistory(h => h.concat(tell(events, current, next, you, local)));
+      if (events.length) setFeed(f => ({ id: (f?.id ?? 0) + 1, list: events }));
     }, BOT_THINKING_MS);
     return () => clearTimeout(timer);
   }, [state, opponent, local]);
@@ -130,6 +135,7 @@ export default function BattleBoard({ initial, seed, drafts, opponent, title, st
   return (
     <Arena
       state={state}
+      events={feed}
       you={you}
       local={local}
       yourTurn={yourTurn}

@@ -79,7 +79,7 @@ export function slabPath(spread = 0): string {
 }
 
 /** How far the base shows past the slab on every side. */
-export const BASE = { out: 8, far: 6, near: 6, face: 10 } as const;
+export const BASE = { out: 8, far: 6, near: 6, face: 0 } as const;
 
 /**
  * The base the slab stands on.

@@ -1,4 +1,4 @@
-import { HAZE, LIGHT, SHELL, STAGE, WELL } from "../../../design/arenaStage";
+import { LIGHT, SHELL, STAGE, WELL } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import { surfacePath, wellPath } from "./board";
 import Materials, { MATERIAL_MIX, materialFill } from "./materials";
@@ -8,12 +8,8 @@ import Materials, { MATERIAL_MIX, materialFill } from "./materials";
  *
  * It is smaller than the opening it sits in, because it is lower: the rim
  * overhangs it all the way round, which is what puts it inside the board
- * rather than on top of it. The overhang throws a shadow onto it, heaviest
- * along the near edge where the rim is between it and the lamp.
- *
- * The far half is greyer than the near one. That is the air between the two
- * ends of the board, and it is the cheapest depth cue there is: it costs one
- * gradient and it does more work than any amount of shading on the rim.
+ * rather than on top of it. The overhang throws the same soft shadow onto it
+ * at both ends, so neither half looks further away.
  *
  * The parchment is the quietest material on the board on purpose. Cards sit on
  * this and nothing else does, so the surface has to hold grain without holding
@@ -212,17 +208,9 @@ export default function Surface({ theme, spread = 0 }: {
           <stop offset="1" stopColor="#000000" stopOpacity="0" />
         </linearGradient>
 
-        {/* The near end of the surface is furthest from the lamp, and the
-            board's own near rim stands between the two. */}
-        <linearGradient id="sf-fall" gradientUnits="userSpaceOnUse" x1={0} y1={WELL.seamY} x2={0} y2={WELL.nearY}>
-          <stop offset="0" stopColor="#000000" stopOpacity="0" />
-          <stop offset="1" stopColor="#000000" stopOpacity="0.34" />
-        </linearGradient>
-
-        {/* The air over the far half. */}
-        <linearGradient id="sf-haze" gradientUnits="userSpaceOnUse" x1={0} y1={WELL.farY} x2={0} y2={WELL.seamY}>
-          <stop offset="0" stopColor={theme.hazeTint} stopOpacity={HAZE} />
-          <stop offset="1" stopColor={theme.hazeTint} stopOpacity="0" />
+        <linearGradient id="sf-near" gradientUnits="userSpaceOnUse" x1={0} y1={FELT.y1} x2={0} y2={FELT.y1 - 96}>
+          <stop offset="0" stopColor="#000000" stopOpacity="0.3" />
+          <stop offset="1" stopColor="#000000" stopOpacity="0" />
         </linearGradient>
 
         {/* The seam: drawn, then rubbed out at both ends, so it separates the
@@ -288,23 +276,9 @@ export default function Surface({ theme, spread = 0 }: {
           filter="url(#sf-soft)"
           opacity="0.92"
         />
-        {/* And again along the near edge only, unblurred and tight, because
-            the rim there stands between the surface and the lamp and is the
-            one wall of the recess that throws a hard shadow. */}
-        <path
-          d={`M ${WELL.nearX0} ${WELL.nearY - WELL.depth / 2} L ${WELL.nearX1} ${WELL.nearY - WELL.depth / 2}`}
-          stroke={theme.shadow}
-          strokeWidth={WELL.depth * 1.5}
-          opacity="0.5"
-        />
-
-        {/* The far wall of the recess: shallower than the near one, because the
-            lamp is over that end and reaches down into it. */}
+        {/* The walls of the recess, the same at both ends. */}
         <rect x={-spread} y={FELT.y0} width={W + spread * 2} height={96} fill="url(#sf-far)" />
-
-
-        <rect x={-spread} y={WELL.farY} width={W + spread * 2} height={WELL.height / 2} fill="url(#sf-haze)" />
-        <rect x={-spread} y={WELL.seamY} width={W + spread * 2} height={WELL.height / 2} fill="url(#sf-fall)" />
+        <rect x={-spread} y={FELT.y1 - 96} width={W + spread * 2} height={96} fill="url(#sf-near)" />
 
         <path
           d={`M ${WELL.nearX0} ${WELL.seamY} L ${WELL.nearX1} ${WELL.seamY}`}

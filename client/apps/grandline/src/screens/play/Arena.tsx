@@ -1,12 +1,8 @@
-import {
-  useEffect, useLayoutEffect, useRef, useState,
-  type ReactNode, type RefObject,
-} from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { PlayerId } from "@cg/contracts";
 import type { BattleCard, BattleIntent, BattlePlayer, BattleState } from "@cg/battle";
 import {
-  CAMERA, CENTRE, FAR_SCALE, HAND, HAZE, PERSPECTIVE, STAGE, TILT, WELL,
-  cardBand, leaderSeat, leftFittings, slabEdges, station, useStageFit,
+  HAND, STAGE, cardBand, leaderSeat, leftFittings, slabEdges, station, useStageFit,
   type Box, type Side,
 } from "../../design/arenaStage";
 import { useArenaTheme, type ArenaTheme } from "../../design/arenaThemes";
@@ -23,33 +19,23 @@ import EnergyRail, { EnergyReadout } from "./arena/EnergyRail";
 import BoardRow from "./arena/BoardRow";
 import RightRail, { key } from "./arena/RightRail";
 import { EnemyHand, Hand } from "./arena/Hands";
+import { CUE_CSS, NO_CUES, buildCues, type CueSet, type EventFeed } from "./arena/cues";
 
 /**
  * The arena: the board Draft and Deck are both played on.
  *
- * The board is a physical object standing in a room. The room fills the window;
- * the object has fixed proportions and is scaled to fit inside it. Everything
- * drawn on the object is measured in the object's own units, so the two halves
- * are identical on every monitor and neither player is given the bigger end of
- * the table.
- *
- * It is built as a stack of layers rather than a pile of components. The stack
- * is declared once in arenaStage.ts — room, atmosphere, structure, surface,
- * props, play, highlights, particles, writing — and each layer stands at its
- * own height above the surface. That is what makes the board lean rather than
- * tip: the layers slide against each other, because they are genuinely at
- * different distances from the eye.
- *
- * This file holds no rules and paints nothing. It puts the layers in order,
- * hands each one what it needs, and turns clicks into intents, which is what
- * lets the same board draw a game running in this browser and a game the server
- * is running for two people.
+ * Seen from straight above and never moves. The layers are stacked flat in
+ * the order LAYER gives. This file holds no rules, it lays the board out and
+ * turns clicks into intents. Engine events come in as `events` and play as
+ * short local animations on the cards they touch.
  */
 
 export function Arena({
-  state, you, local, yourTurn, note, title, badge, opponentName, history = [], onIntent, onLeave, children,
+  state, you, local, yourTurn, note, title, badge, opponentName, history = [], events, onIntent, onLeave, children,
 }: {
   state: BattleState;
+  /** The latest batch of engine events, for the animations. */
+  events?: EventFeed | null;
   /** What has happened so far, most recent last, as lines a player can read. */
   history?: string[];
   /** The seat drawn along the bottom. */
@@ -66,11 +52,8 @@ export function Arena({
   onLeave: () => void;
   children?: ReactNode;
 }) {
-  // The setter is not wired to anything on the board any more: the stones
-  // that switched tables were the one control the housing did not keep.
   const [theme] = useArenaTheme();
   const { ref: fit, frame } = useStageFit();
-  const { stage, room } = useTilt();
   const [held, setHeld] = useState<string | null>(null);
   useEffect(() => { setHeld(null); }, [state.activePlayer]);
 
@@ -102,6 +85,15 @@ export function Arena({
     play({ type: "ATTACK_LEADER", pid: acting });
   };
 
+  // Your own leader can be picked up to attack, the engine decides if it may
+  const leaderReady = yourTurn && !state.winner && mine.leader.canAttack && !mine.leader.exhausted;
+  const leaderClick = (pid: PlayerId) => {
+    if (pid === acting) return leaderReady ? () => onMine(mine.leader) : undefined;
+    return attacking ? onTheirLeader : undefined;
+  };
+
+  const cues = useCues(state, events ?? null, bottom);
+
   const onSlot = (slot: number) => {
     const card = mine.hand.find(c => c.instanceId === held);
     if (card) play({ type: "PLAY_CARD", pid: acting, instanceId: card.instanceId, slot });
@@ -119,7 +111,6 @@ export function Arena({
     return () => window.removeEventListener("keydown", onKey);
   }, [onLeave, onIntent, held, state.pendingAttackerId, state.activePlayer]);
 
-  const half = WELL.height / 2;
   const farRow = cardBand("far");
 
   const headingFor = (pid: PlayerId) =>
@@ -133,63 +124,30 @@ export function Arena({
         inset: 0,
         zIndex: 200,
         overflow: "hidden",
-        // The eye is here, once, for the whole board. Every layer's depth is
-        // measured against this, which is the only way the perspective can
-        // agree with itself.
-        perspective: PERSPECTIVE,
-        // The eye looks at a point above the middle of the screen, which is
-        // where the hall's own floor runs to. Everything that recedes on the
-        // board recedes towards the same place.
-        perspectiveOrigin: `50% ${CAMERA.horizon * 100}%`,
         display: "flex",
-        // Not centred: the stage is set down from the top by what the frame
-        // worked out, so the part of it that has to be seen is centred and the
-        // foot of your hand runs off the bottom of the window.
+        // The stage is placed from the top by the frame, not centred by flex
         alignItems: "flex-start",
         justifyContent: "center",
       }}
     >
-      <Scene theme={theme} nodeRef={room} />
+      <style>{CUE_CSS}</style>
+      <Scene theme={theme} />
 
       <div
-        ref={stage}
         style={{
-          // As wide as the screen, never narrower than the composition. The
-          // board fills the extra; the game inside it does not.
+          // As wide as the screen, never narrower than the composition
           width: frame.width,
           height: STAGE.height,
-          // The fit is a zoom, not a transform. A transform scales a picture
-          // of the stage: everything inside is laid out and rasterised at one
-          // stage unit to the pixel and then blown up by the fit, and at a
-          // fit of 1.24 every card, every letter and every leader's face was
-          // a quarter larger than it had been drawn — soft. A zoom lays the
-          // stage out at the fitted size, so a 12-unit letter is a 15-pixel
-          // letter drawn at 15 pixels. The transform below carries only the
-          // lean.
+          // A zoom rather than a scale transform, so text is laid out sharp
           zoom: frame.scale,
           marginTop: frame.top,
-          // The stage is a fixed object that gets scaled, never squeezed: as a
-          // flex child it would otherwise shrink to the window and every
-          // measurement on the board would be off by whatever that took.
           flex: "none",
           position: "relative",
-          // The layers inside keep their own distance from the eye. Nothing
-          // here may crop or filter, because either one would flatten them all
-          // back into a single sheet.
-          transformStyle: "preserve-3d",
-          transformOrigin: "center",
-          // `transform` is deliberately absent. It carries both the lean and
-          // the fit, it changes with the cursor, and it is written straight to
-          // this node by useTilt's frame loop. Listing it here even once would
-          // hand the property to React, which would then reset it on every
-          // unrelated render — a card picked up, a turn ended — and the board
-          // would snap flat mid-movement.
+          // Keeps the layer z-indexes inside the board, under any overlay
+          isolation: "isolate",
         }}
       >
-        {/* Behind the board: the shadow it drops on the floor, the warmth it
-            bounces onto the margin, and the floor going away under it. The only
-            layer further off than the board, which is why it is the only one
-            the board can stand in front of. */}
+        {/* The board's shadow on the table */}
         <Layer name="atmosphere">
           <Surround theme={theme} spread={frame.spread} />
         </Layer>
@@ -204,15 +162,12 @@ export function Arena({
           <Surface theme={theme} spread={frame.spread} />
         </Layer>
 
-        {/* The two stations: the frame's stone, widened at each end and cut
-            for the leader, the dial and the energy. Over the surface, because
-            each stands a little out over the field. */}
+        {/* The two stations, a little out over the field */}
         <Layer name="stations">
           <Stations theme={theme} spread={frame.spread} />
         </Layer>
 
-        {/* Everything the rules know about. Cropped at the board's edge, which
-            is what lets a hand hang off it the way it does on a table. */}
+        {/* Everything the rules know about. Cropped so the hands run off the edge. */}
         <Layer name="play" core spread={frame.spread} crop>
           {/* Their hand, held above the far edge, whole. */}
           <div
@@ -228,8 +183,6 @@ export function Arena({
             <EnemyHand theme={theme} count={state.players[top].hand.length} />
           </div>
 
-          {/* Not scaled with the far cards: the leader sits in a cavity the
-              board cut full size, and has to fill it. */}
           <LeaderNiche
             theme={theme}
             side={top === you ? "you" : "them"}
@@ -237,10 +190,11 @@ export function Arena({
             card={state.players[top].leader}
             attackable={Boolean(attacking) && top !== acting}
             active={!state.winner && actor === top}
-            onClick={top === acting ? undefined : onTheirLeader}
+            selected={top === acting && attacking === state.players[top].leader.instanceId}
+            cues={cues}
+            onClick={leaderClick(top)}
           />
 
-          <Far originX={CENTRE.x} originY={farRow.top + farRow.height / 2}>
           <BoardRow
             theme={theme}
             band={farRow}
@@ -248,10 +202,11 @@ export function Arena({
             player={state.players[top]}
             attackable={Boolean(attacking) && top !== acting}
             selected={top === acting ? attacking ?? null : null}
+            cues={cues}
+            ghosts={cues.ghosts.filter(g => g.pid === top)}
             onCard={top === acting ? onMine : onTheirs}
             onSlot={held && top === acting && yourTurn ? onSlot : undefined}
           />
-          </Far>
 
           <BoardRow
             theme={theme}
@@ -260,6 +215,8 @@ export function Arena({
             player={state.players[bottom]}
             attackable={Boolean(attacking) && bottom !== acting}
             selected={bottom === acting ? attacking ?? null : null}
+            cues={cues}
+            ghosts={cues.ghosts.filter(g => g.pid === bottom)}
             onCard={bottom === acting ? onMine : onTheirs}
             onSlot={held && bottom === acting && yourTurn ? onSlot : undefined}
           />
@@ -271,12 +228,12 @@ export function Arena({
             card={state.players[bottom].leader}
             attackable={Boolean(attacking) && bottom !== acting}
             active={!state.winner && actor === bottom}
-            onClick={bottom === acting ? undefined : onTheirLeader}
+            selected={bottom === acting && attacking === state.players[bottom].leader.instanceId}
+            cues={cues}
+            onClick={leaderClick(bottom)}
           />
 
-          {/* The two dials, in the sockets the board is cut with. Outside the
-              Far wrapper on purpose: a fitting in a hole has to be the size of
-              the hole, whichever end of the board it is at. */}
+          {/* The two dials, in their sockets */}
           <AbilityDial theme={theme} end="far" />
           <AbilityDial theme={theme} end="near" />
 
@@ -303,26 +260,7 @@ export function Arena({
           </div>
         </Layer>
 
-        {/* The air between the two ends of the board. It goes over the far
-            cards rather than under them, because that is where the air is. */}
-        <Layer name="highlight" core spread={frame.spread}>
-          <div
-            style={{
-              position: "absolute",
-              left: 0,
-              top: WELL.farY,
-              width: STAGE.width,
-              height: half,
-              background: `linear-gradient(to bottom, ${theme.hazeTint}, transparent)`,
-              opacity: HAZE,
-            }}
-          />
-        </Layer>
-
-        {/* The air in front of it all: the corners of the room going dark, and
-            what little there is in the air catching the lamp. Over the cards
-            and under the writing, which is the only place a vignette can be
-            and still be a room rather than a filter. */}
+        {/* Dust in the lamp light */}
         <Layer name="particles">
           <Atmosphere theme={theme} spread={frame.spread} />
         </Layer>
@@ -375,115 +313,30 @@ function turnLine(state: BattleState, yourTurn: boolean, local: boolean): string
 }
 
 /**
- * A degree or so of lean towards the cursor.
- *
- * It is small enough that nobody should notice it happening, which is the
- * point: a board that answers the cursor reads as an object on a table rather
- * than a picture of one. Anything larger starts to make cards harder to click,
- * and the board is a control surface before it is a toy.
- *
- * None of it goes through React. The cursor rewrites this value as fast as the
- * screen refreshes, and a value that changes every frame is the one kind of
- * value that must not be state: it used to re-render the whole arena sixty
- * times a second, and worse, it restarted a two hundred millisecond transform
- * transition on the stage every time, so the entire three dimensional stack —
- * the board, its filtered surfaces, every card — was being recomposited
- * continuously and never actually arrived anywhere.
- *
- * So the mouse writes a target, one frame loop closes the gap towards it, and
- * the loop writes the two transforms itself. The easing that used to be the
- * CSS transition's job is the loop's: a fifth of the remaining distance each
- * frame, which arrives in a handful of frames and cannot be restarted because
- * there is nothing to restart. When the board has arrived the loop stops, so an
- * arena nobody is touching costs nothing at all.
- *
- * Both nodes are written on the same frame on purpose. The room drifts against
- * the board's lean, and if the two moved on different frames they would
- * disagree about where the viewer is standing, which is the one thing the
- * whole arrangement exists to say.
- *
- * Somebody who has asked their system not to animate things gets a board that
- * sits still at its pitch. The fit is not written here at all: it is a zoom
- * on the stage, applied by layout, so nothing in this loop resamples.
+ * Plays each new batch of events once. The cues clear with one timeout after
+ * the last animation ends, so nothing runs while the board is idle.
  */
-function useTilt(): {
-  /** Goes on the stage: the board, and everything standing on it. */
-  stage: RefObject<HTMLDivElement>;
-  /** Goes on the room the board is standing in. */
-  room: RefObject<HTMLDivElement>;
-} {
-  const stage = useRef<HTMLDivElement>(null);
-  const room = useRef<HTMLDivElement>(null);
-  /** Where the cursor has asked the board to be, and where it actually is. */
-  const target = useRef({ x: 0, y: 0 });
-  const shown = useRef({ x: 0, y: 0 });
+function useCues(state: BattleState, events: EventFeed | null, bottom: PlayerId): CueSet {
+  const [cues, setCues] = useState<CueSet>(NO_CUES);
+  const before = useRef(state);
+  const seen = useRef(events?.id ?? 0);
 
-  // The whole loop lives inside the effect: nothing about it is created during
-  // a render, so there is nothing for React to memoise, invalidate or reset.
-  // The two refs above are the only things that outlive it, and they are what
-  // lets the board keep its lean when the window is resized under it.
-  useLayoutEffect(() => {
-    const drift = TILT.sceneDrift / TILT.degrees;
-    let frame = 0;
-    let running = false;
+  useEffect(() => {
+    const prev = before.current;
+    before.current = state;
+    if (!events || events.id === seen.current) return;
+    seen.current = events.id;
+    const next = buildCues(events, prev, state, bottom);
+    if (next.end > 0) setCues(next);
+  }, [state, events, bottom]);
 
-    const paint = () => {
-      const { x, y } = shown.current;
-      if (stage.current) {
-        stage.current.style.transform = `rotateX(${CAMERA.pitch + x}deg) rotateY(${y}deg)`;
-      }
-      if (room.current) {
-        room.current.style.transform = `translate(${-y * drift}px, ${-x * drift}px)`;
-      }
-    };
+  useEffect(() => {
+    if (cues.end === 0) return;
+    const timer = setTimeout(() => setCues(NO_CUES), cues.end + 60);
+    return () => clearTimeout(timer);
+  }, [cues]);
 
-    const step = () => {
-      const to = target.current;
-      const at = shown.current;
-      const dx = to.x - at.x;
-      const dy = to.y - at.y;
-      const arrived = Math.abs(dx) < TILT.rest && Math.abs(dy) < TILT.rest;
-
-      shown.current = arrived
-        ? { x: to.x, y: to.y }
-        : { x: at.x + dx * TILT.ease, y: at.y + dy * TILT.ease };
-      paint();
-
-      if (arrived) {
-        running = false;
-        return;
-      }
-      frame = requestAnimationFrame(step);
-    };
-
-    // Before the browser's first paint rather than after it, so the board is
-    // never shown for a frame at the wrong size.
-    paint();
-
-    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const onMove = (event: MouseEvent) => {
-      const fromCentreX = event.clientX / window.innerWidth - 0.5;
-      const fromCentreY = event.clientY / window.innerHeight - 0.5;
-      target.current = {
-        x: -fromCentreY * TILT.degrees * 2,
-        y: fromCentreX * TILT.degrees * 2,
-      };
-      if (running) return;
-      running = true;
-      frame = requestAnimationFrame(step);
-    };
-
-    // Passive: the board leans in response to the cursor and never asks the
-    // cursor to do anything else, so the browser need not wait to find out.
-    if (!still) window.addEventListener("mousemove", onMove, { passive: true });
-
-    return () => {
-      if (!still) window.removeEventListener("mousemove", onMove);
-      cancelAnimationFrame(frame);
-    };
-  }, []);
-
-  return { stage, room };
+  return cues;
 }
 
 /**
@@ -495,32 +348,6 @@ function useTilt(): {
  */
 const FAR_RIM_Y = leaderSeat("far").line;
 const NEAR_RIM_Y = leaderSeat("near").line;
-
-/**
- * Anything the far side of the board carries, drawn at its distance.
- *
- * It scales about a point on the board rather than about the middle of the
- * stage, so whatever is inside it shrinks towards where it stands instead of
- * sliding off towards the centre.
- */
-function Far({ originX, originY, children }: {
-  originX: number;
-  originY: number;
-  children: ReactNode;
-}) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        inset: 0,
-        transform: `scale(${FAR_SCALE})`,
-        transformOrigin: `${originX}px ${originY}px`,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
 
 /** A player's name, cut into the rim on the left of their own plinth. */
 function RimName({ theme, y, name, far = false }: {
@@ -554,9 +381,7 @@ function RimName({ theme, y, name, far = false }: {
  * What goes in one station's energy channel: the number, then the stones.
  *
  * Both are placed by the station's own geometry rather than laid out against
- * each other, so each lands in the part of the hole the board cut for it. No
- * FAR_SCALE either — the channel at the far end is the same hole as the one at
- * the near end, so what sits in it is the same size.
+ * each other, so each lands in the part of the hole the board cut for it.
  */
 function Channel({ theme, end, player }: {
   theme: ArenaTheme;

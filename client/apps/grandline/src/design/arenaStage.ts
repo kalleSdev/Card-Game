@@ -4,30 +4,9 @@ import { ENERGY_CAP } from "@cg/battle";
 /**
  * The arena, measured once.
  *
- * The board is drawn at one fixed size and then scaled to whatever screen it
- * lands on, the way a physical board keeps its proportions whichever table you
- * put it on. Every number below is in that fixed size, so a value here means
- * the same thing on a laptop and on a television.
- *
- * The board is built as an object rather than as a set of bands: a thick slab
- * with a well cut into it, a rim around the well, a plinth at each end holding
- * a leader, sockets in the right hand rim for the decks, and a base under the
- * corners for whatever is resting on it. Everything else is measured off those
- * parts, so moving a part moves what sits on it.
- *
- * The board is symmetrical about one line. `CENTRE.y` is the seam, the two rims
- * are the same thickness, the two halves of the well are the same depth, and
- * every seat on the board is given for the far side and asked for by side, with
- * `mirrorY` doing the other one. That is the only way two players get the same
- * board: not by writing each end out and keeping them in step by hand, but by
- * there only being one end to write.
- *
- * The camera is almost overhead. There is still a taper and the near edge still
- * shows its thickness, because without those the board is a diagram; but both
- * are shallow, because a player is looking down at a table rather than across
- * one. The whole camera lives in four pairs of numbers below — the slab's edges
- * and the well's — plus how much smaller the far side draws. Nothing else in
- * the arena decides the angle.
+ * The board is drawn at one fixed size and scaled to fit the screen. It is
+ * seen from straight above, so there is no taper and both ends are the same
+ * shape mirrored about CENTRE.y.
  */
 
 /**
@@ -79,31 +58,12 @@ export function boardReach(spread: number): number {
  * `slabEdges(y)` for the width at a depth rather than working it out again.
  */
 export const BOARD = {
-  /**
-   * The slab's far edge, and where its near edge begins.
-   *
-   * The board sits low enough in the stage for their whole hand to be held
-   * above it — a hand cut off by the top of the screen is a hand you cannot
-   * count — and what is left below it is exactly a hand card deep, which is
-   * all yours needs.
-   */
   farY: 206,
   nearY: 802,
-  /**
-   * How much of the slab's thickness shows along the near edge.
-   *
-   * From almost overhead you catch the edge rather than see the side of it.
-   */
-  lip: 18,
-  /**
-   * The far edge is 4% narrower than the near one.
-   *
-   * That is the whole angle of the camera. Enough that the near rim reads as
-   * the nearer one, little enough that the table reads as a table seen from
-   * above rather than a stage seen from a seat.
-   */
-  farX0: 73,
-  farX1: 1367,
+  /** No near edge thickness shows from straight above. */
+  lip: 0,
+  farX0: 46,
+  farX1: 1394,
   nearX0: 46,
   nearX1: 1394,
   round: 38,
@@ -123,8 +83,8 @@ export const RIM_DEPTH = 115;
 export const WELL = {
   farY: BOARD.farY + RIM_DEPTH,
   nearY: BOARD.nearY - RIM_DEPTH,
-  farX0: 253,
-  farX1: 1187,
+  farX0: 229,
+  farX1: 1211,
   nearX0: 229,
   nearX1: 1211,
   /** How far the surface sits below the rim it is set into. */
@@ -186,24 +146,6 @@ export function wellEdges(y: number): { x0: number; x1: number } {
   return { x0: lerp(WELL.farX0, WELL.nearX0, t), x1: lerp(WELL.farX1, WELL.nearX1, t) };
 }
 
-/**
- * How much smaller everything on the far side of the board draws.
- *
- * Nothing, now. The far end used to be shrunk by hand when the board was
- * seen from straight above; the camera is a real one now and does that
- * itself, and a second shrink on top was one more resampling of every far
- * card for no depth the pitch was not already giving.
- */
-export const FAR_SCALE = 1;
-
-/**
- * How much of the far half is taken by the air between here and there.
- *
- * The cheapest depth cue the board has, and the near half gets nothing at all,
- * so the whole of the near/far separation is this one number.
- */
-export const HAZE = 0.14;
-
 export const CARD_RATIO = 217 / 168;
 
 export function cardHeight(width: number): number {
@@ -214,8 +156,7 @@ export function cardHeight(width: number): number {
  * One size for every playing card.
  *
  * A card is the same object in your hand and on the surface, so it is drawn at
- * one size in both. The far side draws its cards at FAR_SCALE of this, which is
- * distance rather than a different card.
+ * one size in both, on both sides of the board.
  *
  * The size is set against the board rather than against the screen: a card is
  * about a seventh of the width of the slab it is lying on, which is roughly
@@ -517,7 +458,7 @@ export const HAND = {
      * so what shows is the lower half of a large card; yours are held close
      * and read whole.
      */
-    scale: 1.052,
+    scale: 1,
     /** Clear stage between the fan and the leader's plate, which stands out
         past the board's far edge. */
     gap: 32,
@@ -741,12 +682,8 @@ export const SHELL = {
     frame: WELL.round,
     hole: WELL.round / 2,
   },
-  /**
-   * The contact shadow a raised layer drops onto the one below it, from the
-   * lamp: down and a little to the right, tight, because the layers are
-   * close.
-   */
-  cast: { dx: 5, dy: 10, blur: 9 },
+  /** Contact shadow under a raised part. Straight down, since we look from above. */
+  cast: { dx: 0, dy: 2, blur: 4 },
   /** How far into a hole the walls' shadow reaches across the floor. */
   occlusion: 18,
 } as const;
@@ -792,109 +729,8 @@ export const LAYER = {
 
 export type LayerName = keyof typeof LAYER;
 
-/**
- * How far each layer stands from the surface, in the board's own units.
- *
- * The board and everything set into it are at one depth. The layers used to
- * be spread along Z so they slid against each other under the lean, but the
- * board is pitched all the time now, not only when the cursor moves, and a
- * layer standing 150 units in front of the wood is drawn 36 units further
- * down the screen than the hole it is supposed to be sitting in: every
- * number missed its plate. A fitting is drawn where its hole is, so the
- * content sits at the board's own depth. Only the dust stands off it.
- */
-export const DEPTH: Record<LayerName, number> = {
-  scene: -420,
-  atmosphere: 0,
-  structure: 0,
-  surface: 0,
-  stations: 0,
-  play: 0,
-  highlight: 0,
-  particles: 60,
-  hud: 0,
-};
-
-/**
- * How far the eye is from the board.
- *
- * One value, shared by the whole arena, because perspective only reads as
- * perspective if every layer agrees where the viewer is standing. Shorter than
- * it was: the painted hall behind the board was drawn with a wider lens than
- * the board had, and a lens is not something two things in one picture can
- * disagree about.
- */
-export const PERSPECTIVE = 1900;
-
-/**
- * Where the eye is.
- *
- * The board used to be seen from almost straight above, with the whole of its
- * depth faked by the slab drawing a little narrower at the far end. The hall it
- * now stands in was painted from a chair: high, but a chair, with its floor
- * running away to a horizon somewhere above the middle of the picture. A board
- * seen from straight above in a room seen from a chair is a board stuck onto
- * a room, so the board is pitched to agree with it.
- *
- * `pitch` is how far the board's far edge is turned away, in degrees. It is
- * real perspective — the whole stage turns as one object, so the far edge
- * draws smaller, the near edge larger, and every card, plate and word on the
- * board keeps its place on it. The slab's own taper stays underneath as the
- * small part it always was.
- *
- * `horizon` is how far down the screen the eye is looking, which is where the
- * far edges converge. It sits above the middle, so the table runs away above
- * the board rather than stopping at its far edge.
- *
- * `distance` is how far the chair is from the table: the share of the screen
- * the composition is allowed to fill. At 1 the board ran to the top and bottom
- * of the screen and the table was a strip down each side, which is a board
- * held up to the eye. Backed off, the table shows all the way round and the
- * board is a thing sitting on it.
- */
-export const CAMERA = {
-  pitch: 3,
-  horizon: 0.42,
-  distance: 0.96,
-} as const;
-
-/**
- * The lean towards the cursor.
- *
- * Small on purpose. It is enough that the board answers you and not enough that
- * anybody has to aim, which is the only budget a board that is also a control
- * surface can afford.
- *
- * The board used to reach its new lean through a CSS transition. That is the
- * wrong tool for a value the cursor rewrites sixty times a second: every event
- * restarted the transition, so the board was permanently part way through a
- * move it never finished, and the whole three dimensional stack had to be
- * recomposited the entire time. The easing lives in the frame loop now — the
- * board closes some of the distance to the cursor each frame and stops when
- * there is nothing left to close.
- */
-export const TILT = {
-  degrees: 0.35,
-  /**
-   * How far the room slides the other way, which is what sells the distance.
-   *
-   * Less than the board's own edges move when it leans. The room is the far
-   * end of the arena, and the far end of anything moves least; a backdrop that
-   * swung further than the object in front of it would be nearer than it, not
-   * further.
-   */
-  sceneDrift: 2,
-  /**
-   * How much of the way to the cursor the board travels each frame.
-   *
-   * A fifth. Enough that the board is where you asked within a few frames, so
-   * it reads as answering you rather than following you, and not so much that
-   * a jumped cursor snaps the board across.
-   */
-  ease: 0.22,
-  /** Closer than this in degrees and the board has arrived. */
-  rest: 0.002,
-} as const;
+/** How much of the screen the board fills. */
+export const FIT = 0.96;
 
 /**
  * Where the light is.
@@ -912,17 +748,6 @@ export const LIGHT = {
 } as const;
 
 /**
- * Where a layer sits, as a transform.
- *
- * Standing a layer off the surface makes it bigger or smaller, because that is
- * what distance does. The scale here undoes exactly that much, so a layer keeps
- * the footprint its measurements gave it and only its parallax changes.
- */
-export function depthTransform(z: number): string {
-  return `translateZ(${z}px) scale(${(PERSPECTIVE - z) / PERSPECTIVE})`;
-}
-
-/**
  * How the board is framed on a given screen.
  *
  * The stage is the gameplay composition and nothing else: the well, the
@@ -936,7 +761,7 @@ export function depthTransform(z: number): string {
  * reaches on each side, in stage units.
  *
  * The scale is chosen so the gameplay composition always fits whole, and
- * then backed off by the camera's distance so that it does not fill the
+ * then backed off by FIT so that it does not fill the
  * screen either. On a short or narrow screen that means the board stops
  * filling every pixel, which is the right way round: a cropped battlefield is
  * worse than a margin.
@@ -960,7 +785,7 @@ export function frameFor(width: number, height: number): StageFrame {
   // with it.
   const scale = Math.max(
     0.01,
-    Math.min(Math.max(width, 1) / STAGE.width, Math.max(height, 1) / STAGE.fit) * CAMERA.distance,
+    Math.min(Math.max(width, 1) / STAGE.width, Math.max(height, 1) / STAGE.fit) * FIT,
   );
   const stageWidth = Math.max(STAGE.width, width / scale);
   // The band of the stage that has to be seen is centred in the window; what

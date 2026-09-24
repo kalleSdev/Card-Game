@@ -134,9 +134,9 @@ export function Hand({ theme, cards, energy, held, live, onHold }: {
               // throws its full height. Both fall down and right, from the
               // board's one lamp.
               filter: up
-                ? `drop-shadow(${CARD.lift / 16}px ${CARD.lift / 8}px ${CARD.lift / 4}px ${theme.shadow})`
+                ? `drop-shadow(0 ${CARD.lift / 8}px ${CARD.lift / 4}px ${theme.shadow})`
                 : lifted
-                  ? `drop-shadow(${CARD.hover / 16}px ${CARD.hover / 8}px ${CARD.hover / 4}px ${theme.shadow})`
+                  ? `drop-shadow(0 ${CARD.hover / 8}px ${CARD.hover / 4}px ${theme.shadow})`
                   : "none",
             }}
           >
@@ -219,7 +219,7 @@ export function EnemyHand({ theme, count }: { theme: ArenaTheme; count: number }
               // Lit from the lamp like everything else, so the shadow falls
               // down and to the right and lands on the card next door. It is
               // what separates one back from the next.
-              filter: `drop-shadow(2px 4px 5px ${theme.shadow})`,
+              filter: `drop-shadow(0 3px 5px ${theme.shadow})`,
             }}
           >
             {/* Turned to face them, as a hand held on the far side of the

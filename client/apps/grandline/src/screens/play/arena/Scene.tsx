@@ -1,44 +1,11 @@
-import type { RefObject } from "react";
-import { LAYER, TILT } from "../../../design/arenaStage";
+import { LAYER } from "../../../design/arenaStage";
 import type { ArenaTheme } from "../../../design/arenaThemes";
 import Tabletop from "./Tabletop";
 
 /**
- * The room the board is standing in.
- *
- * It fills the window rather than the stage. That is the whole reason it
- * exists: the board is a fixed object with fixed proportions, so on a wide
- * screen there is always space beside it, and that space should be the room
- * the game is being played in rather than two black bars.
- *
- * It also drifts against the board's lean. A backdrop that leans with the
- * board is a picture of a board; one that leans the other way is something the
- * board is standing in front of, and the difference costs one transform.
- *
- * That transform is not written here. It belongs to the same frame loop that
- * leans the board, because the two have to move on the same frame or the room
- * and the object in it disagree about where the viewer is. All this does is
- * hand the loop the node to write on — and it never lists `transform` in its
- * own style, so React has no opinion about the property and will not overwrite
- * what the loop puts there.
- *
- * For a room with a painted table, the painting is laid over all of this and
- * is the room. It fills the window and it does not take the board's pitch:
- * the board is an object standing in the room, and the room is what the
- * window shows. For a room without one, the gradients below are the room.
- *
- * The window breathes. One sheet of the lamp's colour, laid diagonally over
- * the room from the window's corner at a few per cent, whose opacity drifts
- * up and down over eighteen seconds — which is a candle in a draught, or the
- * sun going behind and out of a thin cloud, and is the least a room can do to
- * stop being a photograph. It is deliberately below the level anyone can point
- * at. It is the foundation for a scene that moves, not the scene moving.
- *
- * It is a div, and only its opacity is animated, so the browser composites it
- * without repainting anything. Whatever is built on this later has to obey the
- * same rule: a sheet of its own, opacity or transform only, never a value
- * inside one of the SVGs, because animating an SVG's insides repaints the
- * whole board every frame.
+ * The room the board sits in. It fills the window behind the board. If the
+ * theme has a painted table it is laid over the gradients. The breath is one
+ * slow opacity fade, nothing else moves.
  */
 
 /** How long one breath takes, and how far the light swings. */
@@ -59,20 +26,14 @@ const CSS = `
 }
 `;
 
-export default function Scene({ theme, nodeRef }: {
-  theme: ArenaTheme;
-  /** Handed to the frame loop, which drifts this against the board's lean. */
-  nodeRef: RefObject<HTMLDivElement>;
-}) {
+export default function Scene({ theme }: { theme: ArenaTheme }) {
   return (
     <div
-      ref={nodeRef}
       data-layer="scene"
       aria-hidden
       style={{
         position: "absolute",
-        // Wider than the window, so drifting never uncovers an edge.
-        inset: -TILT.sceneDrift * 2,
+        inset: 0,
         zIndex: LAYER.scene,
         pointerEvents: "none",
         // A large table in a dark room, lit from high on the left, in

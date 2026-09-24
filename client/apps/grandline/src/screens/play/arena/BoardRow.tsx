@@ -4,6 +4,8 @@ import type { ArenaTheme } from "../../../design/arenaThemes";
 import { COLOR, RADIUS, text } from "../../../design/tokens";
 import PrintCard from "../../../components/PrintCard";
 import { cardFace } from "../../../data/pool";
+import { cueAnimation, type CueSet, type Ghost } from "./cues";
+import HitMarks from "./HitMarks";
 
 /**
  * One side's cards in play, lying on the parchment.
@@ -24,24 +26,7 @@ import { cardFace } from "../../../data/pool";
  * attacked and which one is picked up, and it reports clicks back.
  */
 
-/**
- * Numbers this row needs that the stage does not name, each worked out from one
- * that it does.
- */
-
-/**
- * The middle of the field is not the middle of the board: the left rail and the
- * right rail are different widths. Cards line up on the board's middle, since
- * that is what the leader niche below them and the seam between the halves are
- * centred on, so the row is pulled over by the difference.
- */
-/**
- * A row sits in the middle of the well at its own depth.
- *
- * The well tapers, so "the middle" is not a fixed number: it is asked for at
- * the depth the row is actually drawn at. A row placed on the stage's middle
- * instead would drift off the surface as the board narrows.
- */
+/** The middle of the well, which the row centres on. */
 function wellCentre(y: number): number {
   const edges = wellEdges(y);
   return (edges.x0 + edges.x1) / 2;
@@ -85,7 +70,7 @@ const CARD_MOVE = `${MOTION.card}ms cubic-bezier(0.2, 0, 0.2, 1)`;
 const SPENT = "saturate(0.5) brightness(0.76)";
 
 export default function BoardRow({
-  theme, band, align, player, attackable, selected, onCard, onSlot,
+  theme, band, align, player, attackable, selected, cues, ghosts, onCard, onSlot,
 }: {
   theme: ArenaTheme;
   /** Which half of the surface this row occupies. */
@@ -94,6 +79,9 @@ export default function BoardRow({
   player: BattlePlayer;
   attackable: boolean;
   selected: string | null;
+  cues: CueSet;
+  /** Cards that just died on this side, still fading in their slot. */
+  ghosts: Ghost[];
   onCard: (card: BattleCard) => void;
   /** Given only while a card is waiting to be put down. */
   onSlot?: (slot: number) => void;
@@ -123,6 +111,19 @@ export default function BoardRow({
         // A card at nothing hp is on its way off the board, and the space it
         // leaves is a space a card can be put in.
         if (card === null || card.currentHp <= 0) {
+          const ghost = ghosts.find(g => g.slot === slot);
+          if (ghost) {
+            return (
+              <BoardCard
+                key={`ghost-${ghost.card.instanceId}`}
+                theme={theme}
+                card={ghost.card}
+                selected={false}
+                attackable={false}
+                cues={cues}
+              />
+            );
+          }
           if (place === undefined) return null;
           return (
             <EmptySlot
@@ -141,6 +142,7 @@ export default function BoardRow({
             align={align}
             selected={selected === card.instanceId}
             attackable={attackable}
+            cues={cues}
             onClick={() => onCard(card)}
           />
         );
@@ -149,76 +151,75 @@ export default function BoardRow({
   );
 }
 
-function BoardCard({ theme, card, align, selected, attackable, onClick }: {
+function BoardCard({ theme, card, align = "bottom", selected, attackable, cues, onClick }: {
   theme: ArenaTheme;
   card: BattleCard;
-  align: "top" | "bottom";
+  align?: "top" | "bottom";
   selected: boolean;
   attackable: boolean;
-  onClick: () => void;
+  cues: CueSet;
+  /** Left out for a card that is only fading away. */
+  onClick?: () => void;
 }) {
   const spent = card.exhausted || card.stunTurns > 0;
   const hurt = card.currentHp < card.maxHp;
-  // A picked-up card leans towards the seam, which is the way it is about to go.
-  // The smaller of the two lifts: the long one belongs to a card coming out of a
-  // hand, where there is room, and a card on the surface has half a board.
-  const lean = align === "top" ? CARD.hover : -CARD.hover;
+  const mine = cues.byId[card.instanceId];
 
   return (
     <div
       onClick={onClick}
+      className={onClick ? "ar-board-card" : undefined}
       style={{
         position: "relative",
         width: CARD.play,
         flex: "0 0 auto",
-        pointerEvents: "auto",
+        pointerEvents: onClick ? "auto" : "none",
         cursor: attackable ? "crosshair" : "pointer",
-        transform: selected ? `translateY(${lean}px)` : "none",
+        // Selected cards grow a little in place, they never move
+        transform: selected ? "scale(1.06)" : "none",
         transition: `transform ${CARD_MOVE}, filter ${CARD_MOVE}`,
-        // Lit by the board's lamp, high on the left, so the shadow falls a
-        // little down and to the right and stays tight: a card lying on the
-        // parchment is in contact with it, and a wide soft shadow under it
-        // had it floating. A picked-up card is off the surface, and its
-        // shadow spreads with the lift.
-        filter: `${spent ? `${SPENT} ` : ""}drop-shadow(${selected
-          ? `${EDGE}px ${CARD.hover / 6}px ${CARD.hover / 4}px`
-          : `2px 3px ${CARD.gap / 3}px`} ${theme.shadow})`,
-        // Only against its own neighbours: a leaning card passes over the card
-        // beside it, and the board's layering is not this row's business.
+        // Contact shadow straight down, a bit softer when picked up
+        filter: `${spent ? `${SPENT} ` : ""}drop-shadow(0 ${selected ? 6 : 2}px ${selected ? 10 : CARD.gap / 3}px ${theme.shadow})`,
         zIndex: selected ? 1 : 0,
       }}
     >
-      <PrintCard
-        card={cardFace(card.defId)}
-        print="base"
-        width={CARD.play}
-        interactive={false}
-        stats={false}
-      />
-
-      {/* What the card is worth right now, which is not what its print says. */}
-      <span
-        style={{
-          position: "absolute",
-          left: STAT.inset,
-          right: STAT.inset,
-          bottom: STAT.drop,
-          display: "flex",
-          justifyContent: "space-between",
-          pointerEvents: "none",
-        }}
+      <div
+        key={mine ? cues.id : 0}
+        style={{ position: "relative", animation: cueAnimation(mine) }}
       >
-        <StatBox theme={theme} value={card.atk} rim={theme.gold.mid} ink={theme.gold.light} />
-        <StatBox
-          theme={theme}
-          value={card.currentHp}
-          rim={hurt ? COLOR.signal : theme.gold.mid}
-          ink={hurt ? COLOR.signal : theme.gold.light}
+        <PrintCard
+          card={cardFace(card.defId)}
+          print="base"
+          width={CARD.play}
+          interactive={false}
+          stats={false}
         />
-      </span>
-
-      <LeadingRule theme={theme} align={align} on={selected} />
-      <TargetRing on={attackable} />
+  
+        {/* What the card is worth right now, which is not what its print says. */}
+        <span
+          style={{
+            position: "absolute",
+            left: STAT.inset,
+            right: STAT.inset,
+            bottom: STAT.drop,
+            display: "flex",
+            justifyContent: "space-between",
+            pointerEvents: "none",
+          }}
+        >
+          <StatBox theme={theme} value={card.atk} rim={theme.gold.mid} ink={theme.gold.light} />
+          <StatBox
+            theme={theme}
+            value={card.currentHp}
+            rim={hurt ? COLOR.signal : theme.gold.mid}
+            ink={hurt ? COLOR.signal : theme.gold.light}
+          />
+        </span>
+  
+        <LeadingRule theme={theme} align={align} on={selected} />
+        <TargetRing on={attackable} />
+        <HitMarks cues={mine} shape={{ borderRadius: RADIUS.lg }} />
+      </div>
     </div>
   );
 }

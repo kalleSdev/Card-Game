@@ -231,7 +231,7 @@ function Hole({ theme, d, deep = false }: { theme: ArenaTheme; d: string; deep?:
       <clipPath id={id}><path d={d} /></clipPath>
       <path d={d} fill="url(#sn-hole)" />
       <g clipPath={`url(#${id})`}>
-        <path d={d} fill="none" stroke={theme.shadow} strokeWidth={SHELL.occlusion * (deep ? 1.8 : 1)} filter="url(#sn-soft)" opacity={DARK} transform="translate(3 3)" />
+        <path d={d} fill="none" stroke={theme.shadow} strokeWidth={SHELL.occlusion * (deep ? 1.8 : 1)} filter="url(#sn-soft)" opacity={DARK} transform="translate(0 2)" />
         <path d={d} fill="none" stroke={theme.frameInlay} strokeWidth={SHELL.lit} opacity={LIT * 0.6} transform={AWAY_FROM_LAMP} />
       </g>
       <path d={d} fill="none" stroke={theme.gold.dark} strokeWidth={SHELL.lit} opacity="0.85" />
