@@ -9,7 +9,7 @@ The main thing I wanted out of this was keeping the game rules completely
 separate from the interface. All the combat logic sits in one pure function, and
 both the UI and the server just call it.
 
-## Running it  
+## Running it/installation
 
 ```bash
 npm install
