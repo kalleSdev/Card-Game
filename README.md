@@ -15,7 +15,7 @@ both the UI and the server just call it.
 npm install
 ```
 
-There are two clients and one server. Each is its own command:
+There are two clients and one server. Each is its own command: (Current beta versiond)
 
 ```bash
 npm run dev           # Grand Line client   → localhost:5180
