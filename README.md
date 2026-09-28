@@ -33,7 +33,7 @@ npm run verify        # typecheck, lint and tests
 npm run build         # production build of both clients
 ```
 
-## How it's put together / structure
+## How it's put together / structure 
 
 ```
 client/
