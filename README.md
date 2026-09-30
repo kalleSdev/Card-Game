@@ -1,4 +1,4 @@
-# Card Battler
+# Card Battler  
 
 A turn based card game I've been building in React and TypeScript. Two players
 draft a deck, then fight it out on a board with leaders, abilities and spells.
